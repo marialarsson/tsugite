@@ -34,8 +34,8 @@ def joint_verticies(r,g,b):
     return verticies
 
 def joint_faces(offset):
-        # Make indices of faces (based on heightfiled)
-        # For draw elements method GL_QUADS
+    # Make indices of faces (based on heightfiled)
+    # For draw elements method GL_QUADS
     # Faces of base
     indices = [0,1,3,2,
                0,4,16,1,
@@ -151,13 +151,9 @@ def joint_lines(offset):
                     elif(count==2):
                         if((val==val_dn_lf and val<=n) or (val_lf==val_dn and val_lf<=n)):
                             indices.extend([ind0+n,ind0+n-1])
-
     indices = np.array(indices, dtype=np.uint32)
-
     indices = indices + offset
-
     #print('Number of line indices', len(indices))
-
     return indices
 
 def get_random_height_field(n):
@@ -214,13 +210,19 @@ def mouseCallback(window,button,action,mods):
         global dragged
         if action==1:
             dragged = True
-            global xstart, ystart
+            global xstart, ystart, xrot, yrot, xrot0, yrot0
             xstart, ystart = glfw.get_cursor_pos(window)
+            xrot0, yrot0 = xrot, yrot
         elif action==0: dragged = False
 
-def updateRotation():
-    global xrot, yrot, xstart, ystart
+def updateRotation(window):
+    global xrot, yrot, xrot0, yrot0, xstart, ystart
     xpos, ypos = glfw.get_cursor_pos(window)
+    ratio = 0.001
+    ydiff = ratio*(xpos-xstart)
+    xdiff = ratio*(ypos-ystart)
+    xrot = xrot0 + xdiff
+    yrot = yrot0 + ydiff
 
 def main():
     # initialize glfw
@@ -240,7 +242,7 @@ def main():
     glfw.set_input_mode(window, glfw.STICKY_KEYS,1)
     # Enable and hangle mouse events
     glfw.set_mouse_button_callback(window, mouseCallback);
-    #glfw.set_input_mode(window, glfw.STICKY_MOUSE_BUTTONS, glfw.TRUE)
+    glfw.set_input_mode(window, glfw.STICKY_MOUSE_BUTTONS, glfw.TRUE)
 
     glLineWidth(1)
     glEnable(GL_POLYGON_OFFSET_FILL)
@@ -275,7 +277,6 @@ def main():
     # Compiling the shaders
     shader = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
                                               OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
-
     # Verticies
     verticies_faces = joint_verticies(1.0,1.0,0.0)
     verticies_lines = joint_verticies(0.0,0.0,1.0)
@@ -285,11 +286,10 @@ def main():
     glBindBuffer(GL_ARRAY_BUFFER, VBO)
     glBufferData(GL_ARRAY_BUFFER, 4*len(verticies_all), verticies_all, GL_DYNAMIC_DRAW) #uploadning data to the buffer. Specifying size / bites of data (x4)
 
-
     while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
 
         # Mouse rotate
-        if dragged==True: updateRotation()
+        if dragged==True: updateRotation(window)
 
         # Incicies
         indices_faces = joint_faces(0)
@@ -342,8 +342,8 @@ if __name__ == "__main__":
     #HF = [[3,0,0],[0,1,0],[0,0,2]]
     HF = get_random_height_field(3)
     type = "I"
-    xrot = 0.4
-    yrot = 0.2
+    xrot, yrot = 0.4, 0.2
+    xrot0, yrot0 = xrot, yrot
     xstart = ystart = 0.0
     dragged = False
     main()
