@@ -6,7 +6,7 @@ Environment setup as YouTube tutorial: https://www.youtube.com/watch?v=Ctfs-E_9r
 
 setup/disco_joint_interface.py
 
-Hit ESC key to quit
+Hit ESC key to quit \n
 Rotate view with mouse (not yet implemented)
 Edit joint geometry with: Y U I \ H J K \ B N M
 Edit joint type with: 1 L T X (not yet implemented)
