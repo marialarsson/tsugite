@@ -6,20 +6,10 @@ import pyrr # for doing vector and matrix multiplications etc.
 import sys
 import random
 
-def draw_rect(x, y, width, height):
-    glBegin(GL_QUADS)                                  # start drawing a rectangle
-    glVertex2f(x, y)                                   # bottom left point
-    glVertex2f(x + width, y)                           # bottom right point
-    glVertex2f(x + width, y + height)                  # top right point
-    glVertex2f(x, y + height)                          # top left point
-    glEnd()
-
 def joint_verticies(r,g,b):
-
     # Set dimentions of joint
     vox_size = 0.1
     component_length = vox_size*7
-
     # Make vertexes
     verticies = []
     # Add 4 compnent base verticies
@@ -44,13 +34,15 @@ def joint_verticies(r,g,b):
     return verticies
 
 def joint_faces(offset):
-    # Outline of base
+        # Make indices of faces (based on heightfiled)
+        # For draw elements method GL_QUADS
+    # Faces of base
     indices = [0,1,3,2,
                0,4,16,1,
                0,2,52,4,
                2,3,64,52,
                1,16,64,3]
-    # Outline of joint
+    # Faces of joint
     for i in range(3):
         for j in range(3):
             # Current height value
@@ -87,17 +79,14 @@ def joint_faces(offset):
                 diff = val-val_dn
                 if abs(diff)>0:
                     indices.extend([v10, v00, ind0+val_dn, ind0+16+val_dn])
-
     indices = np.array(indices, dtype=np.uint32)
-
     indices = indices + offset
-
     #print('Number of face indices', len(indices))
     return indices
 
 def joint_lines(offset):
-    # Make indices of lines that connect the correct vertices (base on heightfiled)
-    # For draw elements method GL_LINES (define start and end point of each line segment)
+    # Make indices of lines (bases on heightfiled)
+    # For draw elements method GL_LINES
     # Outline of base
     indices = [0,1,1,3,3,2,2,0,0,4,1,16,2,52,3,64]
     # Outline of joint
