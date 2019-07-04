@@ -12,5 +12,5 @@ Edit joint geometry with: Y U I \ H J K \ B N M
 Edit joint type with: 1 L T X (not yet implemented)
 Press S to save joint geometry and O to open last saved geometry (not yet implemented)
 
-![Image description](link-to-image)
+![disco_joint_interface.py screenshot](Screenshot_window.JPG)
 
