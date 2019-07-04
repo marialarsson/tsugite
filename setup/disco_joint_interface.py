@@ -205,15 +205,20 @@ def keyCallback(window,key,scancode,action,mods):
             print("Joint type:",type)
 
 def mouseCallback(window,button,action,mods):
-    # action 1 = press, action 0 = release
     if button==glfw.MOUSE_BUTTON_LEFT:
-        global dragged
-        if action==1:
+        global dragged, click_time, autorotate
+        if action==1: #pressed
+            next_click_time = glfw.get_time()
             dragged = True
             global xstart, ystart, xrot, yrot, xrot0, yrot0
             xstart, ystart = glfw.get_cursor_pos(window)
             xrot0, yrot0 = xrot, yrot
-        elif action==0: dragged = False
+            if next_click_time-click_time<0.3:
+                autorotate = not autorotate
+            else: autorotate=False
+            click_time = next_click_time
+        elif action==0: #released
+            dragged = False
 
 def updateRotation(window):
     global xrot, yrot, xrot0, yrot0, xstart, ystart
@@ -223,6 +228,11 @@ def updateRotation(window):
     xdiff = ratio*(ypos-ystart)
     xrot = xrot0 + xdiff
     yrot = yrot0 + ydiff
+
+def autoUpdateRotation():
+    global xrot, yrot
+    xrot = xrot + 0.0001 * glfw.get_time()
+    yrot = yrot + 0.0004 * glfw.get_time()
 
 def main():
     # initialize glfw
@@ -243,6 +253,8 @@ def main():
     # Enable and hangle mouse events
     glfw.set_mouse_button_callback(window, mouseCallback);
     glfw.set_input_mode(window, glfw.STICKY_MOUSE_BUTTONS, glfw.TRUE)
+    global autorotate
+    autorotate = False
 
     glLineWidth(1)
     glEnable(GL_POLYGON_OFFSET_FILL)
@@ -289,7 +301,10 @@ def main():
     while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
 
         # Mouse rotate
-        if dragged==True: updateRotation(window)
+        if dragged==True:
+            updateRotation(window)
+        elif autorotate==True:
+            autoUpdateRotation()
 
         # Incicies
         indices_faces = joint_faces(0)
@@ -318,8 +333,8 @@ def main():
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Rotation
-        rot_x = pyrr.Matrix44.from_x_rotation(xrot) #0.5
-        rot_y = pyrr.Matrix44.from_y_rotation(yrot) #0.8
+        rot_x = pyrr.Matrix44.from_x_rotation(xrot)
+        rot_y = pyrr.Matrix44.from_y_rotation(yrot)
         transformLoc = glGetUniformLocation(shader, "transform")
         glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
 
@@ -346,4 +361,5 @@ if __name__ == "__main__":
     xrot0, yrot0 = xrot, yrot
     xstart = ystart = 0.0
     dragged = False
+    click_time = 0
     main()

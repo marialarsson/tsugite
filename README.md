@@ -8,9 +8,9 @@ setup/disco_joint_interface.py
 
 Hit ESC key to quit.
 
-Rotate view with mouse
+Rotate view with mouse / Double click mouse to start constant rotation
 
-Edit joint geometry with: Y U I \ H J K \ B N M
+Edit joint geometry with: Y U I / H J K / B N M
 
 Edit joint type with: 1 L T X (not yet implemented)
 
