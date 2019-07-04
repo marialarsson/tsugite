@@ -206,7 +206,7 @@ def keyCallback(window,key,scancode,action,mods):
 
 def mouseCallback(window,button,action,mods):
     if button==glfw.MOUSE_BUTTON_LEFT:
-        global dragged, click_time, autorotate
+        global dragged, click_time, autorotate, auto_rot_start_time, next_click_time
         if action==1: #pressed
             next_click_time = glfw.get_time()
             dragged = True
@@ -229,10 +229,10 @@ def updateRotation(window):
     xrot = xrot0 + xdiff
     yrot = yrot0 + ydiff
 
-def autoUpdateRotation():
-    global xrot, yrot
-    xrot = xrot + 0.0001 * glfw.get_time()
-    yrot = yrot + 0.0004 * glfw.get_time()
+def autoRotation():
+    global xrot, yrot, xrot0, yrot0, next_click_time
+    xrot = xrot0 + 0.1 * (glfw.get_time()-next_click_time)
+    yrot = yrot0 + 0.4 * (glfw.get_time()-next_click_time)
 
 def main():
     # initialize glfw
@@ -291,7 +291,7 @@ def main():
                                               OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
     # Verticies
     verticies_faces = joint_verticies(1.0,1.0,0.0)
-    verticies_lines = joint_verticies(0.0,0.0,1.0)
+    verticies_lines = joint_verticies(0.0,0.0,0.0)
     verticies_all = np.concatenate([verticies_faces,verticies_lines])
     # Vertex buffer
     VBO = glGenBuffers(1) # vertex buffer object - the verticies
@@ -301,10 +301,8 @@ def main():
     while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
 
         # Mouse rotate
-        if dragged==True:
-            updateRotation(window)
-        elif autorotate==True:
-            autoUpdateRotation()
+        if dragged==True: updateRotation(window)
+        elif autorotate==True: autoRotation()
 
         # Incicies
         indices_faces = joint_faces(0)
