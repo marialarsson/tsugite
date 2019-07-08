@@ -243,7 +243,7 @@ def joint_face_indicies(comp,offset):
     #print('Number of face indices', len(indices))
     return indices
 
-def get_count(ind,neighbors):
+def get_count(ind,neighbors,fixed_sides):
     global VOX_MAT
     cnt = 0
     val = int(VOX_MAT[ind])
@@ -251,42 +251,97 @@ def get_count(ind,neighbors):
         i = ind[0]+item[0]
         j = ind[1]+item[1]
         k = ind[2]+item[2]
-        if i>=0 and i<DIM and j>=0 and j<DIM and k>=0 and k<DIM:
+        ###
+        val2 = None
+        # Check fixed sides
+        if (i<0 or i>=DIM) and j>=0 and j<DIM and k>=0 and k<DIM:
+            if i<0 and [-1,0,0] in fixed_sides: val2 = val
+            elif i>=DIM and [1,0,0] in fixed_sides: val2 = val
+        elif (k<0 or k>=DIM) and i>=0 and i<DIM and j>=0 and j<DIM:
+            if k<0 and [0,0,-1] in fixed_sides: val2 = val
+            elif k>=DIM and [0,0,1] in fixed_sides: val2 = val
+        elif (j<0 or j>=DIM) and i>=0 and i<DIM and k>=0 and k<DIM:
+            if j<0 and [0,-1,0] in fixed_sides: val2 = val
+            elif j>=DIM and [0,1,0] in fixed_sides: val2 = val
+        # Check neighbours
+        elif np.all(np.array([i,j,k])>=0) and np.all(np.array([i,j,k])<DIM):
             val2 = int(VOX_MAT[i,j,k])
-        else: val2=None
         if val==val2: cnt = cnt+1
         dia = val2
     #print("c",cnt,"d",dia,"v",val,"v2",val2,"ind",ind,"ind2",i,j,k)
+
     return cnt,dia
 
-def joint_line_indicies(comp,offset):
+def get_fixed_sides():
+    # Component A
+    fixed_sides_A = []
+    fixed_sides_A.append([0,0,-1])
+    if TYPE=="X": fixed_sides_A.append([0,0,1])
+    # Component B
+    fixed_sides_B = []
+    if TYPE=="I": fixed_sides_B.append([0,0,1])
+    else: fixed_sides_B.append([-1,0,0])
+    if TYPE=="T" or TYPE=="X": fixed_sides_B.append([1,0,0])
+    return [fixed_sides_A,fixed_sides_B]
+
+def get_index(ind,a,b,c):
+    d = DIM+1
+    (i,j,k) = ind
+    index = (i+a)*d*d + (j+b)*d + k+c
+    return index
+
+def joint_line_indicies(comp,offset,fixed_sides):
     # Make indices of lines (bases on heightfiled)
     # For draw elements method GL_LINES
     indices = []
     for i in range(DIM):
         for j in range(DIM):
             for k in range(DIM):
+                ind = (i,j,k)
                 val = VOX_MAT[i,j,k]
-                if (comp=="A" and val==1) or (comp=="B" and val==0): continue
                 d = DIM+1
+                if (comp=="A" and val==1) or (comp=="B" and val==0):
+                    # Base lines of fixed sides
+                    if i==0 and [-1,0,0] in fixed_sides:
+                        if k==0: indices.extend([get_index(ind,0,0,0), get_index(ind,0,1,0)])
+                        if k==DIM-1: indices.extend([get_index(ind,0,0,1), get_index(ind,0,1,1)])
+                        if j==0: indices.extend([get_index(ind,0,0,0), get_index(ind,0,0,1)])
+                        if j==DIM-1: indices.extend([get_index(ind,0,1,0), get_index(ind,0,1,1)])
+                    if i==DIM-1 and [1,0,0] in fixed_sides:
+                        if k==0: indices.extend([get_index(ind,1,0,0), get_index(ind,1,1,0)])
+                        if k==DIM-1: indices.extend([get_index(ind,1,0,1), get_index(ind,1,1,1)])
+                        if j==0: indices.extend([get_index(ind,1,0,0), get_index(ind,1,0,1)])
+                        if j==DIM-1: indices.extend([get_index(ind,1,1,0), get_index(ind,1,1,1)])
+                    if k==0 and [0,0,-1] in fixed_sides:
+                        if i==0: indices.extend([get_index(ind,0,0,0), get_index(ind,0,1,0)])
+                        if i==DIM-1: indices.extend([get_index(ind,1,0,0), get_index(ind,1,1,0)])
+                        if j==0: indices.extend([get_index(ind,0,0,0), get_index(ind,1,0,0)])
+                        if j==DIM-1: indices.extend([get_index(ind,0,1,0), get_index(ind,1,1,0)])
+                    if k==DIM-1 and [0,0,1] in fixed_sides:
+                        if i==0: indices.extend([get_index(ind,0,0,1), get_index(ind,0,1,1)])
+                        if i==DIM-1: indices.extend([get_index(ind,1,0,1), get_index(ind,1,1,1)])
+                        if j==0: indices.extend([get_index(ind,0,0,1), get_index(ind,1,0,1)])
+                        if j==DIM-1: indices.extend([get_index(ind,0,1,1), get_index(ind,1,1,1)])
+                    continue
                 # Side lines conditionally / i aligned
                 for x in range(2):
                     for y in range(2):
-                        cnt,dia = get_count((i,j,k),[[0,2*x-1,0],[0,0,2*y-1],[0,2*x-1,2*y-1]])
+                        cnt,dia = get_count((i,j,k),[[0,2*x-1,0],[0,0,2*y-1],[0,2*x-1,2*y-1]],fixed_sides)
                         if cnt==0 or cnt==2 or (cnt==1 and dia==val):
                             indices.extend([i*d*d+(j+x)*d+k+y, (i+1)*d*d+(j+x)*d+k+y])
                 # Side lines conditionally / j aligned
                 for x in range(2):
                     for y in range(2):
-                        cnt,dia = get_count((i,j,k),[[2*x-1,0,0],[0,0,2*y-1],[2*x-1,0,2*y-1]])
+                        cnt,dia = get_count((i,j,k),[[2*x-1,0,0],[0,0,2*y-1],[2*x-1,0,2*y-1]],fixed_sides)
                         if cnt==0 or cnt==2 or (cnt==1 and dia==val):
                             indices.extend([(i+x)*d*d+j*d+k+y, (i+x)*d*d+(j+1)*d+k+y])
                 # Side lines conditionally / k aligned
                 for x in range(2):
                     for y in range(2):
-                        cnt,dia = get_count((i,j,k),[[2*x-1,0,0],[0,2*y-1,0],[2*x-1,2*y-1,0]])
+                        cnt,dia = get_count((i,j,k),[[2*x-1,0,0],[0,2*y-1,0],[2*x-1,2*y-1,0]],fixed_sides)
                         if cnt==0 or cnt==2 or (cnt==1 and dia==val):
                             indices.extend([(i+x)*d*d+(j+y)*d+k, (i+x)*d*d+(j+y)*d+k+1])
+
     #Outline of component base
     start = (DIM+1)*(DIM+1)*(DIM+1)
     if comp=="A":
@@ -401,13 +456,15 @@ def create_buffer_vertices(DIM, VOXEL_SIZE, COMP_LENGTH):
     return len(v_faces_A), len(v_lines_B), len(v_faces_A), len(v_lines_B)
 
 def create_buffer_indicies(vn_fA, vn_lA, vn_fB, vn_lB):
+    fixed_sides_AB = get_fixed_sides()
+
     # Indices of component A
     i_faces_A = joint_face_indicies("A",0)
-    i_lines_A = joint_line_indicies("A",int(vn_fA/6))
+    i_lines_A = joint_line_indicies("A",int(vn_fA/6),fixed_sides_AB[0])
 
     # Indices of component B
     i_faces_B = joint_face_indicies("B",int((vn_fA+vn_lA)/6))
-    i_lines_B = joint_line_indicies("B",int((vn_fA+vn_lA+vn_fB)/6))
+    i_lines_B = joint_line_indicies("B",int((vn_fA+vn_lA+vn_fB)/6),fixed_sides_AB[1])
 
     # Join all indices into one list
     i_all = np.concatenate([i_faces_A,i_lines_A,i_faces_B,i_lines_B])
