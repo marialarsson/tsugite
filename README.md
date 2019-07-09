@@ -20,4 +20,4 @@ Turn on/off hidden lines with: E
 
 Press S to save joint geometry and O to open last saved geometry (not yet implemented)
 
-![disco_joint_interface.py screenshot](Screenshot_window.JPG)
+![disco_joint_interface.py screenshot](Screenshot.JPG)
