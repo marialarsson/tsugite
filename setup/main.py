@@ -511,9 +511,40 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
     glLineWidth(1)
     glLineStipple(1, 0x00FF)
     glEnable(GL_LINE_STIPPLE)
-    if HIDDEN_A==False and SHOW_HIDDEN==True: glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
-    if HIDDEN_B==False and SHOW_HIDDEN==True: glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+    # Component A
+    if HIDDEN_A==False and SHOW_HIDDEN==True:
+        glDisable(GL_DEPTH_TEST)
+        glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
+        glEnable(GL_STENCIL_TEST)
+        glStencilFunc(GL_ALWAYS,1,1)
+        glStencilOp(GL_REPLACE,GL_REPLACE,GL_REPLACE)
+        glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
+        glEnable(GL_DEPTH_TEST)
+        glStencilFunc(GL_EQUAL,1,1)
+        glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP)
+        glDrawElements(GL_QUADS, in_fA, GL_UNSIGNED_INT,  ctypes.c_void_p(0))
+        glDisable(GL_STENCIL_TEST)
+        glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
+        glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
+    # Component B
+    if HIDDEN_B==False and SHOW_HIDDEN==True:
+        glClear(GL_DEPTH_BUFFER_BIT)
+        glDisable(GL_DEPTH_TEST)
+        glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
+        glEnable(GL_STENCIL_TEST)
+        glStencilFunc(GL_ALWAYS,1,1)
+        glStencilOp(GL_REPLACE,GL_REPLACE,GL_REPLACE)
+        glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+        glEnable(GL_DEPTH_TEST)
+        glStencilFunc(GL_EQUAL,1,1)
+        glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP)
+        glDrawElements(GL_QUADS, in_fB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA)))
+        glDisable(GL_STENCIL_TEST)
+        glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
+        glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
     glPopAttrib()
+
+    glClear(GL_STENCIL_BUFFER_BIT)
     ### DRAW ONLY VISIBLE LINES ###
     glLineWidth(3)
     glDisable(GL_DEPTH_TEST)
@@ -532,11 +563,6 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
     glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
     if HIDDEN_A==False: glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
     if HIDDEN_B==False: glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
-    #glDrawElements(GL_QUADS, in_fA, GL_UNSIGNED_INT,  ctypes.c_void_p(0))
-    #glDrawElements(GL_QUADS, in_fB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA)))
-
-    #if HIDDEN_A==False:
-    #if HIDDEN_B==False:
 
     glfw.swap_buffers(window)
 
