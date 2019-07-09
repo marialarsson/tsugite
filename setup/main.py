@@ -36,7 +36,7 @@ def create_shaders():
     return shader
 
 def keyCallback(window,key,scancode,action,mods):
-    global TYPE, HIDDEN_A, HIDDEN_B, VOX_MAT, UPDATE_JOINT_INDICIES
+    global TYPE, HIDDEN_A, HIDDEN_B, VOX_MAT, UPDATE_JOINT_INDICIES, SHOW_HIDDEN
     UPDATE_JOINT_INDICIES = True
     if action==glfw.PRESS:
         # Joint geometry
@@ -84,6 +84,8 @@ def keyCallback(window,key,scancode,action,mods):
             HIDDEN_A = not HIDDEN_A
         elif key==glfw.KEY_D:
             HIDDEN_B = not HIDDEN_B
+        elif key==glfw.KEY_E:
+            SHOW_HIDDEN = not SHOW_HIDDEN
 
 def mouseCallback(window,button,action,mods):
     if button==glfw.MOUSE_BUTTON_LEFT:
@@ -438,11 +440,11 @@ def initialize():
 
 def create_buffer_vertices(DIM, VOXEL_SIZE, COMP_LENGTH):
     # Vertices of component A
-    v_faces_A = joint_vertices(1.0,1.0,0.0)
+    v_faces_A = joint_vertices(0.8,0.8,0.8)
     v_lines_A = joint_vertices(0.0,0.0,0.0)
 
     # Vertices of component B
-    v_faces_B = joint_vertices(0.0,1.0,0.0)
+    v_faces_B = joint_vertices(0.8,0.8,0.8)
     v_lines_B = joint_vertices(0.0,0.0,0.0)
 
     # Join all vertices into one list
@@ -493,7 +495,7 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
 
     glfw.poll_events()
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
 
     # Rotation
     rot_x = pyrr.Matrix44.from_x_rotation(XROT)
@@ -503,15 +505,38 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
 
     # Draw the geometries
     glPolygonOffset(1.0,1.0)
-    if HIDDEN_A==False:
-        glDrawElements(GL_QUADS, in_fA, GL_UNSIGNED_INT,  ctypes.c_void_p(0))
-        glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
-    if HIDDEN_B==False:
-        glDrawElements(GL_QUADS, in_fB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA)))
-        glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
 
-    #2D?
-    #draw_rect(0.5,0.5,-0.5,-0.5)
+    ### DRAW ALL LINES INCLUDING HIDDEN ###
+    glPushAttrib(GL_ENABLE_BIT)
+    glLineWidth(1)
+    glLineStipple(1, 0x00FF)
+    glEnable(GL_LINE_STIPPLE)
+    if HIDDEN_A==False and SHOW_HIDDEN==True: glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
+    if HIDDEN_B==False and SHOW_HIDDEN==True: glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+    glPopAttrib()
+    ### DRAW ONLY VISIBLE LINES ###
+    glLineWidth(3)
+    glDisable(GL_DEPTH_TEST)
+    glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
+    glEnable(GL_STENCIL_TEST)
+    glStencilFunc(GL_ALWAYS,1,1)
+    glStencilOp(GL_REPLACE,GL_REPLACE,GL_REPLACE)
+    glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
+    glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+    glEnable(GL_DEPTH_TEST)
+    glStencilFunc(GL_EQUAL,1,1)
+    glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP)
+    if HIDDEN_A==False: glDrawElements(GL_QUADS, in_fA, GL_UNSIGNED_INT,  ctypes.c_void_p(0))
+    if HIDDEN_B==False: glDrawElements(GL_QUADS, in_fB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA)))
+    glDisable(GL_STENCIL_TEST)
+    glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
+    if HIDDEN_A==False: glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
+    if HIDDEN_B==False: glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+    #glDrawElements(GL_QUADS, in_fA, GL_UNSIGNED_INT,  ctypes.c_void_p(0))
+    #glDrawElements(GL_QUADS, in_fB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA)))
+
+    #if HIDDEN_A==False:
+    #if HIDDEN_B==False:
 
     glfw.swap_buffers(window)
 
@@ -546,7 +571,7 @@ if __name__ == "__main__":
     # Declare global variables
     global HF, TYPE, XROT, YROT, XROT0, YROT0, XSTART, YSTART, CLICK_TIME
     global DRAGGED, DOUBLE_CLICKED, DIM, VOXEL_SIZE, COMP_LENGTH, VOX_MAT
-    global HIDDEN_B, UPDATE_JOINT_INDICIES
+    global HIDDEN_B, UPDATE_JOINT_INDICIES, SHOW_HIDDEN
     TYPE = "I"
     # Variables for mouse callback and rotation
     XROT, YROT = 0.8, 0.4
@@ -558,6 +583,7 @@ if __name__ == "__main__":
     HIDDEN_A = False
     HIDDEN_B = False
     UPDATE_JOINT_INDICIES = True
+    SHOW_HIDDEN = True
     # Set geometric variables for joint geometry
     DIM = 3
     VOXEL_SIZE = 0.1
