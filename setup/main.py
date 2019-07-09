@@ -37,6 +37,7 @@ def create_shaders():
 
 def keyCallback(window,key,scancode,action,mods):
     global TYPE, HIDDEN_A, HIDDEN_B, VOX_MAT, UPDATE_JOINT_INDICIES, SHOW_HIDDEN
+    global OPEN
     UPDATE_JOINT_INDICIES = True
     if action==glfw.PRESS:
         # Joint geometry
@@ -86,6 +87,9 @@ def keyCallback(window,key,scancode,action,mods):
             HIDDEN_B = not HIDDEN_B
         elif key==glfw.KEY_E:
             SHOW_HIDDEN = not SHOW_HIDDEN
+        elif key==glfw.KEY_C:
+            OPEN = not OPEN
+            vn_fA, vn_lA, vn_fB, vn_lB = create_buffer_vertices()
 
 def mouseCallback(window,button,action,mods):
     if button==glfw.MOUSE_BUTTON_LEFT:
@@ -118,7 +122,8 @@ def updateRotation(window, DRAGGED, DOUBLE_CLICKED):
         XROT = XROT0 + 0.1 * (glfw.get_time()-NEXT_CLICK_TIME)
         YROT = YROT0 + 0.4 * (glfw.get_time()-NEXT_CLICK_TIME)
 
-def joint_vertices(r,g,b):
+def joint_vertices(comp,r,g,b):
+    global OPEN, VOXEL_SIZE
     vertices = []
     # Add all vertices of the DIM*DIM*DIM voxel cube
     for i in range(DIM+1):
@@ -159,6 +164,12 @@ def joint_vertices(r,g,b):
     # Format
     vertices = np.array(vertices, dtype = np.float32) #converts to correct format
     #print('Number of vertices',int(len(vertices)/6))
+    # Mover vertices for opening component
+    if OPEN==True and comp=="B":
+        for i in range(0,len(vertices),6):
+            vertices[i]   = vertices[i]   + 5*SLIDE[0]*VOXEL_SIZE
+            vertices[i+1] = vertices[i+1] + 5*SLIDE[1]*VOXEL_SIZE
+            vertices[i+2] = vertices[i+2] + 5*SLIDE[2]*VOXEL_SIZE
     return vertices
 
 def component_vertices(corners,vec,dist):
@@ -384,6 +395,21 @@ def joint_line_indicies(comp,offset,fixed_sides):
     #print('Number of line indices', len(indices))
     return indices
 
+def open_line_indicies(offset1,offset2):
+    global DIM, HF
+    indices = []
+    for i in range(2):
+        for j in range(2):
+            h = HF[j*(DIM-1)][i*(DIM-1)]
+            i0 = i*DIM
+            j0 = j*DIM
+            ind = [i0,j0,h]
+            indices.extend([get_index(ind,0,0,0)+offset2,get_index(ind,0,0,0)+offset1])
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    #print('Number of open line indices', len(indices))
+    return indices
+
 def get_random_height_field():
     a = random.randint(0,DIM)
     b = random.randint(0,DIM)
@@ -414,7 +440,7 @@ def initialize():
     if not glfw.init():
         return
     # Create window
-    window = glfw.create_window(1600, 1600, "My OpenGL window", None, None)
+    window = glfw.create_window(1600, 1600, "DISCO JOINT", None, None)
     if not window:
         glfw.terminate()
         return
@@ -438,14 +464,15 @@ def initialize():
 
     return window
 
-def create_buffer_vertices(DIM, VOXEL_SIZE, COMP_LENGTH):
+def create_buffer_vertices():
+    global DIM, VOXEL_SIZE, COMP_LENGTH
     # Vertices of component A
-    v_faces_A = joint_vertices(0.8,0.8,0.8)
-    v_lines_A = joint_vertices(0.0,0.0,0.0)
+    v_faces_A = joint_vertices("A",0.8,0.8,0.8)
+    v_lines_A = joint_vertices("A",0.0,0.0,0.0)
 
     # Vertices of component B
-    v_faces_B = joint_vertices(0.8,0.8,0.8)
-    v_lines_B = joint_vertices(0.0,0.0,0.0)
+    v_faces_B = joint_vertices("B",0.8,0.8,0.8)
+    v_lines_B = joint_vertices("B",0.0,0.0,0.0)
 
     # Join all vertices into one list
     vertices_all = np.concatenate([v_faces_A,v_lines_A,v_faces_B,v_lines_B])
@@ -468,17 +495,20 @@ def create_buffer_indicies(vn_fA, vn_lA, vn_fB, vn_lB):
     i_faces_B = joint_face_indicies("B",int((vn_fA+vn_lA)/6))
     i_lines_B = joint_line_indicies("B",int((vn_fA+vn_lA+vn_fB)/6),fixed_sides_AB[1])
 
+    # Indicies of sliding lines
+    i_open = open_line_indicies(int(vn_fA/6),int((vn_fA+vn_lA+vn_fB)/6))
+
     # Join all indices into one list
-    i_all = np.concatenate([i_faces_A,i_lines_A,i_faces_B,i_lines_B])
+    i_all = np.concatenate([i_faces_A,i_lines_A,i_faces_B,i_lines_B,i_open])
 
     # Elements Buffer
     EBO = glGenBuffers(1) # element buffer object
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4*len(i_all), i_all, GL_DYNAMIC_DRAW)
 
-    return len(i_faces_A), len(i_lines_A), len(i_faces_B), len(i_lines_B)
+    return len(i_faces_A), len(i_lines_A), len(i_faces_B), len(i_lines_B), len(i_open)
 
-def display(window, shader, in_fA, in_lA, in_fB, in_lB):
+def display(window, shader, in_fA, in_lA, in_fB, in_lB, in_open):
 
     position = glGetAttribLocation(shader, "position")
     glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
@@ -509,7 +539,7 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
     ### DRAW ALL LINES INCLUDING HIDDEN ###
     glPushAttrib(GL_ENABLE_BIT)
     glLineWidth(1)
-    glLineStipple(1, 0x00FF)
+    glLineStipple(3, 0xAAAA)
     glEnable(GL_LINE_STIPPLE)
     # Component A
     if HIDDEN_A==False and SHOW_HIDDEN==True:
@@ -554,6 +584,7 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
     glStencilOp(GL_REPLACE,GL_REPLACE,GL_REPLACE)
     glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
     glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
+    glDrawElements(GL_LINES, in_open, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB+in_lB)))
     glEnable(GL_DEPTH_TEST)
     glStencilFunc(GL_EQUAL,1,1)
     glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP)
@@ -564,6 +595,13 @@ def display(window, shader, in_fA, in_lA, in_fB, in_lB):
     if HIDDEN_A==False: glDrawElements(GL_LINES, in_lA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*in_fA))
     if HIDDEN_B==False: glDrawElements(GL_LINES, in_lB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB)))
 
+    if OPEN==True:
+        glPushAttrib(GL_ENABLE_BIT)
+        glLineWidth(2)
+        glLineStipple(1, 0x00FF)
+        glEnable(GL_LINE_STIPPLE)
+        glDrawElements(GL_LINES, in_open, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(in_fA+in_lA+in_fB+in_lB)))
+        glPopAttrib()
     glfw.swap_buffers(window)
 
 def main():
@@ -573,18 +611,17 @@ def main():
     # Create shaders
     shader = create_shaders()
     # Create and buffer joint vertices
-    vn_fA, vn_lA, vn_fB, vn_lB = create_buffer_vertices(DIM, VOXEL_SIZE, COMP_LENGTH)
+    vn_fA, vn_lA, vn_fB, vn_lB = create_buffer_vertices()
 
     while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
         # Update Rotation
         updateRotation(window, DRAGGED, DOUBLE_CLICKED)
         # Create and buffer joint indicies
         if UPDATE_JOINT_INDICIES:
-            in_fA, in_lA, in_fB, in_lB = create_buffer_indicies(vn_fA, vn_lA, vn_fB, vn_lB)
+            in_fA, in_lA, in_fB, in_lB, in_open = create_buffer_indicies(vn_fA, vn_lA, vn_fB, vn_lB)
             UPDATE_JOINT_INDICIES=False
         # Display joint geometries
-        display(window, shader, in_fA, in_lA, in_fB, in_lB)
-
+        display(window, shader, in_fA, in_lA, in_fB, in_lB, in_open)
     glfw.terminate()
 
 if __name__ == "__main__":
@@ -597,7 +634,7 @@ if __name__ == "__main__":
     # Declare global variables
     global HF, TYPE, XROT, YROT, XROT0, YROT0, XSTART, YSTART, CLICK_TIME
     global DRAGGED, DOUBLE_CLICKED, DIM, VOXEL_SIZE, COMP_LENGTH, VOX_MAT
-    global HIDDEN_B, UPDATE_JOINT_INDICIES, SHOW_HIDDEN
+    global HIDDEN_B, UPDATE_JOINT_INDICIES, SHOW_HIDDEN, SLIDE, OPEN
     TYPE = "I"
     # Variables for mouse callback and rotation
     XROT, YROT = 0.8, 0.4
@@ -610,9 +647,11 @@ if __name__ == "__main__":
     HIDDEN_B = False
     UPDATE_JOINT_INDICIES = True
     SHOW_HIDDEN = True
+    SLIDE = [0,0,1]
+    OPEN = False
     # Set geometric variables for joint geometry
     DIM = 3
-    VOXEL_SIZE = 0.1
+    VOXEL_SIZE = 0.075
     COMP_LENGTH = VOXEL_SIZE*2
     #
     HF = get_random_height_field()

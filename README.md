@@ -14,6 +14,8 @@ Edit joint geometry with: Y U I / H J K / B N M
 
 Edit joint type with: 1 L T X
 
+Open/close joint with: C
+
 Turn on/off component view with: A / D
 
 Turn on/off hidden lines with: E
