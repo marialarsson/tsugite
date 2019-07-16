@@ -4,9 +4,8 @@ import OpenGL.GL.shaders
 import numpy as np
 import pyrr
 import sys
-import random
 from Geometries import Geometries
-from PIL import Image
+
 
 def create_shaders():
 
@@ -57,20 +56,11 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_M: Geometries.update_height_field(MESH,2,2)
         elif key==glfw.KEY_C: Geometries.clear_height_field(MESH)
         # Joint TYPE
-        elif key==glfw.KEY_1 and MESH.joint_type!="I":
-            MESH.joint_type = "I"
-            Geometries.create_and_buffer_indicies(MESH)
-        elif key==glfw.KEY_L and MESH.joint_type!="L":
-            MESH.joint_type = "L"
-            Geometries.create_and_buffer_indicies(MESH)
-        elif key==glfw.KEY_T and MESH.joint_type!="T":
-            MESH.joint_type = "T"
-            Geometries.create_and_buffer_indicies(MESH)
-        elif key==glfw.KEY_X and MESH.joint_type!="X":
-            MESH.joint_type = "X"
-            if MESH.sliding_direction==[2,0]:
-                Geometries.update_sliding_direction(MESH,[1,0])
-            Geometries.create_and_buffer_indicies(MESH)
+        elif key==glfw.KEY_1 and MESH.joint_type!="I": Geometries.update_joint_type(MESH,"I")
+        elif key==glfw.KEY_L and MESH.joint_type!="L": Geometries.update_joint_type(MESH,"L")
+        elif key==glfw.KEY_T and MESH.joint_type!="T": Geometries.update_joint_type(MESH,"T")
+        elif key==glfw.KEY_X and MESH.joint_type!="X": Geometries.update_joint_type(MESH,"X")
+        # Sliding direction
         elif (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and MESH.sliding_direction!=[2,0]:
             if MESH.joint_type!="X":
                 Geometries.update_sliding_direction(MESH,[2,0])
@@ -172,7 +162,10 @@ def display(window, shader):
     global MESH
 
     glUseProgram(shader)
-    glClearColor(1.0, 1.0, 1.0, 1.0)
+    if MESH.connected:
+        glClearColor(1.0, 1.0, 1.0, 1.0)
+    else:
+        glClearColor(1.0, 0.9, 0.9, 1.0)
     glEnable(GL_DEPTH_TEST)
     glfw.poll_events()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
@@ -187,8 +180,6 @@ def display(window, shader):
     iA = MESH.ifA + MESH.ifeA + MESH.ilA
     iB = MESH.ifB + MESH.ifeB + MESH.ilB
 
-
-    #sglDisable(GL_TEXTURE_2D)
     glBindTexture(GL_TEXTURE_2D, 1)
 
     ### Draw end grain faces (hidden in depth by full geometry) ###
@@ -204,12 +195,11 @@ def display(window, shader):
     if HIDDEN_B==False:
         G0.append(b0)
         G1.append(b1)
-    if HIDDEN_A==False or HIDDEN_B==False:
+    if MESH.connected and (HIDDEN_A==False or HIDDEN_B==False):
         draw_geometry_with_excluded_area(G0,G1)
 
     #glEnable(GL_TEXTURE_2D)
     glBindTexture(GL_TEXTURE_2D, 0)
-
     ### Draw lines HIDDEN by other component ###
     glPushAttrib(GL_ENABLE_BIT)
     glLineWidth(1)
@@ -259,8 +249,6 @@ def display(window, shader):
         G1 = [a1,b1]
         draw_geometry_with_excluded_area(G0,G1)
         glPopAttrib()
-
-    #display_2D_text()
 
     glfw.swap_buffers(window)
 

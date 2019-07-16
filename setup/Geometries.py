@@ -32,14 +32,18 @@ def get_corner_indices(ax,n,dim):
 def joint_vertices(self,comp,r,g,b):
     vertices = []
     # Add all vertices of the dim*dim*dim voxel cube
+    ax = 2
+    if comp=="B" and self.joint_type!="I": ax = 0
     for i in range(self.dim+1):
         for j in range(self.dim+1):
             for k in range(self.dim+1):
                 x = (i-0.5*self.dim)*self.voxel_size
                 y = (j-0.5*self.dim)*self.voxel_size
                 z = (k-0.5*self.dim)*self.voxel_size
-                tx = 0.3*i
-                ty = 0.3*j
+                tex_coords = [i,j,k]
+                tex_coords.pop(ax)
+                tx = tex_coords[0]/self.dim
+                ty = tex_coords[1]/self.dim
                 vertices.extend([x,y,z,r,g,b,tx,ty])
     # Add component base vertices
     component_vertices = []
@@ -65,18 +69,6 @@ def joint_vertices(self,comp,r,g,b):
         for i in range(0,len(vertices),8):
             vertices[i+ax] += f*dir*self.voxel_size
     return vertices
-
-def get_fixed_sides(joint_type):
-    # Component A
-    fixed_sides_A = []
-    fixed_sides_A.append([2,0]) # [axis (x,y, or z), side (0 or 1)]
-    if joint_type=="X": fixed_sides_A.append([2,1])
-    # Component B
-    fixed_sides_B = []
-    if joint_type=="I": fixed_sides_B.append([2,1])
-    else: fixed_sides_B.append([0,0])
-    if joint_type=="T" or joint_type=="X": fixed_sides_B.append([0,1])
-    return [fixed_sides_A,fixed_sides_B]
 
 def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
     neighbors = []
@@ -261,6 +253,109 @@ def open_line_indicies(self,offset0,offset1):
     indices = np.array(indices, dtype=np.uint32)
     return indices
 
+def get_fixed_sides(joint_type):
+    fixed_sides = []
+    if joint_type=="I":   fixed_sides = [[[2,0]], [[2,1]]]
+    elif joint_type=="L": fixed_sides = [[[2,0]], [[0,0]]]
+    elif joint_type=="T": fixed_sides = [[[2,0]], [[0,0],[0,1]]]
+    elif joint_type=="X": fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
+    return fixed_sides
+
+def add_fixed_sides(mat,fixed_sides):
+    dim = len(mat)
+    pad_loc = [[0,0],[0,0],[0,0]]
+    pad_val = [[-1,-1],[-1,-1],[-1,-1]]
+    for n in range(2):
+        for ax,dir in fixed_sides[n]:
+            pad_loc[ax][dir] = 1
+            pad_val[ax][dir] = n
+    pad_loc = tuple(map(tuple, pad_loc))
+    pad_val = tuple(map(tuple, pad_val))
+    mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
+    # Take care of corners
+    for ax,dir in fixed_sides[0]:
+        for ax2,dir2 in fixed_sides[1]:
+            if ax==ax2: continue
+            for i in range(dim):
+                ind = [i,i,i]
+                ind[ax] =  dir*(mat.shape[ax]-1)
+                ind[ax2] = dir2*(mat.shape[ax2]-1)
+                mat[tuple(ind)] = -1
+    return mat
+
+def get_friction(self):
+    friction = 0
+    # Define which axes are acting in friction
+    axes = [0,1,2]
+    bad_axes = []
+    for n in range(2): #for each material...
+        for item in slide[n]: #for each sliding direction
+            bad_axes.append(item[0])
+    axes = [x for x in axes if x not in bad_axes]
+    # For each material, of all same, check neighbors in good axes.
+    # If neighbor is other, friction is working!
+    n = 0
+    same = np.argwhere(lst==n)
+    same_fixed =  np.argwhere(lst==n+10)
+    indices = np.concatenate((same, same_fixed), axis=0)
+    indices = [tuple(ind) for ind in indices]
+    for ind in indices:
+        for ax in axes:
+            n_indices,n_values = get_axial_neighbors(lst,ind,ax)
+            for n_val in n_values:
+                if n_val==1-n or n_val==11-n:
+                    friction += 1
+    frictions.append(friction)
+    return frictions
+
+def get_neighbors(mat,ind):
+    indices = []
+    values = []
+    for m in range(len(ind)):   # For each direction (x,y)
+        for n in range(2):      # go up and down one step
+            n=2*n-1             # -1,1
+            ind0 = list(ind)
+            ind0[m] = ind[m]+n
+            ind0 = tuple(ind0)
+            if ind0[m]>=0 and ind0[m]<mat.shape[m]:
+                indices.append(ind0)
+                values.append(int(mat[ind0]))
+    return indices, np.array(values)
+
+def get_all_same_connected(mat,indices):
+    start_n = len(indices)
+    val = int(mat[indices[0]])
+    all_same_neighbors = []
+    for ind in indices:
+        n_indices,n_values = get_neighbors(mat,ind)
+        for n_ind,n_val in zip(n_indices,n_values):
+            if n_val==val: all_same_neighbors.append(n_ind)
+    indices.extend(all_same_neighbors)
+    if len(indices)>0:
+        indices = np.unique(indices, axis=0)
+        indices = [tuple(ind) for ind in indices]
+        if len(indices)>start_n: indices = get_all_same_connected(mat,indices)
+    return indices
+
+def is_connected(mat):
+    connected = False
+    # 1. Count number of ones in matrix
+    all_ones = np.count_nonzero(mat==1)
+    # 2. Pick a random one, and get all its neighbors (recursively)
+    if all_ones>0:
+        ind = tuple(np.argwhere(mat==1)[0])
+        inds = get_all_same_connected(mat,[ind])
+        connected_ones = len(inds)
+        # 3. Compare length of all zeros with length of neighour
+        if connected_ones==all_ones: connected = True
+    return connected
+
+def get_sliding_directions(self):
+    return [1,0]
+
+def get_milling_path_length(self):
+    return "x"
+
 class Geometries:
     def __init__(self):
         self.open_joint = False
@@ -270,6 +365,7 @@ class Geometries:
         self.voxel_size = 0.075
         self.component_length = 2*self.voxel_size
         self.height_field = get_random_height_field(self.dim)
+        self.connected = True
         self.voxel_matrix = None
         self.ifA = None
         self.ifeA = None
@@ -278,10 +374,7 @@ class Geometries:
         self.ifeB = None
         self.ilB = None
         self.iopen = None
-
         self.voxel_matrix_from_height_field()
-
-        # Create verticies
         self.vn = self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
 
@@ -304,6 +397,7 @@ class Geometries:
         vox_mat = np.array(vox_mat)
         vox_mat = np.swapaxes(vox_mat,2,ax)
         self.voxel_matrix = vox_mat
+        self.evaluate_joint()
 
     def update_sliding_direction(self,sliding_direction_):
         self.sliding_direction = sliding_direction_
@@ -320,6 +414,14 @@ class Geometries:
         self.height_field = np.zeros((self.dim,self.dim))
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
+
+    def update_joint_type(self,joint_type_):
+        self.joint_type = joint_type_
+        if self.joint_type=="X" and self.sliding_direction==[2,0]:
+            self.update_sliding_direction([1,0])
+        self.vn = self.create_and_buffer_vertices()
+        self.create_and_buffer_indicies()
+        self.evaluate_joint()
 
     def create_and_buffer_vertices(self):
         #print("Updating vertices...")
@@ -395,3 +497,16 @@ class Geometries:
         self.ifeB = len(faces_end_B)
         self.ilB = len(lines_B)
         self.iopen = len(lines_open)
+
+    def evaluate_joint(self):
+        fixed_sides = get_fixed_sides(self.joint_type)
+        voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, fixed_sides)
+        self.connected = is_connected(voxel_matrix_with_sides)
+        #slides = get_sliding_directions(self)
+        #friciton = get_friction(self)
+        #path_length = get_milling_path_length(self)
+        print("\n---JOINT EVALUATION---")
+        print("Connected:   ",self.connected)
+        #print("Sliding dirs:", len(slides))
+        #print("Friction:    ", friciton)
+        #print("Milling path:", path_length, "meters")
