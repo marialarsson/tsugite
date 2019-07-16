@@ -1,6 +1,7 @@
 from OpenGL.GL import *
 import numpy as np
 import random
+from PIL import Image
 
 def get_random_height_field(dim):
     hf = np.zeros((dim,dim))
@@ -37,7 +38,9 @@ def joint_vertices(self,comp,r,g,b):
                 x = (i-0.5*self.dim)*self.voxel_size
                 y = (j-0.5*self.dim)*self.voxel_size
                 z = (k-0.5*self.dim)*self.voxel_size
-                vertices.extend([x,y,z,r,g,b])
+                tx = 0.3*i
+                ty = 0.3*j
+                vertices.extend([x,y,z,r,g,b,tx,ty])
     # Add component base vertices
     component_vertices = []
     for ax in range(3):
@@ -46,8 +49,8 @@ def joint_vertices(self,comp,r,g,b):
             for step in range(2,4):
                 for corner in corners:
                     new_vertex = []
-                    for i in range(6):
-                        new_vertex_param = vertices[6*corner+i]
+                    for i in range(8):
+                        new_vertex_param = vertices[8*corner+i]
                         if i==ax: new_vertex_param = new_vertex_param + (2*n-1)*step*self.component_length
                         new_vertex.append(new_vertex_param)
                     vertices.extend(new_vertex)
@@ -59,7 +62,7 @@ def joint_vertices(self,comp,r,g,b):
         if comp=="B": f=-f
         ax,n = self.sliding_direction
         dir = (2*n-1)
-        for i in range(0,len(vertices),6):
+        for i in range(0,len(vertices),8):
             vertices[i+ax] += f*dir*self.voxel_size
     return vertices
 
@@ -334,17 +337,31 @@ class Geometries:
         # Vertex buffer
         VBO = glGenBuffers(1) # vertex buffer object - the vertices
         glBindBuffer(GL_ARRAY_BUFFER, VBO)
-        glBufferData(GL_ARRAY_BUFFER, 4*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW) #uploadning data to the buffer. Specifying size / bites of data (x4)
+        glBufferData(GL_ARRAY_BUFFER, 6*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW) #uploadning data to the buffer. Specifying size / bites of data (x4)
 
         # vertex attribute pointers
-        position = 0
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(position)
-        color = 1
-        glVertexAttribPointer(color, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
-        glEnableVertexAttribArray(color)
+        # position
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        # color
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12))
+        glEnableVertexAttribArray(1)
+        #texture
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24))
+        glEnableVertexAttribArray(2)
 
-        return int(len(v_faces_A)/6)
+        texture = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        image = Image.open("textures/end_grain.jpg")
+        img_data = np.array(list(image.getdata()), np.uint8)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+
+        return int(len(v_faces_A)/8)
 
     def create_and_buffer_indicies(self):
         #print("Updating indices...")

@@ -6,29 +6,35 @@ import pyrr
 import sys
 import random
 from Geometries import Geometries
+from PIL import Image
 
 def create_shaders():
 
     vertex_shader = """
     #version 330
-    in vec3 position;
-    in vec3 color;
+    in layout(location = 0) vec3 position;
+    in layout(location = 1) vec3 color;
+    in layout(location = 2) vec2 inTexCoords;
     uniform mat4 transform;
     out vec3 newColor;
+    out vec2 outTexCoords;
     void main()
     {
         gl_Position = transform* vec4(position, 1.0f);
         newColor = color;
+        outTexCoords = inTexCoords;
     }
     """
 
     fragment_shader = """
     #version 330
     in vec3 newColor;
+    in vec2 outTexCoords;
     out vec4 outColor;
+    uniform sampler2D samplerTex;
     void main()
     {
-        outColor = vec4(newColor, 1.0f);
+        outColor = texture(samplerTex, outTexCoords);
     }
     """
     # Compiling the shaders
@@ -164,13 +170,7 @@ def initialize():
 
 def display(window, shader):
     global MESH
-    # Set up
-    position = glGetAttribLocation(shader, "position")
-    glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
-    glEnableVertexAttribArray(position)
-    color = glGetAttribLocation(shader, "color")
-    glVertexAttribPointer(color, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
-    glEnableVertexAttribArray(color)
+
     glUseProgram(shader)
     glClearColor(1.0, 1.0, 1.0, 1.0)
     glEnable(GL_DEPTH_TEST)
@@ -187,6 +187,10 @@ def display(window, shader):
     iA = MESH.ifA + MESH.ifeA + MESH.ilA
     iB = MESH.ifB + MESH.ifeB + MESH.ilB
 
+
+    #sglDisable(GL_TEXTURE_2D)
+    glBindTexture(GL_TEXTURE_2D, 1)
+
     ### Draw end grain faces (hidden in depth by full geometry) ###
     a0 = [GL_QUADS, MESH.ifeA, MESH.ifA]
     b0 = [GL_QUADS, MESH.ifeB,iA+ MESH.ifB]
@@ -202,6 +206,9 @@ def display(window, shader):
         G1.append(b1)
     if HIDDEN_A==False or HIDDEN_B==False:
         draw_geometry_with_excluded_area(G0,G1)
+
+    #glEnable(GL_TEXTURE_2D)
+    glBindTexture(GL_TEXTURE_2D, 0)
 
     ### Draw lines HIDDEN by other component ###
     glPushAttrib(GL_ENABLE_BIT)
