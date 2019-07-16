@@ -1,6 +1,6 @@
 # DISCO JOINT
 
-python 3.6.0
+python 3.6.0 / OpenGL / GLFW / PyQt5
 
 Environment setup as YouTube tutorial: https://www.youtube.com/watch?v=Ctfs-E_9rLE
 
@@ -10,16 +10,16 @@ Hit ESC key to quit.
 
 Rotate view with mouse / Double click mouse to start constant rotation
 
-Edit joint geometry with: Y U I / H J K / B N M
+Edit joint geometry: Y U I / H J K / B N M
+Clear joint geometry: C
 
-Edit joint type with: 1 L T X
+Edit joint type: 1 L T X
 
-Open/close joint with: C
+Open/close joint: O
+Turn on/off component view: A / D
+Turn on/off hidden lines: E
 
-Turn on/off component view with: A / D
-
-Turn on/off hidden lines with: E
-
-Press S to save joint geometry and O to open last saved geometry (not yet implemented)
+Save joint geometry: S
+Load saved geometry: G
 
 ![disco_joint_interface.py screenshot](Screenshot.JPG)

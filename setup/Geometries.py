@@ -282,6 +282,14 @@ class Geometries:
         self.vn = self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
 
+    def save(self):
+        np.savetxt("saved_joint_geometry.txt",self.height_field)
+
+    def load(self):
+        self.height_field = np.loadtxt("saved_joint_geometry.txt")
+        self.voxel_matrix_from_height_field()
+        self.create_and_buffer_indicies()
+
     def voxel_matrix_from_height_field(self):
         vox_mat = np.zeros(shape=(self.dim,self.dim,self.dim))
         ax = self.sliding_direction[0]
@@ -302,6 +310,11 @@ class Geometries:
 
     def update_height_field(self,i,j):
         self.height_field[i][j] = (self.height_field[i][j]+1)%4
+        self.voxel_matrix_from_height_field()
+        self.create_and_buffer_indicies()
+
+    def clear_height_field(self):
+        self.height_field = np.zeros((self.dim,self.dim))
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
 

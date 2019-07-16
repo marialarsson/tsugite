@@ -49,6 +49,7 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_B: Geometries.update_height_field(MESH,2,0)
         elif key==glfw.KEY_N: Geometries.update_height_field(MESH,2,1)
         elif key==glfw.KEY_M: Geometries.update_height_field(MESH,2,2)
+        elif key==glfw.KEY_C: Geometries.clear_height_field(MESH)
         # Joint TYPE
         elif key==glfw.KEY_1 and MESH.joint_type!="I":
             MESH.joint_type = "I"
@@ -73,9 +74,15 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_A: HIDDEN_A = not HIDDEN_A
         elif key==glfw.KEY_D: HIDDEN_B = not HIDDEN_B
         elif key==glfw.KEY_E: SHOW_HIDDEN = not SHOW_HIDDEN
-        elif key==glfw.KEY_C:
+        elif key==glfw.KEY_O:
             MESH.open_joint = not MESH.open_joint
             Geometries.create_and_buffer_vertices(MESH)
+        elif key==glfw.KEY_S:
+            print("Saving...")
+            Geometries.save(MESH)
+        elif key==glfw.KEY_G:
+            print("Loading...")
+            Geometries.load(MESH)
 
 def mouseCallback(window,button,action,mods):
     if button==glfw.MOUSE_BUTTON_LEFT:
