@@ -280,8 +280,12 @@ def main():
 if __name__ == "__main__":
     print("Hit ESC key to quit.")
     print("Rotate view with mouse / Autorotate with double click")
-    print("Edit joint geometry with:\nY U I\nH J K\nB N M")
-    print("Edit joint type with: 1 L T X")
+    print("Edit joint geometry:\nY U I\nH J K\nB N M")
+    print("Clear joint geometry with:\nC")
+    print("Edit joint type: 1 L T X")
+    print("Open joint: O")
+    print("Hide components: A / D")
+    print("Hide hidden lines: E")
     print("Press S to save joint geometry and O to open last saved geometry (not yet implemented)")
 
     # Declare global variables
