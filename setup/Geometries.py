@@ -283,30 +283,38 @@ def add_fixed_sides(mat,fixed_sides):
                 mat[tuple(ind)] = -1
     return mat
 
-def get_friction(self):
+def get_axial_neighbors(mat,ind,ax):
+    indices = []
+    values = []
+    m = ax
+    for n in range(2):      # go up and down one step
+        n=2*n-1             # -1,1
+        ind0 = list(ind)
+        ind0[m] = ind[m]+n
+        ind0 = tuple(ind0)
+        if ind0[m]>=0 and ind0[m]<mat.shape[m]:
+            indices.append(ind0)
+            try: values.append(int(mat[ind0]))
+            except: values.append(mat[ind0])
+    return indices,values
+
+def get_friction(mat,slides):
     friction = 0
     # Define which axes are acting in friction
     axes = [0,1,2]
     bad_axes = []
-    for n in range(2): #for each material...
-        for item in slide[n]: #for each sliding direction
+    for n in range(2): #for each material
+        for item in slides[n]: #for each sliding direction
             bad_axes.append(item[0])
     axes = [x for x in axes if x not in bad_axes]
-    # For each material, of all same, check neighbors in good axes.
-    # If neighbor is other, friction is working!
-    n = 0
-    same = np.argwhere(lst==n)
-    same_fixed =  np.argwhere(lst==n+10)
-    indices = np.concatenate((same, same_fixed), axis=0)
-    indices = [tuple(ind) for ind in indices]
+    # Check neighbors in relevant axes. If neighbor is other, friction is acting!
+    indices = np.argwhere(mat==0)
     for ind in indices:
         for ax in axes:
-            n_indices,n_values = get_axial_neighbors(lst,ind,ax)
+            n_indices,n_values = get_axial_neighbors(mat,ind,ax)
             for n_val in n_values:
-                if n_val==1-n or n_val==11-n:
-                    friction += 1
-    frictions.append(friction)
-    return frictions
+                if n_val==1: friction += 1
+    return friction
 
 def get_neighbors(mat,ind):
     indices = []
@@ -337,21 +345,71 @@ def get_all_same_connected(mat,indices):
         if len(indices)>start_n: indices = get_all_same_connected(mat,indices)
     return indices
 
-def is_connected(mat):
+def is_connected(mat,n):
     connected = False
-    # 1. Count number of ones in matrix
-    all_ones = np.count_nonzero(mat==1)
-    # 2. Pick a random one, and get all its neighbors (recursively)
-    if all_ones>0:
-        ind = tuple(np.argwhere(mat==1)[0])
-        inds = get_all_same_connected(mat,[ind])
-        connected_ones = len(inds)
-        # 3. Compare length of all zeros with length of neighour
-        if connected_ones==all_ones: connected = True
+    all_same = np.count_nonzero(mat==n) # Count number of ones in matrix
+    if all_same>0:
+        ind = tuple(np.argwhere(mat==n)[0]) # Pick a random one
+        inds = get_all_same_connected(mat,[ind]) # Get all its neighbors (recursively)
+        connected_same = len(inds)
+        if connected_same==all_same: connected = True
     return connected
 
-def get_sliding_directions(self):
-    return [1,0]
+def reverse_columns(cols):
+    new_cols = []
+    for i in range(len(cols)):
+        temp = []
+        for j in range(len(cols[i])):
+            temp.append(cols[i][len(cols[i])-j-1].astype(int))
+        new_cols.append(temp)
+    return new_cols
+
+def get_columns(mat,ax):
+    columns = []
+    if ax==0:
+        for j in range(len(mat[0])):
+            for k in range(len(mat[0][0])):
+                col = []
+                for i in range(len(mat)): col.append(mat[i][j][k])
+                columns.append(col)
+    elif ax==1:
+        for i in range(len(mat)):
+            for k in range(len(mat[0][0])):
+                col = []
+                for j in range(len(mat[0])): col.append(mat[i][j][k])
+                columns.append(col)
+    elif ax==2:
+        for layer in mat:
+            for col in layer: columns.append(col)
+    columns2 = []
+    for col in columns:
+        col = np.array(col)
+        col = col[np.logical_not(np.isnan(col))] #remove nans
+        if len(col)==0: continue
+        col = col.astype(int)
+        columns2.append(col)
+    return columns2
+
+def get_sliding_directions(mat):
+    sliding_directions = []
+    for n in range(2): # Browse the components (0, 1 / two materials)
+        mat_sliding = []
+        for ax in range(3): # Browse the three possible sliding axes
+            for dir in range(2): # Browse the two possible directions of the axis
+                slides_in_this_direction = True
+                cols = get_columns(mat,ax) # Columns corresponding to this direction
+                if dir==0: cols = reverse_columns(cols)
+                for col in cols:
+                    first_same = False
+                    for i in range(len(col)):
+                        if col[i]==n: first_same = True; continue
+                        elif first_same==True and (col[i]==1-n):
+                            slides_in_this_direction=False; break
+                    if slides_in_this_direction==False: break #stop checking further columns if one was blocking the slide
+                if slides_in_this_direction==True:
+                    mat_sliding.append([ax,dir])
+        sliding_directions.append(mat_sliding)
+    return sliding_directions
 
 def get_milling_path_length(self):
     return "x"
@@ -501,12 +559,17 @@ class Geometries:
     def evaluate_joint(self):
         fixed_sides = get_fixed_sides(self.joint_type)
         voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, fixed_sides)
-        self.connected = is_connected(voxel_matrix_with_sides)
-        #slides = get_sliding_directions(self)
-        #friciton = get_friction(self)
+        connected_A = is_connected(voxel_matrix_with_sides,0)
+        connected_B = is_connected(voxel_matrix_with_sides,1)
+        if connected_A and connected_B: self.connected = True
+        else: self.connected=False
+        slides = get_sliding_directions(voxel_matrix_with_sides)
+        if len(slides[0])!=len(slides[1]): print("Sliding calculation error")
+        print("slides",slides)
+        friciton = get_friction(voxel_matrix_with_sides,slides)
         #path_length = get_milling_path_length(self)
         print("\n---JOINT EVALUATION---")
-        print("Connected:   ",self.connected)
-        #print("Sliding dirs:", len(slides))
-        #print("Friction:    ", friciton)
+        print("Connected:",self.connected)
+        print("Slidings: ", len(slides[0]))
+        print("Friction: ", friciton)
         #print("Milling path:", path_length, "meters")
