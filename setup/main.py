@@ -5,10 +5,9 @@ import numpy as np
 import pyrr
 import sys
 from Geometries import Geometries
+import ctypes
 
-
-def create_shaders():
-
+def create_texture_shaders():
     vertex_shader = """
     #version 330
     in layout(location = 0) vec3 position;
@@ -41,30 +40,67 @@ def create_shaders():
                                               OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
     return shader
 
+def create_color_shaders():
+    vertex_shader = """
+    #version 330
+    in layout(location = 0) vec3 position;
+    in layout(location = 1) vec3 color;
+    in layout(location = 2) vec2 inTexCoords;
+    uniform mat4 transform;
+    out vec3 newColor;
+    out vec2 outTexCoords;
+    void main()
+    {
+        gl_Position = transform* vec4(position, 1.0f);
+        newColor = color;
+        outTexCoords = inTexCoords;
+    }
+    """
+
+    fragment_shader = """
+    #version 330
+    in vec3 newColor;
+    in vec2 outTexCoords;
+    out vec4 outColor;
+    uniform sampler2D samplerTex;
+    void main()
+    {
+        outColor = vec4(newColor, 1.0);
+    }
+    """
+    # Compiling the shaders
+    shader = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
+                                              OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
+    return shader
+
 def keyCallback(window,key,scancode,action,mods):
-    global HIDDEN_A, HIDDEN_B, SHOW_HIDDEN, OPEN
+    global HIDDEN_A, HIDDEN_B, SHOW_HIDDEN, OPEN, SHOW_MILLING_PATH
     if action==glfw.PRESS:
         # Joint geometry edit by height field
-        if key==glfw.KEY_Y:   Geometries.update_height_field(MESH,0,0)
-        elif key==glfw.KEY_U: Geometries.update_height_field(MESH,0,1)
-        elif key==glfw.KEY_I: Geometries.update_height_field(MESH,0,2)
-        elif key==glfw.KEY_H: Geometries.update_height_field(MESH,1,0)
+        if key==glfw.KEY_Y:   Geometries.update_height_field(MESH,0,2)
+        elif key==glfw.KEY_U: Geometries.update_height_field(MESH,1,2)
+        elif key==glfw.KEY_I: Geometries.update_height_field(MESH,2,2)
+        elif key==glfw.KEY_H: Geometries.update_height_field(MESH,0,1)
         elif key==glfw.KEY_J: Geometries.update_height_field(MESH,1,1)
-        elif key==glfw.KEY_K: Geometries.update_height_field(MESH,1,2)
-        elif key==glfw.KEY_B: Geometries.update_height_field(MESH,2,0)
-        elif key==glfw.KEY_N: Geometries.update_height_field(MESH,2,1)
-        elif key==glfw.KEY_M: Geometries.update_height_field(MESH,2,2)
+        elif key==glfw.KEY_K: Geometries.update_height_field(MESH,2,1)
+        elif key==glfw.KEY_N: Geometries.update_height_field(MESH,0,0)
+        elif key==glfw.KEY_M: Geometries.update_height_field(MESH,1,0)
+        elif key==glfw.KEY_COMMA: Geometries.update_height_field(MESH,2,0)
         elif key==glfw.KEY_C: Geometries.clear_height_field(MESH)
         # Joint TYPE
-        elif key==glfw.KEY_1 and MESH.joint_type!="I": Geometries.update_joint_type(MESH,"I")
-        elif key==glfw.KEY_L and MESH.joint_type!="L": Geometries.update_joint_type(MESH,"L")
-        elif key==glfw.KEY_T and MESH.joint_type!="T": Geometries.update_joint_type(MESH,"T")
-        elif key==glfw.KEY_X and MESH.joint_type!="X": Geometries.update_joint_type(MESH,"X")
+        elif key==glfw.KEY_SEMICOLON and MESH.joint_type!="I":
+            Geometries.update_joint_type(MESH,"I")
+        elif key==glfw.KEY_L and MESH.joint_type!="L":
+            Geometries.update_joint_type(MESH,"L")
+        elif key==glfw.KEY_T and MESH.joint_type!="T":
+            Geometries.update_joint_type(MESH,"T")
+        elif key==glfw.KEY_X and MESH.joint_type!="X":
+            Geometries.update_joint_type(MESH,"X")
         # Sliding direction
-        elif (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and MESH.sliding_direction!=[2,0]:
+        elif key==glfw.KEY_UP and MESH.sliding_direction!=[2,0]:
             if MESH.joint_type!="X":
                 Geometries.update_sliding_direction(MESH,[2,0])
-        elif key==glfw.KEY_LEFT or key==glfw.KEY_RIGHT and MESH.sliding_direction!=[1,0]:
+        elif key==glfw.KEY_RIGHT and MESH.sliding_direction!=[1,0]:
             Geometries.update_sliding_direction(MESH,[1,0])
         # Preview options
         elif key==glfw.KEY_A: HIDDEN_A = not HIDDEN_A
@@ -76,9 +112,14 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_S:
             print("Saving...")
             Geometries.save(MESH)
-        elif key==glfw.KEY_G:
+        elif key==glfw.KEY_W:
             print("Loading...")
             Geometries.load(MESH)
+        elif key==glfw.KEY_G: SHOW_MILLING_PATH = not SHOW_MILLING_PATH
+        elif key==glfw.KEY_2: Geometries.update_dimension(MESH,2)
+        elif key==glfw.KEY_3: Geometries.update_dimension(MESH,3)
+        elif key==glfw.KEY_4: Geometries.update_dimension(MESH,4)
+
 
 def mouseCallback(window,button,action,mods):
     if button==glfw.MOUSE_BUTTON_LEFT:
@@ -158,10 +199,13 @@ def initialize():
 
     return window
 
-def display(window, shader):
+def display(window, shader_tex, shader_col):
     global MESH
 
-    glUseProgram(shader)
+    iA = MESH.ifA + MESH.ifeA + MESH.ilA
+    iB = MESH.ifB + MESH.ifeB + MESH.ilB
+
+    glUseProgram(shader_tex)
     if MESH.connected:
         glClearColor(1.0, 1.0, 1.0, 1.0)
     else:
@@ -171,22 +215,18 @@ def display(window, shader):
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
     rot_x = pyrr.Matrix44.from_x_rotation(XROT)
     rot_y = pyrr.Matrix44.from_y_rotation(YROT)
-    transformLoc = glGetUniformLocation(shader, "transform")
+    transformLoc = glGetUniformLocation(shader_tex, "transform")
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
 
-    # Draw geometries
     glPolygonOffset(1.0,1.0)
 
-    iA = MESH.ifA + MESH.ifeA + MESH.ilA
-    iB = MESH.ifB + MESH.ifeB + MESH.ilB
-
-    glBindTexture(GL_TEXTURE_2D, 1)
+    ################# Textures faces
 
     ### Draw end grain faces (hidden in depth by full geometry) ###
     a0 = [GL_QUADS, MESH.ifeA, MESH.ifA]
-    b0 = [GL_QUADS, MESH.ifeB,iA+ MESH.ifB]
-    a1 = [GL_QUADS, MESH.ifA,0]
-    b1 = [GL_QUADS, MESH.ifB,iA]
+    b0 = [GL_QUADS, MESH.ifeB, iA+MESH.ifB]
+    a1 = [GL_QUADS, MESH.ifA, 0]
+    b1 = [GL_QUADS, MESH.ifB, iA]
     G0 = []
     G1 = []
     if HIDDEN_A==False:
@@ -198,8 +238,11 @@ def display(window, shader):
     if MESH.connected and (HIDDEN_A==False or HIDDEN_B==False):
         draw_geometry_with_excluded_area(G0,G1)
 
-    #glEnable(GL_TEXTURE_2D)
-    glBindTexture(GL_TEXTURE_2D, 0)
+    ################## SWITCH SHADER FOR Lines
+    glUseProgram(shader_col)
+    transformLoc = glGetUniformLocation(shader_col, "transform")
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
+
     ### Draw lines HIDDEN by other component ###
     glPushAttrib(GL_ENABLE_BIT)
     glLineWidth(1)
@@ -214,7 +257,7 @@ def display(window, shader):
     # Component B
     if HIDDEN_B==False and SHOW_HIDDEN==True:
         glClear(GL_DEPTH_BUFFER_BIT)
-        G0 = [[GL_LINES,  MESH.ilB, iA+ MESH.ifB+ MESH.ifeB]]
+        G0 = [[GL_LINES,  MESH.ilB, iA+MESH.ifB+ MESH.ifeB]]
         G1 = [[GL_QUADS,  MESH.ifB+ MESH.ifeB, iA]]
         draw_geometry_with_excluded_area(G0,G1)
     glPopAttrib()
@@ -222,7 +265,7 @@ def display(window, shader):
     ### Draw visible lines ###
     glLineWidth(3)
     glClear(GL_DEPTH_BUFFER_BIT)
-    a0 = [GL_LINES,  MESH.ilA,  MESH.ifA+ MESH.ifeA]
+    a0 = [GL_LINES,  MESH.ilA, MESH.ifA+ MESH.ifeA]
     b0 = [GL_LINES,  MESH.ilB, iA+ MESH.ifB+ MESH.ifeB]
     a1 = [GL_QUADS,  MESH.ifA+ MESH.ifeA, 0]
     b1 = [GL_QUADS,  MESH.ifB+ MESH.ifeB, iA]
@@ -250,16 +293,27 @@ def display(window, shader):
         draw_geometry_with_excluded_area(G0,G1)
         glPopAttrib()
 
+    ############# Milling paths
+    ### Draw gpath lines ###
+    glClear(GL_DEPTH_BUFFER_BIT)
+    glLineWidth(1)
+    if not HIDDEN_A and SHOW_MILLING_PATH:
+        glDrawElements(GL_LINE_STRIP, MESH.imA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(iA+iB+MESH.iopen)))
+    if not HIDDEN_B and SHOW_MILLING_PATH:
+        glDrawElements(GL_LINE_STRIP, MESH.imB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(iA+iB+MESH.iopen+MESH.imA)))
+
     glfw.swap_buffers(window)
 
 def main():
     global MESH
+
     # Initialize window
     window = initialize()
+
     # Create shaders
-    shader = create_shaders()
-    # Create and buffer joint vertices
-    #VBO, vn_fA, vn_lA, vn_fB, vn_lB = create_buffer_vertices()
+    shader_tex = create_texture_shaders()
+    shader_col = create_color_shaders()
+
     MESH = Geometries()
 
     while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
@@ -267,31 +321,33 @@ def main():
         updateRotation(window, DRAGGED, DOUBLE_CLICKED)
 
         # Display joint geometries
-        display(window, shader)
+        display(window, shader_tex, shader_col)
 
-    #glDeleteBuffers(2, [VBO,EBO])
+    #glDeleteBuffers(2, [MESH.VBO,MESH.EBO])
     glfw.terminate()
 
 if __name__ == "__main__":
     print("Hit ESC key to quit.")
     print("Rotate view with mouse / Autorotate with double click")
-    print("Edit joint geometry:\nY U I\nH J K\nB N M")
+    print("Edit joint geometry:\nY U I\nH J K\nN M ;")
     print("Clear joint geometry with:\nC")
     print("Edit joint type: 1 L T X")
     print("Open joint: O")
     print("Hide components: A / D")
+    print("Show milling path: G")
     print("Hide hidden lines: E")
-    print("Press S to save joint geometry and O to open last saved geometry (not yet implemented)")
+    print("Press S to save joint geometry and W to open last saved geometry")
 
     # Declare global variables
     global XROT, YROT, XROT0, YROT0, XSTART, YSTART, CLICK_TIME, DRAGGED, DOUBLE_CLICKED
     global HIDDEN_A, HIDDEN_A, SHOW_HIDDEN
-    global MESH
+    global MESH, SHOW_MILLING_PATH
 
     HIDDEN_A = False
     HIDDEN_B = False
     SHOW_HIDDEN = True
     OPEN = False
+    SHOW_MILLING_PATH = False
 
     # Variables for mouse callback and rotation
     XROT, YROT = 0.8, 0.4

@@ -1,7 +1,9 @@
 from OpenGL.GL import *
 import numpy as np
+from numpy import linalg
 import random
 from PIL import Image
+import math
 
 def get_random_height_field(dim):
     hf = np.zeros((dim,dim))
@@ -88,7 +90,9 @@ def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
                 neighbors.append([ax,n])
     return neighbors
 
-def joint_face_indicies(self,comp,offset,fixed_sides):
+def joint_face_indicies(self,comp,offset):
+    if comp=="A": fixed_sides = self.fixed_sides[0]
+    else: fixed_sides = self.fixed_sides[1]
     # Make indices of faces for drawing method GL_QUADS
     # 1. Faces of joint
     indices = []
@@ -169,7 +173,9 @@ def get_count(ind,neighbors,fixed_sides,voxel_matrix,dim):
         dia = val2
     return cnt,dia
 
-def joint_line_indicies(self,comp,offset,fixed_sides):
+def joint_line_indicies(self,comp,offset):
+    if comp=="A": fixed_sides = self.fixed_sides[0]
+    else: fixed_sides = self.fixed_sides[1]
     # Make indices for draw elements method GL_LINES
     d = self.dim+1
     indices = []
@@ -411,17 +417,127 @@ def get_sliding_directions(mat):
         sliding_directions.append(mat_sliding)
     return sliding_directions
 
-def get_milling_path_length(self):
+def get_milling_path_length(self,path):
     return "x"
+
+def get_vertex(index,verts,n):
+    x = verts[n*index]
+    y = verts[n*index+1]
+    z = verts[n*index+2]
+    return np.array([x,y,z])
+
+def get_next_same_axial_index(ind,ax,mat,dim):
+    if ind[ax]<dim-1:
+        val = mat[tuple(ind)]
+        ind_next = ind.copy()
+        ind_next[ax] += 1
+        val_next = mat[tuple(ind_next)]
+        if val==val_next:
+            ind_next_next = get_next_same_axial_index(ind_next,ax,mat,dim)
+            return ind_next_next
+        else: return ind
+    else: return ind
+
+def milling_path_vertices(self,n,r,g,b):
+    vertices = []
+    # Parameters
+    rad = 0.015 #milling bit radius
+    dep = 0.015 #milling depth
+    #
+    n_ = 1-n
+    # Define number of steps
+    no_lanes = math.ceil(2+(self.voxel_size-4*rad)/(2*rad))
+    w = (self.voxel_size-2*rad)/(no_lanes-1)
+    no_z = int(self.voxel_size/dep)
+    dep = self.voxel_size/no_z
+    # Texture coordinates (not used, just for conistent format)
+    tx = 0.0
+    ty = 0.0
+    # Get reference vertices
+    if n==0: verts = self.v_A
+    else: verts = self.v_B
+    # Defines axes
+    ax = self.sliding_direction[0] # mill bit axis
+    axes = [0,1,2]
+    axes.pop(ax)
+    mill_ax = axes[0] # primary milling direction axis
+    off_ax = axes[1] # milling offset axis
+    # create offset direction vectors
+    vec = [0,0,0]
+    vec[off_ax]=1
+    vec = np.array(vec)
+    vec2 = [0,0,0]
+    vec2[mill_ax]=1
+    vec2 = np.array(vec2)
+    # get top ones to cut out
+    for i in range(self.dim):
+        for j in range(self.dim):
+            for k in range(self.dim):
+                ind = [j,k]
+                ind.insert(ax,n_*(self.dim-n_)+(2*n-1)*i) # 0 when n is 1, dim-1 when n is 0
+                val = self.voxel_matrix[tuple(ind)]
+                if val==n: continue # dont cut out if material is there, continue
+                # if previous was mill axis neighbor, its already been cut, continue
+                if ind[mill_ax]>0:
+                    ind_pre = ind.copy()
+                    ind_pre[mill_ax] = ind_pre[mill_ax]-1
+                    val_pre = self.voxel_matrix[tuple(ind_pre)]
+                    if val_pre==val: continue
+                # if next is mill axis neighbor, redefine pt_b
+                ind_next = get_next_same_axial_index(ind,mill_ax,self.voxel_matrix,self.dim)
+                # get 4 corners of the top of the voxel
+                add = [0,0,0]
+                add[ax]=n_
+                i_a = get_index(ind,add,self.dim)
+                add[mill_ax]=1
+                i_b = get_index(ind_next,add,self.dim)
+                # get x y z vertices corresponding to the indexes
+                pt_a = get_vertex(i_a,verts,self.vertex_no_info)
+                pt_b = get_vertex(i_b,verts,self.vertex_no_info)
+                # define offsetted verticies
+                layer_vertices = []
+                for num in range(no_lanes):
+                    p0 = pt_a+rad*vec+num*w*vec+rad*vec2
+                    p1 = pt_b+rad*vec+num*w*vec-rad*vec2
+                    if num%2==1: p0, p1 = p1, p0
+                    layer_vertices.append([p0[0],p0[1],p0[2],r,g,b,tx,ty])
+                    layer_vertices.append([p1[0],p1[1],p1[2],r,g,b,tx,ty])
+                # add startpoint
+                start_vert = layer_vertices[0].copy()
+                safe_height = layer_vertices[0][ax]-(2*n-1)*i*self.voxel_size-0.2*(2*n-1)*self.voxel_size
+                start_vert[ax] = safe_height
+                vertices.extend(start_vert)
+                for num in range(no_z):
+                    if num%2==1: layer_vertices.reverse()
+                    for vert in layer_vertices:
+                        vert[ax] = vert[ax]+(2*n-1)*dep
+                        vertices.extend(vert)
+                # add enpoint
+                end_vert = layer_vertices[-1].copy()
+                end_vert[ax] = safe_height
+                vertices.extend(end_vert)
+
+    vertices = np.array(vertices, dtype = np.float32)
+    return vertices
+
+def milling_path_indices(self,no,start):
+    indices = []
+    for i in range(start,start+no):
+        indices.append(int(i))
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    return indices
 
 class Geometries:
     def __init__(self):
         self.open_joint = False
         self.joint_type = "I"
+        self.fixed_sides = get_fixed_sides(self.joint_type)
         self.sliding_direction = [2,0]
         self.dim = 3
-        self.voxel_size = 0.075
-        self.component_length = 2*self.voxel_size
+        self.component_size = 0.275
+        self.voxel_size = self.component_size/self.dim
+        self.component_length = 0.55*self.component_size
         self.height_field = get_random_height_field(self.dim)
         self.connected = True
         self.voxel_matrix = None
@@ -432,15 +548,33 @@ class Geometries:
         self.ifeB = None
         self.ilB = None
         self.iopen = None
+        self.v_faces_A = None
+        self.v_faces_B = None
+        self.vertex_no_info = 8
+        self.voxel_matrix_with_sides = None
         self.voxel_matrix_from_height_field()
-        self.vn = self.create_and_buffer_vertices()
+        self.vn = None
+        self.vmA = None
+        self.vmB = None
+        image = Image.open("textures/end_grain.jpg")
+        self.img_data = np.array(list(image.getdata()), np.uint8)
+        self.milling_path_A = None
+        self.milling_path_B = None
+        self.VBO = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        self.EBO = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+        self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
 
     def save(self):
-        np.savetxt("saved_joint_geometry.txt",self.height_field)
+        np.savetxt("saved_height_field.txt",self.height_field)
+        np.savetxt("saved_voxel_matrix",self.voxel_matrix)
+        np.savetxt("saved_voxel_matrix_with_fixed_sides",self.voxel_matrix_with_sides)
+        np.savetxt("saved_fixed_sides",self.fixed_sides)
 
     def load(self):
-        self.height_field = np.loadtxt("saved_joint_geometry.txt")
+        self.height_field = np.loadtxt("saved_height_field.txt")
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
 
@@ -455,17 +589,20 @@ class Geometries:
         vox_mat = np.array(vox_mat)
         vox_mat = np.swapaxes(vox_mat,2,ax)
         self.voxel_matrix = vox_mat
+        self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
         self.evaluate_joint()
 
     def update_sliding_direction(self,sliding_direction_):
         self.sliding_direction = sliding_direction_
         self.voxel_matrix_from_height_field()
-        self.vn = self.create_and_buffer_vertices()
+        self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
 
     def update_height_field(self,i,j):
         self.height_field[i][j] = (self.height_field[i][j]+1)%4
         self.voxel_matrix_from_height_field()
+        self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
+        #self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
 
     def clear_height_field(self):
@@ -477,75 +614,77 @@ class Geometries:
         self.joint_type = joint_type_
         if self.joint_type=="X" and self.sliding_direction==[2,0]:
             self.update_sliding_direction([1,0])
-        self.vn = self.create_and_buffer_vertices()
+        self.fixed_sides = get_fixed_sides(self.joint_type)
+        #self.create_and_buffer_vertices()
+        self.create_and_buffer_indicies()
+        self.evaluate_joint()
+
+    def update_dimension(self,dim_): # not always working OS error
+        self.dim = dim_
+        self.voxel_size = self.component_size/self.dim
+        self.height_field = get_random_height_field(self.dim)
+        self.voxel_matrix_from_height_field()
+        self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
         self.evaluate_joint()
 
     def create_and_buffer_vertices(self):
-        #print("Updating vertices...")
 
-        # Vertices of component A
-        v_faces_A = joint_vertices(self,"A",0.95,0.95,0.95)
-        v_lines_A = joint_vertices(self,"A",0.0,0.0,0.0)
+        ### VERTICIES FOR JOINT ###
+        self.v_A = joint_vertices(self,"A",0.0,0.0,0.0)
+        self.v_B = joint_vertices(self,"B",0.0,0.0,0.0)
 
-        # Vertices of component B
-        v_faces_B = joint_vertices(self,"B",0.95,0.95,0.95)
-        v_lines_B = joint_vertices(self,"B",0.0,0.0,0.0)
+        ### VERTICIES FOR MILLING PATHS ###
+        self.milling_path_A = milling_path_vertices(self,0, 0.0,1.0,0.0)
+        self.milling_path_B = milling_path_vertices(self,1, 0.0,0.8,1.0)
 
-        # Join all vertices into one list
-        vertices_all = np.concatenate([v_faces_A,v_lines_A,v_faces_B,v_lines_B])
-        # Vertex buffer
-        VBO = glGenBuffers(1) # vertex buffer object - the vertices
-        glBindBuffer(GL_ARRAY_BUFFER, VBO)
-        glBufferData(GL_ARRAY_BUFFER, 6*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW) #uploadning data to the buffer. Specifying size / bites of data (x4)
+        vertices_all = np.concatenate([self.v_A, self.v_B,
+                                       self.milling_path_A, self.milling_path_B])
+
+        try:
+            glBufferData(GL_ARRAY_BUFFER, 6*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW)
+        except:
+            print("--------------------------ERROR IN ARRAY BUFFER WRAPPER -------------------------------------")
+            print("All vertices:",vertices_all)
 
         # vertex attribute pointers
-        # position
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0))
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0)) #position
         glEnableVertexAttribArray(0)
-        # color
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12))
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12)) #color
         glEnableVertexAttribArray(1)
-        #texture
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24))
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24)) #texture
         glEnableVertexAttribArray(2)
-
         texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, self.img_data)
 
-        image = Image.open("textures/end_grain.jpg")
-        img_data = np.array(list(image.getdata()), np.uint8)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
-
-        return int(len(v_faces_A)/8)
+        self.vn =  int(len(self.v_A)/8)
+        self.vmA = int(len(self.milling_path_A)/8)
+        self.vmB = int(len(self.milling_path_B)/8)
 
     def create_and_buffer_indicies(self):
-        #print("Updating indices...")
 
-        fixed_sides_AB = get_fixed_sides(self.joint_type)
+        ### INDICES FOR JOINT ###
+        faces_A,faces_end_A = joint_face_indicies(self,"A",0)
+        lines_A = joint_line_indicies(self,"A",0)
+        faces_B,faces_end_B = joint_face_indicies(self,"B",self.vn)
+        lines_B = joint_line_indicies(self,"B",self.vn)
 
-        # Indices of component A
-        faces_A,faces_end_A = joint_face_indicies(self,"A",0,fixed_sides_AB[0])
-        lines_A = joint_line_indicies(self,"A",self.vn,fixed_sides_AB[0])
+        lines_open = open_line_indicies(self,0,self.vn)
 
-        # Indices of component B
-        faces_B,faces_end_B = joint_face_indicies(self,"B",2*self.vn,fixed_sides_AB[1])
-        lines_B = joint_line_indicies(self,"B",3*self.vn,fixed_sides_AB[1])
+        ### INDICES FOR MILLING PATHS ###
+        lines_gpath_A = milling_path_indices(self, self.vmA, 2*self.vn)
+        lines_gpath_B = milling_path_indices(self, self.vmB, 2*self.vn+self.vmA)
 
-        # Indicies of sliding lines
-        lines_open = open_line_indicies(self,self.vn,3*self.vn)
-
-        # Join all indices into one list
         all_indices = np.concatenate([faces_A, faces_end_A, lines_A,
                                       faces_B, faces_end_B, lines_B,
-                                      lines_open])
-        # Elements Buffer
-        EBO = glGenBuffers(1) # element buffer object
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
+                                      lines_open,
+                                      lines_gpath_A, lines_gpath_B])
+
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4*len(all_indices), all_indices, GL_DYNAMIC_DRAW)
 
         self.ifA = len(faces_A)
@@ -555,19 +694,18 @@ class Geometries:
         self.ifeB = len(faces_end_B)
         self.ilB = len(lines_B)
         self.iopen = len(lines_open)
+        self.imA = len(lines_gpath_A)
+        self.imB = len(lines_gpath_B)
 
     def evaluate_joint(self):
-        fixed_sides = get_fixed_sides(self.joint_type)
-        voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, fixed_sides)
-        connected_A = is_connected(voxel_matrix_with_sides,0)
-        connected_B = is_connected(voxel_matrix_with_sides,1)
+        connected_A = is_connected(self.voxel_matrix_with_sides,0)
+        connected_B = is_connected(self.voxel_matrix_with_sides,1)
         if connected_A and connected_B: self.connected = True
         else: self.connected=False
-        slides = get_sliding_directions(voxel_matrix_with_sides)
+        slides = get_sliding_directions(self.voxel_matrix_with_sides)
         if len(slides[0])!=len(slides[1]): print("Sliding calculation error")
-        print("slides",slides)
-        friciton = get_friction(voxel_matrix_with_sides,slides)
-        #path_length = get_milling_path_length(self)
+        friciton = get_friction(self.voxel_matrix_with_sides,slides)
+        #path_length = get_milling_path_length(milling_path_A,milling_path_B)
         print("\n---JOINT EVALUATION---")
         print("Connected:",self.connected)
         print("Slidings: ", len(slides[0]))
