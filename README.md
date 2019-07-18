@@ -20,10 +20,14 @@ Open/close joint: O
 
 Turn on/off component view: A / D
 
+Turn on/off milling path display: G
+
 Turn on/off hidden lines: E
 
 Save joint geometry: S
 
-Load saved geometry: G
+Load saved geometry: W
+
+Edit voxel cube dimension: 2, 3, 4, 5
 
 ![disco_joint_interface.py screenshot](Screenshot.JPG)

@@ -302,6 +302,7 @@ def display(window, shader_tex, shader_col):
     if not HIDDEN_B and SHOW_MILLING_PATH:
         glDrawElements(GL_LINE_STRIP, MESH.imB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(iA+iB+MESH.iopen+MESH.imA)))
 
+    ## the end
     glfw.swap_buffers(window)
 
 def main():
