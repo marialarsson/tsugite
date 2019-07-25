@@ -1,33 +1,36 @@
 # DISCO JOINT
 
-python 3.6.0 / OpenGL / GLFW / PyQt5
+python 3.6.0 / OpenGL / GLFW
 
-Environment setup as YouTube tutorial: https://www.youtube.com/watch?v=Ctfs-E_9rLE
-
-setup/main.py
-
-Hit ESC key to quit.
+Run setup/main.py
 
 Rotate view with mouse / Double click mouse to start constant rotation
 
-Edit joint geometry: Y U I / H J K / B N M
+Edit joint geometry by clicking and dragging on 3D joint (not yet implemented)
 
-Clear joint geometry: C
+Change joint type: I L T X
 
-Edit joint type: 1 L T X
+Change sliding direction: Up arrow / right arrow
 
 Open/close joint: O
 
-Turn on/off component view: A / D
+Turn on/off component view: A B
 
-Turn on/off milling path display: G
+Switch to view of fabricated geometry: F
 
-Turn on/off hidden lines: E
+Turn on/off milling path display: P
+
+Turn on/off hidden lines: H
 
 Save joint geometry: S
 
-Load saved geometry: W
+Load saved geometry: G
 
 Edit voxel cube dimension: 2, 3, 4, 5
+
+Clear joint geometry: C
+
+
+Hit ESC key to quit.
 
 ![disco_joint_interface.py screenshot](Screenshot.JPG)
