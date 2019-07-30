@@ -9,6 +9,7 @@ class ViewSettings:
         self.hidden_a = False
         self.hidden_b = False
         self.show_hidden_lines = True
+        self.show_arrows = True
 
         # Joint opening variables
         self.open_joint = False

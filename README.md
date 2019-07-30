@@ -4,9 +4,12 @@ python 3.6.0 / OpenGL / GLFW
 
 Run setup/main.py
 
-Rotate view with mouse / Double click mouse to start constant rotation
+Rotate view with right mouse button
 
-Edit joint geometry by clicking and dragging on 3D joint (not yet implemented)
+Edit joint geometry by clicking and dragging on 3D joint
+
+![disco_joint_interface.py screenshot](Screenshots/screenshot_type_I.png)
+![disco_joint_interface.py screenshot](Screenshots/screenshot_type_T.png)
 
 Change joint type: I L T X
 
@@ -28,8 +31,9 @@ Load saved geometry: G
 
 Edit voxel cube dimension: 2, 3, 4, 5
 
-Clear joint geometry: C
+Randomize joint geometry: R
 
+Clear joint geometry: C
 
 Hit ESC key to quit.
 
