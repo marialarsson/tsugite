@@ -17,10 +17,10 @@ Randomize joint geometry with key R, and clear joint geometry key C
 ### Joint types
 Change joint type with keys I L T X:
 <p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="215" />
-  <img src="/Screenshots/screenshot_type_L.png" width="215" />
-  <img src="/Screenshots/screenshot_type_T.png" width="215" />
-  <img src="/Screenshots/screenshot_type_X.png" width="215" /> 
+  <img src="/Screenshots/screenshot_type_I.png" width="210" />
+  <img src="/Screenshots/screenshot_type_L.png" width="210" />
+  <img src="/Screenshots/screenshot_type_T.png" width="210" />
+  <img src="/Screenshots/screenshot_type_X.png" width="210" /> 
 </p>
 
 ### Sliding Directions
