@@ -1,7 +1,8 @@
 # DISCO JOINT
-### DISCrete Optimization of JOINT geometries
 
-python 3.6.0 / OpenGL / GLFW
+DISCrete Optimization of JOINT geometries, and automatic milling path generation.
+
+Developed with python 3.6.0 / OpenGL / GLFW
 
 Run setup/main.py
 
