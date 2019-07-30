@@ -38,6 +38,18 @@ Edit voxel cube dimension with keys 2, 3 (default), 4 and 5
   <img src="/Screenshots/screenshot_dim_5.png" width="200" /> 
 </p>
 
+### Feedback
+
+Unconnected voxels and unbridged components are colored:
+<p float="left">
+  <img src="/Screenshots/screenshot_unconnected.png" width="200" />
+  <img src="/Screenshots/screenshot_unbridged.png" width="200" />
+</p>
+
+Arrows show the current sliding directions:
+
+Dashed arrows indicated slides additional to the main sliding direction.
+
 
 ### Preview Options
 
@@ -57,8 +69,8 @@ Turn on/off hidden lines with key H
 
 Turn on/off component view with keys A and B
 <p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="200" />
-  <img src="/Screenshots/screenshot_comp_hide.png" width="200" />
+  <img src="/Screenshots/screenshot_A.png" width="200" />
+  <img src="/Screenshots/screenshot_B.png" width="200" />
 </p>
 
 Switch to view of fabricated geometry with F
