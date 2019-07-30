@@ -116,7 +116,7 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_O: view_opt.open_joint = not view_opt.open_joint
         elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
         elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
-        elif key==glfw.KEY_P: mesh.show_milling_path = not mesh.show_milling_path
+        elif key==glfw.KEY_P: view_opt.show_milling_path = not view_opt.show_milling_path
         elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
         elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
         elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
@@ -352,7 +352,7 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
 
     ############################# Draw hidden lines #############################
     glClear(GL_DEPTH_BUFFER_BIT)
-    glUniform3f(5,0.0,0.0,0.0)
+    glUniform3f(5,0.0,0.0,0.0) # black
     glPushAttrib(GL_ENABLE_BIT)
     glLineWidth(1)
     glLineStipple(3, 0xAAAA) #dashed line
@@ -421,14 +421,13 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
         draw_geometries_with_excluded_area(window,G0_other,G1,translation_vec=vec)
         glPopAttrib()
 
-    ############# Milling paths
-    ### Draw gpath lines ###
-    #glClear(GL_DEPTH_BUFFER_BIT)
-    #glLineWidth(1)
-    #if not view_opt.hidden_a and mesh.show_milling_path:
-    #    glDrawElements(GL_LINE_STRIP, mesh.imA, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(iA+iB+2*mesh.iopen)))
-    #if not view_opt.hidden_b and mesh.show_milling_path:
-    #    glDrawElements(GL_LINE_STRIP, mesh.imB, GL_UNSIGNED_INT,  ctypes.c_void_p(4*(iA+iB+2*mesh.iopen+mesh.imA)))
+    ############################ Milling paths ##################################
+    if view_opt.show_milling_path:
+        glLineWidth(1)
+        glUniform3f(5,0.0,1.0,0.0)
+        draw_geometries(window,[mesh.lines_mill_a])
+        glUniform3f(5,0.0,0.8,1.0)
+        draw_geometries(window,[mesh.lines_mill_b])
 
     ## the end
     glfw.swap_buffers(window)
@@ -537,8 +536,8 @@ if __name__ == "__main__":
     print("Open joint: O")
     print("Hide components: A B")
     print("Hide hidden lines: H")
-    print("Show milling path: M")
-    print("Press S to save joint geometry and G to open last saved geometry")
-    print("Press W to save a screenshot")
+    print("Show milling path: P")
+    print("Press S to save joint geometry and G to open")
+    print("Press W to save a screenshot\n")
 
     main()

@@ -6,6 +6,8 @@ from PIL import Image
 import math
 import pyrr
 
+# Supporting functions
+
 def get_random_height_field(dim):
     hf = np.zeros((dim,dim))
     for i in range(dim):
@@ -31,6 +33,270 @@ def get_corner_indices(ax,n,dim):
             add[other_axes[1]] = y*dim
             corner_indices.append(get_index(ind,add,dim))
     return corner_indices
+
+def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
+    neighbors = []
+    val = voxel_matrix[tuple(ind)]
+    for ax in range(3):
+        for n in range(2):
+            add = [0,0]
+            add.insert(ax,2*n-1)
+            add = np.array(add)
+            ind2 = ind+add
+            if (ind2[ax]<0 or ind2[ax]>=dim) and [ax,n] in fixed_sides:
+                val2 = val
+            elif np.all(ind2>=0) and np.all(ind2<dim):
+                val2 = voxel_matrix[tuple(ind2)]
+            else: val2=None
+            if val==val2:
+                neighbors.append([ax,n])
+    return neighbors
+
+def face_neighbors(mat,ind,ax,n,fixed_sides):
+    values = []
+    dim = len(mat)
+    for i in range(2):
+        val = None
+        ind2 = ind.copy()
+        ind2[ax] = ind2[ax]-i
+        ind2 = np.array(ind2)
+        if np.all(ind2>=0) and np.all(ind2<dim):
+            val = mat[tuple(ind2)]
+        elif len(fixed_sides)>0:
+            for fixed_side in fixed_sides:
+                ind3 = np.delete(ind2,fixed_side[0])
+                if np.all(ind3>=0) and np.all(ind3<dim):
+                    if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n
+                    elif ind2[fixed_side[0]]>=dim and fixed_side[1]==1: val = n
+        values.append(val)
+    values = np.array(values)
+    count = np.count_nonzero(values==n)
+    return count
+
+def get_count(ind,neighbors,fixed_sides,voxel_matrix,dim):
+    cnt = 0
+    val = int(voxel_matrix[ind])
+    vals2 = []
+    for item in neighbors:
+        i = ind[0]+item[0]
+        j = ind[1]+item[1]
+        k = ind[2]+item[2]
+        ###
+        val2 = None
+        # Check fixed sides
+        if (i<0 or i>=dim) and j>=0 and j<dim and k>=0 and k<dim:
+            if i<0 and [0,0] in fixed_sides:
+                val2 = val
+            elif i>=dim and [0,1] in fixed_sides:
+                val2 = val
+        elif (j<0 or j>=dim) and i>=0 and i<dim and k>=0 and k<dim:
+            if j<0 and [1,0] in fixed_sides:
+                val2 = val
+            elif j>=dim and [1,1] in fixed_sides:
+                val2 = val
+        elif (k<0 or k>=dim) and i>=0 and i<dim and j>=0 and j<dim:
+            if k<0 and [2,0] in fixed_sides:
+                val2 = val
+            elif k>=dim and [2,1] in fixed_sides:
+                val2 = val
+        # Check neighbours
+        elif np.all(np.array([i,j,k])>=0) and np.all(np.array([i,j,k])<dim):
+            val2 = int(voxel_matrix[i,j,k])
+        if val==val2: cnt = cnt+1
+        vals2.append(val2)
+    return cnt,vals2[2],vals2[0],vals2[1]
+
+def line_neighbors(self,ind,ax,n):
+    values = []
+    for i in range(-1,1):
+        for j in range(-1,1):
+            val = None
+            add = [i,j]
+            add.insert(ax,0)
+            ind2 = np.array(ind)+np.array(add)
+            if np.all(ind2>=0) and np.all(ind2<self.dim):
+                val = self.voxel_matrix[tuple(ind2)]
+            else:
+                for n2 in range(2):
+                    for fixed_side in self.fixed_sides[n2]:
+                        ind3 = np.delete(ind2,fixed_side[0])
+                        if np.all(ind3>=0) and np.all(ind3<self.dim):
+                            if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n2
+                            elif ind2[fixed_side[0]]>=self.dim and fixed_side[1]==1: val = n2
+            values.append(val)
+    values = np.array(values)
+    count = np.count_nonzero(values==n)
+    return count,values
+
+def get_fixed_sides(joint_type):
+    fixed_sides = []
+    if joint_type=="I":   fixed_sides = [[[2,0]], [[2,1]]]
+    elif joint_type=="L": fixed_sides = [[[2,0]], [[0,0]]]
+    elif joint_type=="T": fixed_sides = [[[2,0]], [[0,0],[0,1]]]
+    elif joint_type=="X": fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
+    return fixed_sides
+
+def add_fixed_sides(mat,fixed_sides):
+    dim = len(mat)
+    pad_loc = [[0,0],[0,0],[0,0]]
+    pad_val = [[-1,-1],[-1,-1],[-1,-1]]
+    for n in range(2):
+        for ax,dir in fixed_sides[n]:
+            pad_loc[ax][dir] = 1
+            pad_val[ax][dir] = n
+    pad_loc = tuple(map(tuple, pad_loc))
+    pad_val = tuple(map(tuple, pad_val))
+    mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
+    # Take care of corners
+    for ax,dir in fixed_sides[0]:
+        for ax2,dir2 in fixed_sides[1]:
+            if ax==ax2: continue
+            for i in range(dim):
+                ind = [i,i,i]
+                ind[ax] =  dir*(mat.shape[ax]-1)
+                ind[ax2] = dir2*(mat.shape[ax2]-1)
+                mat[tuple(ind)] = -1
+    return mat
+
+def get_axial_neighbors(mat,ind,ax):
+    indices = []
+    values = []
+    m = ax
+    for n in range(2):      # go up and down one step
+        n=2*n-1             # -1,1
+        ind0 = list(ind)
+        ind0[m] = ind[m]+n
+        ind0 = tuple(ind0)
+        if ind0[m]>=0 and ind0[m]<mat.shape[m]:
+            indices.append(ind0)
+            try: values.append(int(mat[ind0]))
+            except: values.append(mat[ind0])
+    return indices,values
+
+def get_neighbors(mat,ind):
+    indices = []
+    values = []
+    for m in range(len(ind)):   # For each direction (x,y)
+        for n in range(2):      # go up and down one step
+            n=2*n-1             # -1,1
+            ind0 = list(ind)
+            ind0[m] = ind[m]+n
+            ind0 = tuple(ind0)
+            if ind0[m]>=0 and ind0[m]<mat.shape[m]:
+                indices.append(ind0)
+                values.append(int(mat[ind0]))
+    return indices, np.array(values)
+
+def get_all_same_connected(mat,indices):
+    start_n = len(indices)
+    val = int(mat[indices[0]])
+    all_same_neighbors = []
+    for ind in indices:
+        n_indices,n_values = get_neighbors(mat,ind)
+        for n_ind,n_val in zip(n_indices,n_values):
+            if n_val==val: all_same_neighbors.append(n_ind)
+    indices.extend(all_same_neighbors)
+    if len(indices)>0:
+        indices = np.unique(indices, axis=0)
+        indices = [tuple(ind) for ind in indices]
+        if len(indices)>start_n: indices = get_all_same_connected(mat,indices)
+    return indices
+
+def reverse_columns(cols):
+    new_cols = []
+    for i in range(len(cols)):
+        temp = []
+        for j in range(len(cols[i])):
+            temp.append(cols[i][len(cols[i])-j-1].astype(int))
+        new_cols.append(temp)
+    return new_cols
+
+def get_columns(mat,ax):
+    columns = []
+    if ax==0:
+        for j in range(len(mat[0])):
+            for k in range(len(mat[0][0])):
+                col = []
+                for i in range(len(mat)): col.append(mat[i][j][k])
+                columns.append(col)
+    elif ax==1:
+        for i in range(len(mat)):
+            for k in range(len(mat[0][0])):
+                col = []
+                for j in range(len(mat[0])): col.append(mat[i][j][k])
+                columns.append(col)
+    elif ax==2:
+        for layer in mat:
+            for col in layer: columns.append(col)
+    columns2 = []
+    for col in columns:
+        col = np.array(col)
+        col = col[np.logical_not(np.isnan(col))] #remove nans
+        if len(col)==0: continue
+        col = col.astype(int)
+        columns2.append(col)
+    return columns2
+
+def get_vertex(index,verts,n):
+    x = verts[n*index]
+    y = verts[n*index+1]
+    z = verts[n*index+2]
+    return np.array([x,y,z])
+
+def get_next_same_axial_index(ind,ax,mat,dim):
+    if ind[ax]<dim-1:
+        val = mat[tuple(ind)]
+        ind_next = ind.copy()
+        ind_next[ax] += 1
+        val_next = mat[tuple(ind_next)]
+        if val==val_next:
+            ind_next_next = get_next_same_axial_index(ind_next,ax,mat,dim)
+            return ind_next_next
+        else: return ind
+    else: return ind
+
+def get_indices_of_same_neighbors(indices,mat):
+    d = len(mat)
+    val = mat[tuple(indices[0])]
+    neighbors = []
+    for ind in indices:
+        for ax in range(3):
+            for dir in range(2):
+                dir = 2*dir-1
+                ind2 = ind.copy()
+                ind2[ax] = ind2[ax]+dir
+                if ind2[ax]>=0 and ind2[ax]<d:
+                    val2 = mat[tuple(ind2)]
+                    if val==val2:
+                        neighbors.append(ind2)
+    if len(neighbors)>0:
+        neighbors = np.array(neighbors)
+        neighbors = np.unique(neighbors, axis=0)
+    return neighbors
+
+def is_connected_to_fixed_side(indices,mat,fixed_sides):
+    connected = False
+    val = mat[tuple(indices[0])]
+    d = len(mat)
+    for ind in indices:
+        for ax,dir in fixed_sides:
+            if ind[ax]==0 and dir==0:
+                connected=True
+                break
+            elif ind[ax]==d-1 and dir==1:
+                connected=True
+                break
+        if connected: break
+    if not connected:
+        neighbors = get_indices_of_same_neighbors(indices,mat)
+        if len(neighbors)>0:
+            new_indices = np.concatenate([indices,neighbors])
+            new_indices = np.unique(new_indices, axis=0)
+            if len(new_indices)>len(indices):
+                connected = is_connected_to_fixed_side(new_indices,mat,fixed_sides)
+    return connected
+
+# Create vertex lists functions
 
 def joint_vertices(self,comp,r,g,b):
     vertices = []
@@ -113,44 +379,84 @@ def arrow_vertices(self):
     vertices = np.array(vertices, dtype = np.float32) #converts to correct format
     return vertices
 
-def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
-    neighbors = []
-    val = voxel_matrix[tuple(ind)]
-    for ax in range(3):
-        for n in range(2):
-            add = [0,0]
-            add.insert(ax,2*n-1)
-            add = np.array(add)
-            ind2 = ind+add
-            if (ind2[ax]<0 or ind2[ax]>=dim) and [ax,n] in fixed_sides:
-                val2 = val
-            elif np.all(ind2>=0) and np.all(ind2<dim):
-                val2 = voxel_matrix[tuple(ind2)]
-            else: val2=None
-            if val==val2:
-                neighbors.append([ax,n])
-    return neighbors
+def milling_path_vertices(self,n):
+    vertices = []
+    # Parameters
+    r = g = b = tx = ty = 0.0
+    n_ = 1-n
+    # Define number of steps
+    no_lanes = math.ceil(2+(self.voxel_size-4*self.rad)/(2*self.rad))
+    w = (self.voxel_size-2*self.rad)/(no_lanes-1)
+    no_z = int(self.voxel_size/self.dep)
+    self.dep = self.voxel_size/no_z
+    # Get reference vertices
+    if n==0: verts = self.v_A
+    else: verts = self.v_B
+    # Defines axes
+    ax = self.sliding_direction[0] # mill bit axis
+    axes = [0,1,2]
+    axes.pop(ax)
+    mill_ax = axes[0] # primary milling direction axis
+    off_ax = axes[1] # milling offset axis
+    # create offset direction vectors
+    vec = [0,0,0]
+    vec[off_ax]=1
+    vec = np.array(vec)
+    vec2 = [0,0,0]
+    vec2[mill_ax]=1
+    vec2 = np.array(vec2)
+    # get top ones to cut out
+    for i in range(self.dim):
+        for j in range(self.dim):
+            for k in range(self.dim):
+                ind = [j,k]
+                ind.insert(ax,n_*(self.dim-n_)+(2*n-1)*i) # 0 when n is 1, dim-1 when n is 0
+                val = self.voxel_matrix[tuple(ind)]
+                if val==n: continue # dont cut out if material is there, continue
+                # if previous was mill axis neighbor, its already been cut, continue
+                if ind[mill_ax]>0:
+                    ind_pre = ind.copy()
+                    ind_pre[mill_ax] = ind_pre[mill_ax]-1
+                    val_pre = self.voxel_matrix[tuple(ind_pre)]
+                    if val_pre==val: continue
+                # if next is mill axis neighbor, redefine pt_b
+                ind_next = get_next_same_axial_index(ind,mill_ax,self.voxel_matrix,self.dim)
+                # get 4 corners of the top of the voxel
+                add = [0,0,0]
+                add[ax]=n_
+                i_a = get_index(ind,add,self.dim)
+                add[mill_ax]=1
+                i_b = get_index(ind_next,add,self.dim)
+                # get x y z vertices corresponding to the indexes
+                pt_a = get_vertex(i_a,verts,self.vertex_no_info)
+                pt_b = get_vertex(i_b,verts,self.vertex_no_info)
+                # define offsetted verticies
+                layer_vertices = []
+                for num in range(no_lanes):
+                    p0 = pt_a+self.rad*vec+num*w*vec+self.rad*vec2
+                    p1 = pt_b+self.rad*vec+num*w*vec-self.rad*vec2
+                    if num%2==1: p0, p1 = p1, p0
+                    layer_vertices.append([p0[0],p0[1],p0[2],r,g,b,tx,ty])
+                    layer_vertices.append([p1[0],p1[1],p1[2],r,g,b,tx,ty])
+                # add startpoint
+                start_vert = layer_vertices[0].copy()
+                safe_height = layer_vertices[0][ax]-(2*n-1)*i*self.voxel_size-0.2*(2*n-1)*self.voxel_size
+                start_vert[ax] = safe_height
+                vertices.extend(start_vert)
+                for num in range(no_z):
+                    if num%2==1: layer_vertices.reverse()
+                    for vert in layer_vertices:
+                        vert[ax] = vert[ax]+(2*n-1)*self.dep
+                        vertices.extend(vert)
+                # add enpoint
+                end_vert = layer_vertices[-1].copy()
+                end_vert[ax] = safe_height
+                vertices.extend(end_vert)
 
-def face_neighbors(mat,ind,ax,n,fixed_sides):
-    values = []
-    dim = len(mat)
-    for i in range(2):
-        val = None
-        ind2 = ind.copy()
-        ind2[ax] = ind2[ax]-i
-        ind2 = np.array(ind2)
-        if np.all(ind2>=0) and np.all(ind2<dim):
-            val = mat[tuple(ind2)]
-        elif len(fixed_sides)>0:
-            for fixed_side in fixed_sides:
-                ind3 = np.delete(ind2,fixed_side[0])
-                if np.all(ind3>=0) and np.all(ind3<dim):
-                    if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n
-                    elif ind2[fixed_side[0]]>=dim and fixed_side[1]==1: val = n
-        values.append(val)
-    values = np.array(values)
-    count = np.count_nonzero(values==n)
-    return count
+    vertices = np.array(vertices, dtype = np.float32)
+    return vertices
+
+# Create index lists functions
 
 def joint_face_indicies(self,all_indices,mat,fixed_sides,n,offset):
     # Make indices of faces for drawing method GL_QUADS
@@ -273,61 +579,6 @@ def joint_top_face_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, indices_tops_prop, all_indices
 
-def get_count(ind,neighbors,fixed_sides,voxel_matrix,dim):
-    cnt = 0
-    val = int(voxel_matrix[ind])
-    vals2 = []
-    for item in neighbors:
-        i = ind[0]+item[0]
-        j = ind[1]+item[1]
-        k = ind[2]+item[2]
-        ###
-        val2 = None
-        # Check fixed sides
-        if (i<0 or i>=dim) and j>=0 and j<dim and k>=0 and k<dim:
-            if i<0 and [0,0] in fixed_sides:
-                val2 = val
-            elif i>=dim and [0,1] in fixed_sides:
-                val2 = val
-        elif (j<0 or j>=dim) and i>=0 and i<dim and k>=0 and k<dim:
-            if j<0 and [1,0] in fixed_sides:
-                val2 = val
-            elif j>=dim and [1,1] in fixed_sides:
-                val2 = val
-        elif (k<0 or k>=dim) and i>=0 and i<dim and j>=0 and j<dim:
-            if k<0 and [2,0] in fixed_sides:
-                val2 = val
-            elif k>=dim and [2,1] in fixed_sides:
-                val2 = val
-        # Check neighbours
-        elif np.all(np.array([i,j,k])>=0) and np.all(np.array([i,j,k])<dim):
-            val2 = int(voxel_matrix[i,j,k])
-        if val==val2: cnt = cnt+1
-        vals2.append(val2)
-    return cnt,vals2[2],vals2[0],vals2[1]
-
-def line_neighbors(self,ind,ax,n):
-    values = []
-    for i in range(-1,1):
-        for j in range(-1,1):
-            val = None
-            add = [i,j]
-            add.insert(ax,0)
-            ind2 = np.array(ind)+np.array(add)
-            if np.all(ind2>=0) and np.all(ind2<self.dim):
-                val = self.voxel_matrix[tuple(ind2)]
-            else:
-                for n2 in range(2):
-                    for fixed_side in self.fixed_sides[n2]:
-                        ind3 = np.delete(ind2,fixed_side[0])
-                        if np.all(ind3>=0) and np.all(ind3<self.dim):
-                            if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n2
-                            elif ind2[fixed_side[0]]>=self.dim and fixed_side[1]==1: val = n2
-            values.append(val)
-    values = np.array(values)
-    count = np.count_nonzero(values==n)
-    return count,values
-
 def joint_line_indicies(self,all_indices,n,offset):
     fixed_sides = self.fixed_sides[n]
     fab_ax = self.sliding_direction[0]
@@ -369,10 +620,8 @@ def joint_line_indicies(self,all_indices,n,offset):
     # Return
     return indices_prop, all_indices
 
-def joint_line_fab_indicies(self,n,offset,offset_extra):
+def joint_line_fab_indicies(self,all_indices,n,offset,offset_extra):
     offset_extra = offset_extra-offset
-    if comp=="A": n=0
-    elif comp=="B": n=1
     fixed_sides = self.fixed_sides[n]
     fab_ax = self.sliding_direction[0]
     d = self.dim+1
@@ -437,18 +686,22 @@ def joint_line_fab_indicies(self,n,offset,offset_extra):
 
     #Outline of component base
     start = d*d*d
-    for ax,n in fixed_sides:
-        a1,b1,c1,d1 = get_corner_indices(ax,n,self.dim)
-        step = 1
-        if self.joint_type=="X" or ( self.joint_type=="T" and comp=="B"): step = 0
-        off = 16*ax+8*n+4*step
+    for ax,dir in fixed_sides:
+        a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
+        step = 2
+        if self.joint_type=="X" or ( self.joint_type=="T" and n==1): step = 1
+        off = 24*ax+12*dir+4*step
         a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
         indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
         indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
     # Format
     indices = np.array(indices, dtype=np.uint32)
     indices = indices + offset
-    return indices
+    # Store
+    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
 
 def open_line_indicies(self,all_indices,n,offset):
     ax,dir = self.sliding_direction
@@ -508,50 +761,19 @@ def arrow_indices(self,all_indices,slide_dirs,n,offset):
     # Return
     return line_indices_prop, face_indices_prop, all_indices
 
-def get_fixed_sides(joint_type):
-    fixed_sides = []
-    if joint_type=="I":   fixed_sides = [[[2,0]], [[2,1]]]
-    elif joint_type=="L": fixed_sides = [[[2,0]], [[0,0]]]
-    elif joint_type=="T": fixed_sides = [[[2,0]], [[0,0],[0,1]]]
-    elif joint_type=="X": fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
-    return fixed_sides
-
-def add_fixed_sides(mat,fixed_sides):
-    dim = len(mat)
-    pad_loc = [[0,0],[0,0],[0,0]]
-    pad_val = [[-1,-1],[-1,-1],[-1,-1]]
-    for n in range(2):
-        for ax,dir in fixed_sides[n]:
-            pad_loc[ax][dir] = 1
-            pad_val[ax][dir] = n
-    pad_loc = tuple(map(tuple, pad_loc))
-    pad_val = tuple(map(tuple, pad_val))
-    mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
-    # Take care of corners
-    for ax,dir in fixed_sides[0]:
-        for ax2,dir2 in fixed_sides[1]:
-            if ax==ax2: continue
-            for i in range(dim):
-                ind = [i,i,i]
-                ind[ax] =  dir*(mat.shape[ax]-1)
-                ind[ax2] = dir2*(mat.shape[ax2]-1)
-                mat[tuple(ind)] = -1
-    return mat
-
-def get_axial_neighbors(mat,ind,ax):
+def milling_path_indices(self,all_indices,no,start,n):
     indices = []
-    values = []
-    m = ax
-    for n in range(2):      # go up and down one step
-        n=2*n-1             # -1,1
-        ind0 = list(ind)
-        ind0[m] = ind[m]+n
-        ind0 = tuple(ind0)
-        if ind0[m]>=0 and ind0[m]<mat.shape[m]:
-            indices.append(ind0)
-            try: values.append(int(mat[ind0]))
-            except: values.append(mat[ind0])
-    return indices,values
+    for i in range(start,start+no):
+        indices.append(int(i))
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    # Store
+    indices_prop = ElementProperties(GL_LINE_LOOP, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
+
+# Analyze joint functions
 
 def get_friction(mat,slides):
     friction = 0
@@ -571,35 +793,6 @@ def get_friction(mat,slides):
                 if n_val==1: friction += 1
     return friction
 
-def get_neighbors(mat,ind):
-    indices = []
-    values = []
-    for m in range(len(ind)):   # For each direction (x,y)
-        for n in range(2):      # go up and down one step
-            n=2*n-1             # -1,1
-            ind0 = list(ind)
-            ind0[m] = ind[m]+n
-            ind0 = tuple(ind0)
-            if ind0[m]>=0 and ind0[m]<mat.shape[m]:
-                indices.append(ind0)
-                values.append(int(mat[ind0]))
-    return indices, np.array(values)
-
-def get_all_same_connected(mat,indices):
-    start_n = len(indices)
-    val = int(mat[indices[0]])
-    all_same_neighbors = []
-    for ind in indices:
-        n_indices,n_values = get_neighbors(mat,ind)
-        for n_ind,n_val in zip(n_indices,n_values):
-            if n_val==val: all_same_neighbors.append(n_ind)
-    indices.extend(all_same_neighbors)
-    if len(indices)>0:
-        indices = np.unique(indices, axis=0)
-        indices = [tuple(ind) for ind in indices]
-        if len(indices)>start_n: indices = get_all_same_connected(mat,indices)
-    return indices
-
 def is_connected(mat,n):
     connected = False
     all_same = np.count_nonzero(mat==n) # Count number of ones in matrix
@@ -609,41 +802,6 @@ def is_connected(mat,n):
         connected_same = len(inds)
         if connected_same==all_same: connected = True
     return connected
-
-def reverse_columns(cols):
-    new_cols = []
-    for i in range(len(cols)):
-        temp = []
-        for j in range(len(cols[i])):
-            temp.append(cols[i][len(cols[i])-j-1].astype(int))
-        new_cols.append(temp)
-    return new_cols
-
-def get_columns(mat,ax):
-    columns = []
-    if ax==0:
-        for j in range(len(mat[0])):
-            for k in range(len(mat[0][0])):
-                col = []
-                for i in range(len(mat)): col.append(mat[i][j][k])
-                columns.append(col)
-    elif ax==1:
-        for i in range(len(mat)):
-            for k in range(len(mat[0][0])):
-                col = []
-                for j in range(len(mat[0])): col.append(mat[i][j][k])
-                columns.append(col)
-    elif ax==2:
-        for layer in mat:
-            for col in layer: columns.append(col)
-    columns2 = []
-    for col in columns:
-        col = np.array(col)
-        col = col[np.logical_not(np.isnan(col))] #remove nans
-        if len(col)==0: continue
-        col = col.astype(int)
-        columns2.append(col)
-    return columns2
 
 def get_sliding_directions(mat):
     sliding_directions = []
@@ -668,152 +826,6 @@ def get_sliding_directions(mat):
 
 def get_milling_path_length(self,path):
     return "x"
-
-def get_vertex(index,verts,n):
-    x = verts[n*index]
-    y = verts[n*index+1]
-    z = verts[n*index+2]
-    return np.array([x,y,z])
-
-def get_next_same_axial_index(ind,ax,mat,dim):
-    if ind[ax]<dim-1:
-        val = mat[tuple(ind)]
-        ind_next = ind.copy()
-        ind_next[ax] += 1
-        val_next = mat[tuple(ind_next)]
-        if val==val_next:
-            ind_next_next = get_next_same_axial_index(ind_next,ax,mat,dim)
-            return ind_next_next
-        else: return ind
-    else: return ind
-
-def milling_path_vertices(self,n,r,g,b):
-    vertices = []
-    # Parameters
-    n_ = 1-n
-    # Define number of steps
-    no_lanes = math.ceil(2+(self.voxel_size-4*self.rad)/(2*self.rad))
-    w = (self.voxel_size-2*self.rad)/(no_lanes-1)
-    no_z = int(self.voxel_size/self.dep)
-    self.dep = self.voxel_size/no_z
-    # Texture coordinates (not used, just for conistent format)
-    tx = 0.0
-    ty = 0.0
-    # Get reference vertices
-    if n==0: verts = self.v_A
-    else: verts = self.v_B
-    # Defines axes
-    ax = self.sliding_direction[0] # mill bit axis
-    axes = [0,1,2]
-    axes.pop(ax)
-    mill_ax = axes[0] # primary milling direction axis
-    off_ax = axes[1] # milling offset axis
-    # create offset direction vectors
-    vec = [0,0,0]
-    vec[off_ax]=1
-    vec = np.array(vec)
-    vec2 = [0,0,0]
-    vec2[mill_ax]=1
-    vec2 = np.array(vec2)
-    # get top ones to cut out
-    for i in range(self.dim):
-        for j in range(self.dim):
-            for k in range(self.dim):
-                ind = [j,k]
-                ind.insert(ax,n_*(self.dim-n_)+(2*n-1)*i) # 0 when n is 1, dim-1 when n is 0
-                val = self.voxel_matrix[tuple(ind)]
-                if val==n: continue # dont cut out if material is there, continue
-                # if previous was mill axis neighbor, its already been cut, continue
-                if ind[mill_ax]>0:
-                    ind_pre = ind.copy()
-                    ind_pre[mill_ax] = ind_pre[mill_ax]-1
-                    val_pre = self.voxel_matrix[tuple(ind_pre)]
-                    if val_pre==val: continue
-                # if next is mill axis neighbor, redefine pt_b
-                ind_next = get_next_same_axial_index(ind,mill_ax,self.voxel_matrix,self.dim)
-                # get 4 corners of the top of the voxel
-                add = [0,0,0]
-                add[ax]=n_
-                i_a = get_index(ind,add,self.dim)
-                add[mill_ax]=1
-                i_b = get_index(ind_next,add,self.dim)
-                # get x y z vertices corresponding to the indexes
-                pt_a = get_vertex(i_a,verts,self.vertex_no_info)
-                pt_b = get_vertex(i_b,verts,self.vertex_no_info)
-                # define offsetted verticies
-                layer_vertices = []
-                for num in range(no_lanes):
-                    p0 = pt_a+self.rad*vec+num*w*vec+self.rad*vec2
-                    p1 = pt_b+self.rad*vec+num*w*vec-self.rad*vec2
-                    if num%2==1: p0, p1 = p1, p0
-                    layer_vertices.append([p0[0],p0[1],p0[2],r,g,b,tx,ty])
-                    layer_vertices.append([p1[0],p1[1],p1[2],r,g,b,tx,ty])
-                # add startpoint
-                start_vert = layer_vertices[0].copy()
-                safe_height = layer_vertices[0][ax]-(2*n-1)*i*self.voxel_size-0.2*(2*n-1)*self.voxel_size
-                start_vert[ax] = safe_height
-                vertices.extend(start_vert)
-                for num in range(no_z):
-                    if num%2==1: layer_vertices.reverse()
-                    for vert in layer_vertices:
-                        vert[ax] = vert[ax]+(2*n-1)*self.dep
-                        vertices.extend(vert)
-                # add enpoint
-                end_vert = layer_vertices[-1].copy()
-                end_vert[ax] = safe_height
-                vertices.extend(end_vert)
-
-    vertices = np.array(vertices, dtype = np.float32)
-    return vertices
-
-def milling_path_indices(self,no,start):
-    indices = []
-    for i in range(start,start+no):
-        indices.append(int(i))
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    return indices
-
-def get_indices_of_same_neighbors(indices,mat):
-    d = len(mat)
-    val = mat[tuple(indices[0])]
-    neighbors = []
-    for ind in indices:
-        for ax in range(3):
-            for dir in range(2):
-                dir = 2*dir-1
-                ind2 = ind.copy()
-                ind2[ax] = ind2[ax]+dir
-                if ind2[ax]>=0 and ind2[ax]<d:
-                    val2 = mat[tuple(ind2)]
-                    if val==val2:
-                        neighbors.append(ind2)
-    if len(neighbors)>0:
-        neighbors = np.array(neighbors)
-        neighbors = np.unique(neighbors, axis=0)
-    return neighbors
-
-def is_connected_to_fixed_side(indices,mat,fixed_sides):
-    connected = False
-    val = mat[tuple(indices[0])]
-    d = len(mat)
-    for ind in indices:
-        for ax,dir in fixed_sides:
-            if ind[ax]==0 and dir==0:
-                connected=True
-                break
-            elif ind[ax]==d-1 and dir==1:
-                connected=True
-                break
-        if connected: break
-    if not connected:
-        neighbors = get_indices_of_same_neighbors(indices,mat)
-        if len(neighbors)>0:
-            new_indices = np.concatenate([indices,neighbors])
-            new_indices = np.unique(new_indices, axis=0)
-            if len(new_indices)>len(indices):
-                connected = is_connected_to_fixed_side(new_indices,mat,fixed_sides)
-    return connected
 
 class Selection:
     def __init__(self,parent,x,y,n):
@@ -872,14 +884,13 @@ class Geometries:
         self.fixed_sides = get_fixed_sides(self.joint_type)
         self.sliding_direction = [2,0]
         self.dim = 3
+        self.fab_geometry = True
         self.component_size = 0.275
         self.voxel_size = self.component_size/self.dim
         self.component_length = 0.5*self.component_size
         self.rad = 0.015 #milling bit radius
         self.dep = 0.015 #milling depth
         self.height_field = get_random_height_field(self.dim)
-        self.fab_geometry = False
-        self.show_milling_path = False
         self.slides = []
         self.connected = True
         self.voxel_matrix = None
@@ -921,6 +932,7 @@ class Geometries:
         self.arrow_lines_b = self.arrow_faces_b = None
         self.arrow_other_lines_a = self.arrow_other_faces_a = None
         self.arrow_other_lines_b = self.arrow_other_faces_b = None
+        self.lines_mill_a = self.lines_mill_b = None
 
         self.VBO = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
@@ -1058,14 +1070,13 @@ class Geometries:
         ve_B = joint_extra_vertices(self,"B",0.0,0.0,0.0)
 
         ### VERTICIES FOR ARROWS DISPLAYING SLIDING DIRECTIONS ###
-        v_arrows = arrow_vertices(self)
+        va = arrow_vertices(self)
 
         ### VERTICIES FOR MILLING PATHS ###
-        #self.milling_path_A = milling_path_vertices(self,0, 0.0,1.0,0.0)
-        #self.milling_path_B = milling_path_vertices(self,1, 0.0,0.8,1.0)
+        vm_A = milling_path_vertices(self,0)
+        vm_B = milling_path_vertices(self,1)
 
-        vertices_all = np.concatenate([self.v_A,  self.v_B, ve_A, ve_B, v_arrows])
-                                       #self.milling_path_A, self.milling_path_B])
+        vertices_all = np.concatenate([self.v_A,  self.v_B, ve_A, ve_B, va, vm_A, vm_B])
 
         try:
             glBufferData(GL_ARRAY_BUFFER, 6*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW)
@@ -1090,9 +1101,11 @@ class Geometries:
 
         self.vn =  int(len(self.v_A)/8)
         self.ven = int(len(ve_A)/8)
-        self.var = int(len(v_arrows)/8)
-        #self.vmA = int(len(self.milling_path_A)/8)
-        #self.vmB = int(len(self.milling_path_B)/8)
+        self.var = int(len(va)/8)
+        self.vmA = int(len(vm_A)/8)
+        self.vmB = int(len(vm_B)/8)
+        self.vmA_start = 2*self.vn+2*self.ven+self.var
+        self.vmB_start = self.vmA_start+self.vmA
 
     def create_and_buffer_indicies(self):
         all_indices = []
@@ -1111,7 +1124,11 @@ class Geometries:
         # All faces
         self.faces_all_a = ElementProperties(GL_QUADS, count_all, self.f_not_ends_a.start_index, 0)
         # Lines
-        self.lines_a, all_indices = joint_line_indicies(self,all_indices,0,0)
+        if not self.fab_geometry:
+            self.lines_a, all_indices = joint_line_indicies(self,all_indices,0,0)
+        else:
+            self.lines_a, all_indices = joint_line_fab_indicies(self,all_indices,0,0,2*self.vn)
+
 
         ### INDICES FOR COMPONENT B ###
 
@@ -1127,7 +1144,10 @@ class Geometries:
         # All faces
         self.faces_all_b = ElementProperties(GL_QUADS, count_all, self.f_not_ends_b.start_index, 1)
         # Lines
-        self.lines_b,all_indices = joint_line_indicies(self,all_indices,1,self.vn)
+        if not self.fab_geometry:
+            self.lines_b,all_indices = joint_line_indicies(self,all_indices,1,self.vn)
+        else:
+            self.lines_b, all_indices = joint_line_fab_indicies(self,all_indices,1,self.vn,2*self.vn+self.ven)
 
         ### INDICES FOR UNBRIDGED COMPONENTS ###
         if not self.bridged_A:
@@ -1159,9 +1179,10 @@ class Geometries:
                                 all_indices,self.slides[0],0,2*self.vn+2*self.ven)
         self.arrow_other_lines_b, self.arrow_other_faces_b, all_indices = arrow_indices(self,
                                 all_indices,self.slides[0],1,2*self.vn+2*self.ven)
+
         ### INDICES FOR MILLING PATHS ###
-        #lines_gpath_A = milling_path_indices(self, self.vmA, 2*self.vn+2*self.ven)
-        #lines_gpath_B = milling_path_indices(self, self.vmB, 2*self.vn+2*self.ven+self.vmA)
+        self.lines_mill_a, all_indices = milling_path_indices(self, all_indices, self.vmA, self.vmA_start, 0)
+        self.lines_mill_b, all_indices = milling_path_indices(self, all_indices, self.vmB, self.vmB_start, 1)
 
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4*len(all_indices), all_indices, GL_DYNAMIC_DRAW)
 
