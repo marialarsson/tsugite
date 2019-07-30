@@ -30,7 +30,7 @@ Change main sliding direction with arrow keys up and right:
   <img src="/Screenshots/screenshot_slide_rt.png" width="200" />
 </p>
 
-Arrows show the current sliding directions. Dashed arrows indicated slides additional to the main sliding direction.
+Arrows show the current sliding directions. Dashed arrows indicated slides additional to the main sliding direction:
 <p float="left">
   <img src="/Screenshots/screenshot_slide_2.png" width="200" />
   <img src="/Screenshots/screenshot_slide_3.png" width="200" />
@@ -71,16 +71,16 @@ Open/close joint with key O:
   <img src="/Screenshots/screenshot_open.png" width="200" />
 </p>
 
-Turn on/off hidden lines with key H:
-<p float="left">
-  <img src="/Screenshots/screenshot_hidden_show.png" width="200" />
-  <img src="/Screenshots/screenshot_hidden_hide.png" width="200" />
-</p>
-
 Turn on/off component view with keys A and B:
 <p float="left">
   <img src="/Screenshots/screenshot_A.png" width="200" />
   <img src="/Screenshots/screenshot_B.png" width="200" />
+</p>
+
+Turn on/off hidden lines with key H:
+<p float="left">
+  <img src="/Screenshots/screenshot_hidden_show.png" width="200" />
+  <img src="/Screenshots/screenshot_hidden_hide.png" width="200" />
 </p>
 
 Save joint geometry with key S, and load saved geometry with G
