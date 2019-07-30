@@ -26,33 +26,33 @@ Change joint type with keys I L T X:
 ### Sliding Directions
 Change main sliding direction with arrow keys up and right:
 <p float="left">
-  <img src="/Screenshots/screenshot_slide_up.png" width="215" />
-  <img src="/Screenshots/screenshot_slide_rt.png" width="215" />
+  <img src="/Screenshots/screenshot_slide_up.png" width="210" />
+  <img src="/Screenshots/screenshot_slide_rt.png" width="210" />
 </p>
 
 Arrows show the current sliding directions. Dashed arrows indicated slides additional to the main sliding direction:
 <p float="left">
-  <img src="/Screenshots/screenshot_slide_2.png" width="215" />
-  <img src="/Screenshots/screenshot_slide_3.png" width="215" />
-  <img src="/Screenshots/screenshot_slide_4.png" width="215" />
-  <img src="/Screenshots/screenshot_slide_5.png" width="215" /> 
+  <img src="/Screenshots/screenshot_slide_2.png" width="210" />
+  <img src="/Screenshots/screenshot_slide_3.png" width="210" />
+  <img src="/Screenshots/screenshot_slide_4.png" width="210" />
+  <img src="/Screenshots/screenshot_slide_5.png" width="210" /> 
 </p>
 
 ### Joint Resolution
 Edit voxel cube dimension with keys 2, 3 (default), 4 and 5:
 <p float="left">
-  <img src="/Screenshots/screenshot_dim_2.png" width="215" />
-  <img src="/Screenshots/screenshot_dim_3.png" width="215" />
-  <img src="/Screenshots/screenshot_dim_4.png" width="215" />
-  <img src="/Screenshots/screenshot_dim_5.png" width="215" /> 
+  <img src="/Screenshots/screenshot_dim_2.png" width="210" />
+  <img src="/Screenshots/screenshot_dim_3.png" width="210" />
+  <img src="/Screenshots/screenshot_dim_4.png" width="210" />
+  <img src="/Screenshots/screenshot_dim_5.png" width="210" /> 
 </p>
 
 ### Feedback
 
 Unconnected voxels and unbridged components are colored:
 <p float="left">
-  <img src="/Screenshots/screenshot_unconnected.png" width="215" />
-  <img src="/Screenshots/screenshot_unbridged.png" width="215" />
+  <img src="/Screenshots/screenshot_unconnected.png" width="210" />
+  <img src="/Screenshots/screenshot_unbridged.png" width="210" />
 </p>
 
 ### Fabrication
@@ -67,20 +67,20 @@ Rotate view with right mouse button.
 
 Open/close joint with key O:
 <p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="215" />
-  <img src="/Screenshots/screenshot_open.png" width="215" />
+  <img src="/Screenshots/screenshot_type_I.png" width="210" />
+  <img src="/Screenshots/screenshot_open.png" width="210" />
 </p>
 
 Turn on/off component view with keys A and B:
 <p float="left">
-  <img src="/Screenshots/screenshot_A.png" width="215" />
-  <img src="/Screenshots/screenshot_B.png" width="215" />
+  <img src="/Screenshots/screenshot_A.png" width="210" />
+  <img src="/Screenshots/screenshot_B.png" width="210" />
 </p>
 
 Turn on/off hidden lines with key H:
 <p float="left">
-  <img src="/Screenshots/screenshot_hidden_show.png" width="215" />
-  <img src="/Screenshots/screenshot_hidden_hide.png" width="215" />
+  <img src="/Screenshots/screenshot_hidden_show.png" width="210" />
+  <img src="/Screenshots/screenshot_hidden_hide.png" width="210" />
 </p>
 
 Save joint geometry with key S, and load saved geometry with G
