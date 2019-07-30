@@ -22,7 +22,7 @@ Change joint type with keys I L T X:
   <img src="/Screenshots/screenshot_type_I.png" width="210" />
   <img src="/Screenshots/screenshot_type_L.png" width="210" />
   <img src="/Screenshots/screenshot_type_T.png" width="210" />
-  <img src="/Screenshots/screenshot_type_X.png" width="210" /> 
+  <img src="/Screenshots/screenshot_type_X.png" width="210" />
 </p>
 
 ### Sliding Directions
@@ -37,7 +37,7 @@ Arrows show the current sliding directions. Dashed arrows indicated slides addit
   <img src="/Screenshots/screenshot_slide_2.png" width="210" />
   <img src="/Screenshots/screenshot_slide_3.png" width="210" />
   <img src="/Screenshots/screenshot_slide_4.png" width="210" />
-  <img src="/Screenshots/screenshot_slide_5.png" width="210" /> 
+  <img src="/Screenshots/screenshot_slide_5.png" width="210" />
 </p>
 
 ### Joint Resolution
@@ -46,7 +46,7 @@ Edit voxel cube dimension with keys 2, 3 (default), 4 and 5:
   <img src="/Screenshots/screenshot_dim_2.png" width="210" />
   <img src="/Screenshots/screenshot_dim_3.png" width="210" />
   <img src="/Screenshots/screenshot_dim_4.png" width="210" />
-  <img src="/Screenshots/screenshot_dim_5.png" width="210" /> 
+  <img src="/Screenshots/screenshot_dim_5.png" width="210" />
 </p>
 
 ### Feedback
@@ -84,6 +84,8 @@ Turn on/off hidden lines with key H:
   <img src="/Screenshots/screenshot_hidden_show.png" width="210" />
   <img src="/Screenshots/screenshot_hidden_hide.png" width="210" />
 </p>
+
+Press key W to save a screenshot.
 
 Save joint geometry with key S, and load saved geometry with G
 
