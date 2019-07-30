@@ -7,7 +7,7 @@ Run setup/main.py
 ## Interface
 
 ### Model Joint
-Edit joint geometry by pushing/pulling on faces
+Edit joint geometry by pushing/pulling on faces. Randomize joint geometry with key R, and clear joint geometry key C
 <p float="left">
   <img src="/Screenshots/screenshot_edit_pulled.png" width="400" />
   <img src="/Screenshots/screenshot_edit_result.png" width="400" />
@@ -44,21 +44,25 @@ Edit voxel cube dimension with keys 2, 3 (default), 4 and 5
 Rotate view with right mouse button
 
 Open/close joint with key O
+<p float="left">
+  <img src="/Screenshots/screenshot_type_I.png" width="200" />
+  <img src="/Screenshots/screenshot_open.png" width="200" />
+</p>
+
+Turn on/off hidden lines with key H
+<p float="left">
+  <img src="/Screenshots/screenshot_hidden_show.png" width="200" />
+  <img src="/Screenshots/screenshot_hidden_hide.png" width="200" />
+</p>
 
 Turn on/off component view with keys A and B
+Turn on/off hidden lines with key H
 
 Switch to view of fabricated geometry with F
 
 Turn on/off milling path display with key P
 
-Turn on/off hidden lines with key H
-
 Save joint geometry with key S, and load saved geometry with G
-
-
-Randomize joint geometry: R
-
-Clear joint geometry: C
 
 Hit ESC key to quit.
 
