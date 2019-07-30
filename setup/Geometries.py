@@ -930,13 +930,13 @@ class Geometries:
         self.create_and_buffer_indicies()
 
     def save(self):
-        np.save("saved_height_field.npy",self.height_field)
-        np.save("saved_voxel_matrix.npy",self.voxel_matrix)
-        np.save("saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
-        np.save("saved_fixed_sides.npy",self.fixed_sides)
+        np.save("data/saved_height_field.npy",self.height_field)
+        np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
+        np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
+        np.save("data/saved_fixed_sides.npy",self.fixed_sides)
 
     def load(self):
-        self.height_field = np.load("saved_height_field.npy")
+        self.height_field = np.load("data/saved_height_field.npy")
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
 
