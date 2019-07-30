@@ -57,11 +57,13 @@ Unconnected voxels and unbridged components are colored:
   <img src="/Screenshots/screenshot_unbridged.png" width="210" />
 </p>
 
+Structural evaluation (to be implemented).
+
 ### Fabrication
 
-Switch to view of fabricated geometry with F.
+Switch to view of fabricated geometry with F (to be implemented).
 
-Turn on/off milling path display with key P.
+Turn on/off milling path display with key P (to be improved).
 
 ### Preview Options
 
