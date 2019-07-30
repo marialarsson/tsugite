@@ -48,6 +48,12 @@ Unconnected voxels and unbridged components are colored:
 </p>
 
 Arrows show the current sliding directions:
+<p float="left">
+  <img src="/Screenshots/screenshot_slide_1.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_2.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_3.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_4.png" width="200" /> 
+</p>
 
 Dashed arrows indicated slides additional to the main sliding direction.
 
