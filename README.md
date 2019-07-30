@@ -23,11 +23,19 @@ Change joint type with keys I L T X:
   <img src="/Screenshots/screenshot_type_X.png" width="200" /> 
 </p>
 
-### Sliding Direction
-Change sliding direction with arrow keys up and right:
+### Sliding Directions
+Change main sliding direction with arrow keys up and right:
 <p float="left">
-  <img src="/Screenshots/screenshot_open.png" width="200" />
-  <img src="/Screenshots/screenshot_direction.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_up.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_rt.png" width="200" />
+</p>
+
+Arrows show the current sliding directions. Dashed arrows indicated slides additional to the main sliding direction.
+<p float="left">
+  <img src="/Screenshots/screenshot_slide_2.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_3.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_4.png" width="200" />
+  <img src="/Screenshots/screenshot_slide_5.png" width="200" /> 
 </p>
 
 ### Joint Resolution
@@ -46,16 +54,6 @@ Unconnected voxels and unbridged components are colored:
   <img src="/Screenshots/screenshot_unconnected.png" width="200" />
   <img src="/Screenshots/screenshot_unbridged.png" width="200" />
 </p>
-
-Arrows show the current sliding directions:
-<p float="left">
-  <img src="/Screenshots/screenshot_slide_1.png" width="200" />
-  <img src="/Screenshots/screenshot_slide_2.png" width="200" />
-  <img src="/Screenshots/screenshot_slide_3.png" width="200" />
-  <img src="/Screenshots/screenshot_slide_4.png" width="200" /> 
-</p>
-
-Dashed arrows indicated slides additional to the main sliding direction.
 
 ### Fabrication
 
