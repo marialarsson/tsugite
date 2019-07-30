@@ -7,14 +7,15 @@ Run setup/main.py
 ## Interface
 
 ###Edit
+
 Edit joint geometry by pushing/pulling on faces
 <p float="left">
-  <img src="/Screenshots/screenshot_edit_hovered.png" width="200" />
-  <img src="/Screenshots/screenshot_edit_pulled.png" width="200" />
-  <img src="/Screenshots/screenshot_edit_result.png" width="200" />
+  <img src="/Screenshots/screenshot_edit_pulled.png" width="400" />
+  <img src="/Screenshots/screenshot_edit_result.png" width="400" />
 </p>
 
 ###Joint types
+
 Change joint type with keys I L T X
 <p float="left">
   <img src="/Screenshots/screenshot_type_I.png" width="200" />
