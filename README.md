@@ -8,7 +8,11 @@ Rotate view with right mouse button
 
 Edit joint geometry by clicking and dragging on 3D joint
 
-![disco_joint_interface.py screenshot](Screenshots/screenshot_type_I.png) | ![disco_joint_interface.py screenshot](Screenshots/screenshot_type_T.png)
+<p float="left">
+  <img src="/Screenshots/screenshot_type_I.png" width="100" />
+  <img src="/Screenshots/screenshot_type_T.png" width="100" /> 
+</p>
+
 
 Change joint type: I L T X
 
