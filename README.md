@@ -4,10 +4,18 @@ python 3.6.0 / OpenGL / GLFW
 
 Run setup/main.py
 
-Rotate view with right mouse button
+## Interface
 
-Edit joint geometry by clicking and dragging on 3D joint
+###Edit
+Edit joint geometry by pushing/pulling on faces
+<p float="left">
+  <img src="/Screenshots/screenshot_edit_hovered.png" width="200" />
+  <img src="/Screenshots/screenshot_edit_pulled.png" width="200" />
+  <img src="/Screenshots/screenshot_edit_result.png" width="200" />
+</p>
 
+###Joint types
+Change joint type with keys I L T X
 <p float="left">
   <img src="/Screenshots/screenshot_type_I.png" width="200" />
   <img src="/Screenshots/screenshot_type_L.png" width="200" />
@@ -15,10 +23,15 @@ Edit joint geometry by clicking and dragging on 3D joint
   <img src="/Screenshots/screenshot_type_X.png" width="200" /> 
 </p>
 
+### Sliding direction
+Change sliding direction with arrow keys up and right
+<p float="left">
+  <img src="/Screenshots/screenshot_open.png" width="200" />
+  <img src="/Screenshots/screenshot_direction.png" width="200" />
+</p>
 
-Change joint type: I L T X
-
-Change sliding direction: Up arrow / right arrow
+### Rotate
+Rotate view with right mouse button
 
 Open/close joint: O
 
