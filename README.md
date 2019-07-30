@@ -9,8 +9,8 @@ Rotate view with right mouse button
 Edit joint geometry by clicking and dragging on 3D joint
 
 <p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="100" />
-  <img src="/Screenshots/screenshot_type_T.png" width="100" /> 
+  <img src="/Screenshots/screenshot_type_I.png" width="200" />
+  <img src="/Screenshots/screenshot_type_L.png" width="200" /> 
 </p>
 
 
