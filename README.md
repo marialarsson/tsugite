@@ -9,8 +9,8 @@ Run setup/main.py
 ### Model Joint
 Edit joint geometry by pushing/pulling on faces:
 <p float="left">
-  <img src="/Screenshots/screenshot_edit_pulled.png" width="430" />
-  <img src="/Screenshots/screenshot_edit_result.png" width="430" />
+  <img src="/Screenshots/screenshot_edit_pulled.png" width="440" />
+  <img src="/Screenshots/screenshot_edit_result.png" width="440" />
 </p>
 Randomize joint geometry with key R, and clear joint geometry key C
 
