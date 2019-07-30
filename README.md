@@ -56,7 +56,10 @@ Turn on/off hidden lines with key H
 </p>
 
 Turn on/off component view with keys A and B
-Turn on/off hidden lines with key H
+<p float="left">
+  <img src="/Screenshots/screenshot_type_I.png" width="200" />
+  <img src="/Screenshots/screenshot_comp_hide.png" width="200" />
+</p>
 
 Switch to view of fabricated geometry with F
 
@@ -65,5 +68,3 @@ Turn on/off milling path display with key P
 Save joint geometry with key S, and load saved geometry with G
 
 Hit ESC key to quit.
-
-![disco_joint_interface.py screenshot](Screenshot.JPG)
