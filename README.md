@@ -63,7 +63,7 @@ Structural evaluation (to be implemented).
 
 Switch to view of fabricated geometry with F (to be implemented).
 
-Turn on/off milling path display with key P (to be improved).
+Turn on/off milling path display with key M (to be improved).
 
 ### Preview Options
 
@@ -87,7 +87,7 @@ Turn on/off hidden lines with key H:
   <img src="/Screenshots/screenshot_hidden_hide.png" width="210" />
 </p>
 
-Press key W to save a screenshot.
+Press key P to save a screenshot.
 
 Save joint geometry with key S, and load saved geometry with G
 
