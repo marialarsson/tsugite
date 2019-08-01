@@ -61,7 +61,11 @@ Structural evaluation (to be implemented).
 
 ### Fabrication
 
-Switch to view of fabricated geometry with F (to be implemented).
+Preview fabricated geometry with key F:
+<p float="left">
+  <img src="/Screenshots/screenshot_fab_0.png" width="210" />
+  <img src="/Screenshots/screenshot_fab_1.png" width="210" />
+</p>
 
 Turn on/off milling path display with key M (to be improved).
 

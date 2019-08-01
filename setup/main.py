@@ -8,6 +8,7 @@ import sys
 from Geometries import Geometries
 from Geometries import ElementProperties
 from ViewSettings import ViewSettings
+from Fabrication import Fabrication
 import ctypes
 import math
 import cv2
@@ -116,15 +117,14 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_O: view_opt.open_joint = not view_opt.open_joint
         elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
         elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
-        elif key==glfw.KEY_P: view_opt.show_milling_path = not view_opt.show_milling_path
+        elif key==glfw.KEY_M: view_opt.show_milling_path = not view_opt.show_milling_path
         elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
         elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
         elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
         elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
         elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
-        elif key==glfw.KEY_W:
-            print("saving screenshot...")
-            save_screenshot(window)
+        elif key==glfw.KEY_P: save_screenshot(window)
+        elif key==glfw.KEY_K: mesh.fab_a.export_gcode()
 
 def mouseCallback(window,button,action,mods):
     mesh, view_opt = glfw.get_window_user_pointer(window)
@@ -141,6 +141,8 @@ def mouseCallback(window,button,action,mods):
 def save_screenshot(window):
     image_buffer = glReadPixels(0, 0, 1600, 1600, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
     image = np.frombuffer(image_buffer, dtype=np.uint8).reshape(1600, 1600, 3)
+    image = np.flip(image,axis=0)
+    image = np.flip(image,axis=2)
     cv2.imwrite("screenshot.png", image)
 
 def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
@@ -235,53 +237,42 @@ def initialize():
 
     return window
 
-def display(window, mesh, view_opt, shader_tex, shader_col):
-
-    ######################## START WITH TEXTURE SHADER ###########################
-    glUseProgram(shader_tex)
+def init_display():
     glClearColor(1.0, 1.0, 1.0, 1.0)
     glEnable(GL_DEPTH_TEST)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
     glMatrixMode(GL_MODELVIEW)
+    glPolygonOffset(1.0,1.0)
 
+def init_shader(shader,view_opt):
+    glUseProgram(shader)
     rot_x = pyrr.Matrix44.from_x_rotation(view_opt.xrot)
     rot_y = pyrr.Matrix44.from_y_rotation(view_opt.yrot)
     glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
-    glPolygonOffset(1.0,1.0)
 
-    ####################### Draw textures end grain faces #######################
-
+def display_end_grains(window,mesh):
     G0 = [mesh.f_ends_a, mesh.f_ends_b]
     G1 = [mesh.f_not_ends_a, mesh.f_not_ends_b]
     draw_geometries_with_excluded_area(window,G0,G1)
 
-    ######################## SWITCH TO COLOR SHADER ###########################
+def display_unconnected(window,mesh):
+    # 1. Draw hidden geometry
+    glUniform3f(5, 1.0, 0.8, 0.7) # light red orange
+    if not mesh.connected_A: draw_geometries(window,[mesh.f_unconnected_a])
+    if not mesh.connected_B: draw_geometries(window,[mesh.f_unconnected_b])
 
-    glUseProgram(shader_col)
-    glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
+    # 1. Draw visible geometry
+    glUniform3f(5, 1.0, 0.2, 0.0) # red orange
+    G0, G1 = [], []
+    if not mesh.connected_A:
+        G0.append(mesh.f_unconnected_a)
+        G1.append(mesh.f_connected_a)
+    if not mesh.connected_B:
+        G0.append(mesh.f_unconnected_b)
+        G1.append(mesh.f_connected_b)
+    draw_geometries_with_excluded_area(window,G0,G1)
 
-    #################### Draw geometry of unconnected voxels ###################
-
-    if not mesh.connected:
-
-        # 1. Draw hidden geometry
-        glUniform3f(5, 1.0, 0.8, 0.7) # light red orange
-        if not mesh.connected_A: draw_geometries(window,[mesh.f_unconnected_a])
-        if not mesh.connected_B: draw_geometries(window,[mesh.f_unconnected_b])
-
-        # 1. Draw visible geometry
-        glUniform3f(5, 1.0, 0.2, 0.0) # red orange
-        G0, G1 = [], []
-        if not mesh.connected_A:
-            G0.append(mesh.f_unconnected_a)
-            G1.append(mesh.f_connected_a)
-        if not mesh.connected_B:
-            G0.append(mesh.f_unconnected_b)
-            G1.append(mesh.f_connected_b)
-        draw_geometries_with_excluded_area(window,G0,G1)
-
-    ##################### Draw colors unbridged components #####################
-
+def display_unbridged(window,mesh,view_opt):
     # 1. Unbringed component A
     if not view_opt.hidden_a and not mesh.bridged_A:
         # a) Unbridge part 1
@@ -308,48 +299,47 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
         G1 = [mesh.faces_unbridged_1_b, mesh.faces_all_a, mesh.f_unconnected_b]
         draw_geometries_with_excluded_area(window,G0,G1)
 
-
+def display_selected(window,mesh,view_opt):
     ################### Draw top face that is currently being hovered ##########
-    if mesh.Selected!=None:
-        # Draw base face (hovered)
-        glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        glUniform3f(5, 0.2, 0.2, 0.2) #dark grey
-        index = mesh.dim*mesh.Selected.x+mesh.Selected.y
-        if mesh.Selected.n==0:
-            top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_a.start_index+4*index, 0)
-        else:
-            top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_b.start_index+4*index, 1)
-        G0 = [top]
-        G1 = [mesh.faces_not_tops_a,mesh.faces_not_tops_b]
-        draw_geometries_with_excluded_area(window,G0,G1)
-        # Outline
-        glClear(GL_DEPTH_BUFFER_BIT)
-        glPushAttrib(GL_ENABLE_BIT)
-        glLineWidth(1)
-        glEnable(GL_LINE_STIPPLE)
-        glLineStipple(2, 0xAAAA)
-        glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top.start_index)))
-        glPopAttrib()
-
+    # Draw base face (hovered)
+    glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+    glUniform3f(5, 0.2, 0.2, 0.2) #dark grey
+    index = mesh.dim*mesh.Selected.x+mesh.Selected.y
+    if mesh.Selected.n==0:
+        top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_a.start_index+4*index, 0)
+    else:
+        top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_b.start_index+4*index, 1)
+    G0 = [top]
+    G1 = [mesh.faces_not_tops_a,mesh.faces_not_tops_b]
+    draw_geometries_with_excluded_area(window,G0,G1)
+    # Outline
+    glClear(GL_DEPTH_BUFFER_BIT)
+    glPushAttrib(GL_ENABLE_BIT)
+    glLineWidth(1)
+    glEnable(GL_LINE_STIPPLE)
+    glLineStipple(2, 0xAAAA)
+    glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top.start_index)))
+    glPopAttrib()
     ################ Draw top face that is currently being pulled ###############
-        if mesh.Selected.n==0: top_start_index = mesh.faces_tops_a.start_index
-        else: top_start_index = mesh.faces_tops_b.start_index
-        if mesh.Selected.val!=0:
-            for val in range(1,abs(mesh.Selected.val)+1):
-                if mesh.Selected.val<0: val = -val
-                pulled_vec = [0,0,0]
-                ax = mesh.sliding_direction[0]
-                pulled_vec[ax] = (2*mesh.Selected.n-1) * view_opt.distance + val*mesh.voxel_size
-                move = pyrr.matrix44.create_from_translation(pulled_vec)
-                glUniformMatrix4fv(4, 1, GL_FALSE, move)
-                glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-                glPushAttrib(GL_ENABLE_BIT)
-                glLineWidth(3)
-                glEnable(GL_LINE_STIPPLE)
-                glLineStipple(2, 0xAAAA)
-                glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top_start_index+4*index)))
-                glPopAttrib()
+    if mesh.Selected.n==0: top_start_index = mesh.faces_tops_a.start_index
+    else: top_start_index = mesh.faces_tops_b.start_index
+    if mesh.Selected.val!=0:
+        for val in range(1,abs(mesh.Selected.val)+1):
+            if mesh.Selected.val<0: val = -val
+            pulled_vec = [0,0,0]
+            ax = mesh.sliding_direction[0]
+            pulled_vec[ax] = (2*mesh.Selected.n-1) * view_opt.distance + val*mesh.voxel_size
+            move = pyrr.matrix44.create_from_translation(pulled_vec)
+            glUniformMatrix4fv(4, 1, GL_FALSE, move)
+            glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+            glPushAttrib(GL_ENABLE_BIT)
+            glLineWidth(3)
+            glEnable(GL_LINE_STIPPLE)
+            glLineStipple(2, 0xAAAA)
+            glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top_start_index+4*index)))
+            glPopAttrib()
 
+def display_joint_geometry(window,mesh,view_opt):
     ############################# Draw hidden lines #############################
     glClear(GL_DEPTH_BUFFER_BIT)
     glUniform3f(5,0.0,0.0,0.0) # black
@@ -365,13 +355,11 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
         G1 = [mesh.faces_all_b]
         draw_geometries_with_excluded_area(window,G0,G1)
     glPopAttrib()
-
     ############################ Draw visible lines #############################
     glLineWidth(3)
     G0 = [mesh.lines_a, mesh.lines_b]
     G1 = [mesh.faces_all_a, mesh.faces_all_b]
     draw_geometries_with_excluded_area(window,G0,G1)
-
     ################ When joint is fully open, draw dahsed lines ################
     if not view_opt.hidden_a and not view_opt.hidden_b and view_opt.distance==mesh.component_size:
         glPushAttrib(GL_ENABLE_BIT)
@@ -383,6 +371,26 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
         draw_geometries_with_excluded_area(window,G0,G1)
         glPopAttrib()
 
+def display_joint_geometry_lines(window,mesh,view_opt):
+    glUniform3f(5,0.0,0.0,0.0) # black
+    glLineWidth(3)
+    G0 = [mesh.lines_a, mesh.lines_b]
+    draw_geometries(window,G0)
+
+def display_joint_faces(window,mesh,view_opt):
+    glUniform3f(5,0.8,0.8,0.8) #grey
+    glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
+    G0 = [mesh.faces_all_a, mesh.faces_all_b]
+    draw_geometries(window,G0)
+    glUniform3f(5,0.0,0.0,0.0) #black
+    glLineWidth(1)
+    glPolygonOffset(1.0, 1.0)
+    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+    G0 = [mesh.faces_all_a, mesh.faces_all_b]
+    draw_geometries(window,G0,clear_depth_buffer=False)
+    glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
+
+def display_arrows(window,mesh,view_opt):
     ############################## Direction arrows ################################
     if view_opt.show_arrows:
         # A
@@ -421,16 +429,13 @@ def display(window, mesh, view_opt, shader_tex, shader_col):
         draw_geometries_with_excluded_area(window,G0_other,G1,translation_vec=vec)
         glPopAttrib()
 
-    ############################ Milling paths ##################################
+def display_milling_paths(window,mesh,view_opt):
     if view_opt.show_milling_path:
         glLineWidth(1)
         glUniform3f(5,0.0,1.0,0.0)
         draw_geometries(window,[mesh.lines_mill_a])
         glUniform3f(5,0.0,0.8,1.0)
         draw_geometries(window,[mesh.lines_mill_b])
-
-    ## the end
-    glfw.swap_buffers(window)
 
 def pick(window, mesh, view_opt, shader_col):
 
@@ -521,7 +526,19 @@ def main():
             mesh.Selected.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
 
         # Display joint geometries
-        display(window, mesh, view_opt, shader_tex, shader_col)
+        init_display()
+        init_shader(shader_tex, view_opt)
+        display_end_grains(window,mesh)
+        init_shader(shader_col, view_opt)
+        if not mesh.connected: display_unconnected(window,mesh)
+        if not mesh.bridged_A or not mesh.bridged_B: display_unbridged(window,mesh,view_opt)
+        if mesh.Selected!=None: display_selected(window,mesh,view_opt)
+        #display_joint_faces(window,mesh,view_opt)
+        display_joint_geometry(window,mesh,view_opt)
+        #display_joint_geometry_lines(window,mesh,view_opt)
+        if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
+        if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
+        glfw.swap_buffers(window)
 
     glfw.terminate()
 
@@ -536,8 +553,8 @@ if __name__ == "__main__":
     print("Open joint: O")
     print("Hide components: A B")
     print("Hide hidden lines: H")
-    print("Show milling path: P")
+    print("Show milling path: M")
     print("Press S to save joint geometry and G to open")
-    print("Press W to save a screenshot\n")
+    print("Press P to save a screenshot\n")
 
     main()

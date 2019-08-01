@@ -9,7 +9,7 @@ class ViewSettings:
         self.hidden_a = False
         self.hidden_b = False
         self.show_hidden_lines = True
-        self.show_arrows = False
+        self.show_arrows = True
         self.show_milling_path = False
 
         # Joint opening variables
