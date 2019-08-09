@@ -781,6 +781,48 @@ def joint_top_face_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, indices_tops_prop, all_indices
 
+def joint_selected_top_line_indices(self,selected,all_indices):
+    # Make indices of lines for drawing method GL_LINES
+    n = selected.n
+    offset = n*self.vn
+    sax=self.sliding_direction[0]
+    h = self.height_field[tuple(selected.selected_faces[0])]
+    # 1. Outline of selected top faces of joint
+    indices = []
+    for face in selected.selected_faces:
+        ind = [int(face[0]),int(face[1])]
+        ind.insert(sax,h)
+        #print(ind)
+        other_axes = [0,1,2]
+        other_axes.pop(sax)
+        for i in range(2):
+            ax = other_axes[i]
+            for j in range(2):
+                nface = face.copy()
+                nface[ax] += 2*j-1
+                nface = np.array(nface, dtype=np.uint32)
+                if np.all(nface>=0) and np.all(nface<self.dim):
+                    unique = True
+                    for face2 in selected.selected_faces:
+                        if nface[0]==face2[0] and nface[1]==face2[1]:
+                            unique = False
+                            break
+                    if not unique: continue
+                for k in range(2):
+                    add = [k,k,k]
+                    add[ax] = j
+                    add[sax] = 0
+                    index = get_index(ind,add,self.dim)
+                    indices.append(index)
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    indices = indices + offset
+    # Store
+    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
+
 def joint_line_indicies(self,all_indices,n,offset):
     fixed_sides = self.fixed_sides[n]
     fab_ax = self.sliding_direction[0]
@@ -797,11 +839,10 @@ def joint_line_indicies(self,all_indices,n,offset):
                     diagonal = False
                     if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
                     if cnt==1 or cnt==3 or (cnt==2 and diagonal):
-                        add0 = [0,0,0]
-                        add1 = [0,0,0]
-                        add1[ax] = 1
-                        start_i = get_index(ind,add0,self.dim)
-                        end_i = get_index(ind,add1,self.dim)
+                        add = [0,0,0]
+                        add[ax] = 1
+                        start_i = get_index(ind,[0,0,0],self.dim)
+                        end_i = get_index(ind,add,self.dim)
                         indices.extend([start_i,end_i])
     #Outline of component base
     start = d*d*d
@@ -1076,21 +1117,72 @@ def get_sliding_directions(mat):
 def get_milling_path_length(self,path):
     return "x"
 
+def get_same_height_neighbors(hfield,inds):
+    dim = len(hfield)
+    val = hfield[tuple(inds[0])]
+    new_inds = list(inds)
+    for ind in inds:
+        for ax in range(2):
+            for dir in range(-1,2,2):
+                ind2 = ind.copy()
+                ind2[ax] += dir
+                if np.all(ind2>=0) and np.all(ind2<dim):
+                    val2 = hfield[tuple(ind2)]
+                    if val2==val:
+                        unique = True
+                        for ind3 in new_inds:
+                            if ind2[0]==ind3[0] and ind2[1]==ind3[1]:
+                                unique = False
+                                break
+                        if unique: new_inds.append(ind2)
+    if len(new_inds)>len(inds):
+        new_inds = get_same_height_neighbors(hfield,new_inds)
+    return new_inds
+
 class Selection:
     def __init__(self,parent,x,y,n):
         self.parent = parent
         self.x = x
         self.y = y
+        self.x2 = x
+        self.y2 = y
         self.n = n
+        self.pos = np.array([self.x,self.y])
         self.active = False
         self.start_pos = self.current_pos = None
         self.start_height = self.current_height = None
         self.val = 0
+        self.clicked_mouse_pos = [0,0]
+        self.refresh = False
+        self.mouse_pressed = False
+        self.selection_mode = False
+        self.nc = 2
+        if parent.shift:
+            self.selected_faces = [self.pos]
+        else:
+            self.selected_faces = get_same_height_neighbors(parent.height_field,[self.pos])
 
     def activate(self,mouse_pos):
         self.active=True
+        self.selection_mode = False
         self.start_pos = np.array([mouse_pos[0],-mouse_pos[1]])
         self.start_height = self.parent.height_field[self.x][self.y]
+        Geometries.create_and_buffer_indicies(self.parent)
+
+    def add(self,mouse_pos):
+        self.clicked_mouse_pos = np.array([mouse_pos[0],-mouse_pos[1]])
+        unique = True
+        for face in self.selected_faces:
+            if face[0]==self.x2 and face[1]==self.y2:
+                unique = False
+                break
+        if unique:
+            self.selected_faces.append(np.array([self.x2,self.y2]))
+            Geometries.create_and_buffer_indicies(self.parent)
+
+    def set_current(self,x,y):
+        self.x2 = x
+        self.y2 = y
 
     def edit(self,mouse_pos,screen_xrot,screen_yrot):
         self.current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
@@ -1128,9 +1220,8 @@ class ElementProperties:
 
 class Geometries:
     def __init__(self):
-        self.Selected = None
-        self.fab_a = None
-        self.fab_b = None
+        self.shift = False
+        self.outline_selected_faces = None
         self.joint_type = "I"
         self.fixed_sides = get_fixed_sides(self.joint_type)
         self.sliding_direction = [2,0]
@@ -1142,8 +1233,11 @@ class Geometries:
         self.rad = 0.015 #milling bit radius
         self.dep = 0.015 #milling depth
         self.height_field = get_random_height_field(self.dim)
+        self.pre_height_field = self.height_field
         self.slides = []
         self.connected = True
+        self.Selected = None
+        self.fab_a = self.fab_b = None
         self.voxel_matrix = None
         self.voxel_matrix_with_sides = None
         self.voxel_matrix_connected = None
@@ -1274,19 +1368,32 @@ class Geometries:
         self.Selected = Selection(self,x,y,n)
 
     def finalize_selection(self):
+        self.pre_height_field = self.height_field.copy()
         if self.Selected.val!=0:
-            self.height_field[self.Selected.x][self.Selected.y] = self.Selected.current_height
+            for ind in self.Selected.selected_faces:
+                self.height_field[tuple(ind)] = self.Selected.current_height
             self.voxel_matrix_from_height_field()
             self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
             self.create_and_buffer_indicies()
         self.Selected = None
 
+    def undo(self):
+        print("undoing...")
+        temp = self.height_field.copy()
+        self.height_field = self.pre_height_field.copy()
+        self.pre_height_field = temp
+        self.voxel_matrix_from_height_field()
+        self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
+        self.create_and_buffer_indicies()
+
     def randomize_height_field(self):
+        self.pre_height_field = self.height_field.copy()
         self.height_field = get_random_height_field(self.dim)
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
 
     def clear_height_field(self):
+        self.pre_height_field = self.height_field.copy()
         self.height_field = np.zeros((self.dim,self.dim))
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_indicies()
@@ -1302,13 +1409,39 @@ class Geometries:
         self.evaluate_joint()
 
     def update_dimension(self,dim_): # not always working OS error
+        pdim = self.dim
         self.dim = dim_
         self.voxel_size = self.component_size/self.dim
-        self.height_field = get_random_height_field(self.dim)
+        if self.dim>pdim:
+            f = self.dim/pdim
+            a = int(0.5*(self.dim-pdim)+0.5)
+            b = self.dim-pdim-a
+            self.height_field = f*np.pad(self.height_field, ((a, b),(a, b)), 'edge')
+        elif self.dim<pdim:
+            f = self.dim/pdim
+            f2 = pdim/self.dim
+            hf = np.zeros((self.dim,self.dim))
+            for i in range(self.dim):
+                for j in range(self.dim):
+                    sum = 0
+                    cnt = 0
+                    for x in range(self.dim):
+                        for y in range(self.dim):
+                            a = int(f2*i+x)
+                            b = int(f2*j+y)
+                            if a>=pdim or b>=pdim: continue
+                            sum += self.height_field[a][b]
+                            cnt +=1
+                    hf[i][j] = int(f*sum/cnt+0.5)
+            self.height_field = hf
         self.voxel_matrix_from_height_field()
         self.create_and_buffer_vertices()
         self.create_and_buffer_indicies()
         self.evaluate_joint()
+
+    def update_number_of_components(self,num):
+        self.nc = num
+        self.create_and_buffer_indicies()        
 
     def create_and_buffer_vertices(self):
 
@@ -1325,9 +1458,9 @@ class Geometries:
 
         ### VERTICIES FOR MILLING PATHS ###
         vm_A = milling_path_vertices(self,0)
-        self.fab_a = Fabrication(vm_A)
+        self.fab_a = Fabrication(vm_A,self.component_size,self.sliding_direction,self.joint_type,0)
         vm_B = milling_path_vertices(self,1)
-        self.fab_b = Fabrication(vm_B)
+        self.fab_b = Fabrication(vm_B,self.component_size,self.sliding_direction,self.joint_type,1)
 
         vertices_all = np.concatenate([self.v_A,  self.v_B, ve_A, ve_B, va, vm_A, vm_B])
 
@@ -1428,6 +1561,10 @@ class Geometries:
         ### INDICES OF TOP FACES FOR PICKING ###
         self.faces_not_tops_a, self.faces_tops_a, all_indices = joint_top_face_indices(self,all_indices,0,0)
         self.faces_not_tops_b, self.faces_tops_b, all_indices = joint_top_face_indices(self,all_indices,1,self.vn)
+
+        ### INDICES OUTLINE OF ACTIVE SELECTED FACE OF MANY FACES ###
+        if self.Selected!=None and self.Selected.active:
+            self.outline_selected_faces, all_indices = joint_selected_top_line_indices(self,self.Selected,all_indices)
 
         ### Indicies for arrows ###
         self.arrow_lines_a, self.arrow_faces_a, all_indices = arrow_indices(self,

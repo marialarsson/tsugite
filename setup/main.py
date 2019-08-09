@@ -89,8 +89,11 @@ def create_color_shaders():
 def keyCallback(window,key,scancode,action,mods):
     mesh, view_opt = glfw.get_window_user_pointer(window)
     if action==glfw.PRESS:
+        if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
+            mesh.shift = True
+            if mesh.Selected!=None: mesh.Selected.refresh = True
         # Joint geometry
-        if key==glfw.KEY_C: Geometries.clear_height_field(mesh)
+        elif key==glfw.KEY_C: Geometries.clear_height_field(mesh)
         # Joint type
         elif key==glfw.KEY_I and mesh.joint_type!="I":
             Geometries.update_joint_type(mesh,"I")
@@ -100,6 +103,8 @@ def keyCallback(window,key,scancode,action,mods):
             Geometries.update_joint_type(mesh,"T")
         elif key==glfw.KEY_X and mesh.joint_type!="X":
             Geometries.update_joint_type(mesh,"X")
+        elif key==glfw.KEY_Y:
+            Geometries.update_number_of_components(mesh,3)
         # Sliding direction
         elif key==glfw.KEY_UP and mesh.sliding_direction!=[2,0]:
             if mesh.joint_type!="X":
@@ -117,23 +122,41 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_O: view_opt.open_joint = not view_opt.open_joint
         elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
         elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
-        elif key==glfw.KEY_M: view_opt.show_milling_path = not view_opt.show_milling_path
+        elif key==glfw.KEY_M:
+            Geometries.create_and_buffer_vertices(mesh)
+            Geometries.create_and_buffer_indicies(mesh)
+            view_opt.show_milling_path = not view_opt.show_milling_path
         elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
         elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
         elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
         elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
         elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
         elif key==glfw.KEY_P: save_screenshot(window)
-        elif key==glfw.KEY_K: mesh.fab_a.export_gcode()
+        elif key==glfw.KEY_K:
+            Geometries.create_and_buffer_vertices(mesh)
+            mesh.fab_a.export_gcode("joint_side_a")
+            mesh.fab_b.export_gcode("joint_side_b")
+        elif key==glfw.KEY_Z: Geometries.undo(mesh)
+    elif action==glfw.RELEASE:
+        if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
+            if mesh.Selected!=None: mesh.Selected.refresh = True
+            mesh.shift = False
 
 def mouseCallback(window,button,action,mods):
     mesh, view_opt = glfw.get_window_user_pointer(window)
     if button==glfw.MOUSE_BUTTON_LEFT:
         if mesh.Selected!=None:
             if action==1:
-                mesh.Selected.activate(glfw.get_cursor_pos(window))
+                mesh.Selected.mouse_pressed = True
+                if not mesh.Selected.active:
+                    if mesh.shift:
+                        mesh.Selected.selection_mode = True
+                        mesh.Selected.add(glfw.get_cursor_pos(window))
+                    else: mesh.Selected.activate(glfw.get_cursor_pos(window))
             elif action==0:
-                Geometries.finalize_selection(mesh)
+                mesh.Selected.mouse_pressed = False
+                if mesh.Selected.active and mesh.Selected.val!=0:
+                    Geometries.finalize_selection(mesh)
     elif button==glfw.MOUSE_BUTTON_RIGHT:
         if action==1: ViewSettings.start_rotation(view_opt, window)
         elif action==0: ViewSettings.end_rotation(view_opt)
@@ -263,13 +286,10 @@ def display_unconnected(window,mesh):
 
     # 1. Draw visible geometry
     glUniform3f(5, 1.0, 0.2, 0.0) # red orange
-    G0, G1 = [], []
-    if not mesh.connected_A:
-        G0.append(mesh.f_unconnected_a)
-        G1.append(mesh.f_connected_a)
-    if not mesh.connected_B:
-        G0.append(mesh.f_unconnected_b)
-        G1.append(mesh.f_connected_b)
+    G0 = []
+    if not mesh.connected_A: G0.append(mesh.f_unconnected_a)
+    if not mesh.connected_B: G0.append(mesh.f_unconnected_b)
+    G1 = [mesh.f_connected_a, mesh.f_connected_b]
     draw_geometries_with_excluded_area(window,G0,G1)
 
 def display_unbridged(window,mesh,view_opt):
@@ -304,40 +324,28 @@ def display_selected(window,mesh,view_opt):
     # Draw base face (hovered)
     glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
     glUniform3f(5, 0.2, 0.2, 0.2) #dark grey
-    index = mesh.dim*mesh.Selected.x+mesh.Selected.y
-    if mesh.Selected.n==0:
-        top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_a.start_index+4*index, 0)
-    else:
-        top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_b.start_index+4*index, 1)
-    G0 = [top]
     G1 = [mesh.faces_not_tops_a,mesh.faces_not_tops_b]
-    draw_geometries_with_excluded_area(window,G0,G1)
-    # Outline
-    glClear(GL_DEPTH_BUFFER_BIT)
-    glPushAttrib(GL_ENABLE_BIT)
-    glLineWidth(1)
-    glEnable(GL_LINE_STIPPLE)
-    glLineStipple(2, 0xAAAA)
-    glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top.start_index)))
-    glPopAttrib()
-    ################ Draw top face that is currently being pulled ###############
-    if mesh.Selected.n==0: top_start_index = mesh.faces_tops_a.start_index
-    else: top_start_index = mesh.faces_tops_b.start_index
-    if mesh.Selected.val!=0:
-        for val in range(1,abs(mesh.Selected.val)+1):
+    for face in mesh.Selected.selected_faces:
+        index = int(mesh.dim*face[0]+face[1])
+        if mesh.Selected.n==0:
+            top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_a.start_index+4*index, 0)
+        else:
+            top = ElementProperties(GL_QUADS, 4, mesh.faces_tops_b.start_index+4*index, 1)
+        G0 = [top]
+        draw_geometries_with_excluded_area(window,G0,G1)
+    # Draw pulled face
+    if mesh.Selected.active==True:
+        glPushAttrib(GL_ENABLE_BIT)
+        glLineWidth(3)
+        glEnable(GL_LINE_STIPPLE)
+        glLineStipple(2, 0xAAAA)
+        ax = mesh.sliding_direction[0]
+        for val in range(0,abs(mesh.Selected.val)+1):
             if mesh.Selected.val<0: val = -val
             pulled_vec = [0,0,0]
-            ax = mesh.sliding_direction[0]
-            pulled_vec[ax] = (2*mesh.Selected.n-1) * view_opt.distance + val*mesh.voxel_size
-            move = pyrr.matrix44.create_from_translation(pulled_vec)
-            glUniformMatrix4fv(4, 1, GL_FALSE, move)
-            glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-            glPushAttrib(GL_ENABLE_BIT)
-            glLineWidth(3)
-            glEnable(GL_LINE_STIPPLE)
-            glLineStipple(2, 0xAAAA)
-            glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, ctypes.c_void_p(4*(top_start_index+4*index)))
-            glPopAttrib()
+            pulled_vec[ax] = -(2*mesh.Selected.n-1)*val*mesh.voxel_size
+            draw_geometries(window,[mesh.outline_selected_faces],translation_vec=np.array(pulled_vec))
+        glPopAttrib()
 
 def display_joint_geometry(window,mesh,view_opt):
     ############################# Draw hidden lines #############################
@@ -475,6 +483,7 @@ def pick(window, mesh, view_opt, shader_col):
         draw_geometries(window,[top],clear_depth_buffer=False)
 
     ############### Read pixel color at mouse position ###############
+
     xpos,ypos = glfw.get_cursor_pos(window)
     mouse_pixel = glReadPixelsub(xpos, 1600-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
     pick_n = pick_x = pick_y = None
@@ -488,9 +497,33 @@ def pick(window, mesh, view_opt, shader_col):
         if mouse_pixel[0]!=0:
             pick_x=int(mouse_pixel[0]*(mesh.dim+2)/255-1)
             pick_y=int(mouse_pixel[1]*(mesh.dim+2)/255-1)
+
+    ### Update selection
     if pick_x !=None and pick_y!=None:
-        Geometries.init_selection(mesh,pick_x,pick_y,pick_n)
-    else: mesh.Selected = None
+        ### Initialize selection
+        new_pos = False
+        if mesh.Selected!=None:
+            if pick_x!=mesh.Selected.x or pick_y!=mesh.Selected.y or pick_n!=mesh.Selected.n:
+                new_pos = True
+        if mesh.Selected==None:
+            Geometries.init_selection(mesh,pick_x,pick_y,pick_n)
+        elif new_pos and not mesh.Selected.active and not mesh.Selected.selection_mode:
+            Geometries.init_selection(mesh,pick_x,pick_y,pick_n)
+        elif mesh.Selected.refresh:
+            Geometries.init_selection(mesh,pick_x,pick_y,pick_n)
+            mesh.Selected.refresh = False
+        ### Prepare to add to selection
+        if mesh.Selected!=None and mesh.shift and mesh.Selected.selection_mode:
+            mesh.Selected.set_current(pick_x,pick_y)
+            if not mesh.Selected.active and mesh.Selected.mouse_pressed:
+                mouse_pos = glfw.get_cursor_pos(window)
+                current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
+                pvec = mesh.Selected.clicked_mouse_pos-current_pos
+                dist = linalg.norm(pvec)
+                if dist>2:
+                    mesh.Selected.activate(glfw.get_cursor_pos(window))
+                    #mesh.Selected.activate(mesh.Selected.clicked_mouse_pos)
+    elif mesh.Selected!=None and not mesh.Selected.selection_mode: mesh.Selected = None
     ## the end
     #glfw.swap_buffers(window) # for debugging
     glClearColor(1.0, 1.0, 1.0, 1.0)

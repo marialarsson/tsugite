@@ -1,12 +1,19 @@
 import numpy as np
 
 class Fabrication:
-    def __init__(self, path_vertices):
+    def __init__(self, path_vertices, virtual_component_size, sliding_direction, joint_type, n):
         self.path_vertices = path_vertices
+        self.sliding_direction = sliding_direction
+        self.n = n
+        self.real_component_size = 36 #mm
+        self.ratio = self.real_component_size/virtual_component_size
+        if self.sliding_direction[0]==2: self.coords = [0,1,2]
+        elif self.sliding_direction[0]==1: self.coords = [2,0,1]
+        #if n==1: self.coords[2] = -self.coords[2]
 
-    def export_gcode(self):
+    def export_gcode(self,file_name):
         d = 3 # =precision / no of decimals to write
-        file = open("gcode/test.gcode","w")
+        file = open("gcode/"+file_name+".gcode","w")
         ###initialization
         file.write("%\n")
         file.write("G90 (Absolute [G91 is incremental])\n")
@@ -24,10 +31,21 @@ class Fabrication:
             x = self.path_vertices[i]
             y = self.path_vertices[i+1]
             z = self.path_vertices[i+2]
-            #convert from cm to mm
-            x = str(round(100*x,d))
-            y = str(round(100*y,d))
-            z = str(round(100*z,d))
+            #convert from virtul dimensions to mm
+            x = self.ratio*x
+            y = self.ratio*y
+            z = self.ratio*z
+            #sawp
+            xyz = [x,y,z]
+            xyz = xyz[self.coords[0]],xyz[self.coords[1]],xyz[self.coords[2]]
+            x,y,z = xyz[0],xyz[1],xyz[2]
+            #move z down, flip if component b
+            z = -(2*self.n-1)*z-0.5*self.real_component_size
+            #string
+            x = str(round(x,d))
+            y = str(round(y,d))
+            z = str(round(z,d))
+            #write to file
             if x_!=x or y_!=y: file.write("G01 X "+x+" Y "+y+" F "+str(speed)+"\n")
             if z_!=z: file.write("G01 Z "+z+" F "+str(speed)+"\n")
             x_ = x
