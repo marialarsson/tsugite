@@ -2,10 +2,14 @@ from OpenGL.GL import *
 import numpy as np
 from numpy import linalg
 import random
-from PIL import Image
+
 import math
 import pyrr
-from Fabrication import Fabrication
+from Selection import Selection
+#from Fabrication import Fabrication
+from Evaluation import Evaluation
+from Buffer import Buffer
+from Buffer import ElementProperties
 
 # Supporting functions
 
@@ -137,107 +141,6 @@ def get_fixed_sides(joint_type):
     elif joint_type=="X": fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
     return fixed_sides
 
-def add_fixed_sides(mat,fixed_sides):
-    dim = len(mat)
-    pad_loc = [[0,0],[0,0],[0,0]]
-    pad_val = [[-1,-1],[-1,-1],[-1,-1]]
-    for n in range(2):
-        for ax,dir in fixed_sides[n]:
-            pad_loc[ax][dir] = 1
-            pad_val[ax][dir] = n
-    pad_loc = tuple(map(tuple, pad_loc))
-    pad_val = tuple(map(tuple, pad_val))
-    mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
-    # Take care of corners
-    for ax,dir in fixed_sides[0]:
-        for ax2,dir2 in fixed_sides[1]:
-            if ax==ax2: continue
-            for i in range(dim):
-                ind = [i,i,i]
-                ind[ax] =  dir*(mat.shape[ax]-1)
-                ind[ax2] = dir2*(mat.shape[ax2]-1)
-                mat[tuple(ind)] = -1
-    return mat
-
-def get_axial_neighbors(mat,ind,ax):
-    indices = []
-    values = []
-    m = ax
-    for n in range(2):      # go up and down one step
-        n=2*n-1             # -1,1
-        ind0 = list(ind)
-        ind0[m] = ind[m]+n
-        ind0 = tuple(ind0)
-        if ind0[m]>=0 and ind0[m]<mat.shape[m]:
-            indices.append(ind0)
-            try: values.append(int(mat[ind0]))
-            except: values.append(mat[ind0])
-    return indices,values
-
-def get_neighbors(mat,ind):
-    indices = []
-    values = []
-    for m in range(len(ind)):   # For each direction (x,y)
-        for n in range(2):      # go up and down one step
-            n=2*n-1             # -1,1
-            ind0 = list(ind)
-            ind0[m] = ind[m]+n
-            ind0 = tuple(ind0)
-            if ind0[m]>=0 and ind0[m]<mat.shape[m]:
-                indices.append(ind0)
-                values.append(int(mat[ind0]))
-    return indices, np.array(values)
-
-def get_all_same_connected(mat,indices):
-    start_n = len(indices)
-    val = int(mat[indices[0]])
-    all_same_neighbors = []
-    for ind in indices:
-        n_indices,n_values = get_neighbors(mat,ind)
-        for n_ind,n_val in zip(n_indices,n_values):
-            if n_val==val: all_same_neighbors.append(n_ind)
-    indices.extend(all_same_neighbors)
-    if len(indices)>0:
-        indices = np.unique(indices, axis=0)
-        indices = [tuple(ind) for ind in indices]
-        if len(indices)>start_n: indices = get_all_same_connected(mat,indices)
-    return indices
-
-def reverse_columns(cols):
-    new_cols = []
-    for i in range(len(cols)):
-        temp = []
-        for j in range(len(cols[i])):
-            temp.append(cols[i][len(cols[i])-j-1].astype(int))
-        new_cols.append(temp)
-    return new_cols
-
-def get_columns(mat,ax):
-    columns = []
-    if ax==0:
-        for j in range(len(mat[0])):
-            for k in range(len(mat[0][0])):
-                col = []
-                for i in range(len(mat)): col.append(mat[i][j][k])
-                columns.append(col)
-    elif ax==1:
-        for i in range(len(mat)):
-            for k in range(len(mat[0][0])):
-                col = []
-                for j in range(len(mat[0])): col.append(mat[i][j][k])
-                columns.append(col)
-    elif ax==2:
-        for layer in mat:
-            for col in layer: columns.append(col)
-    columns2 = []
-    for col in columns:
-        col = np.array(col)
-        col = col[np.logical_not(np.isnan(col))] #remove nans
-        if len(col)==0: continue
-        col = col.astype(int)
-        columns2.append(col)
-    return columns2
-
 def get_vertex(index,verts,n):
     x = verts[n*index]
     y = verts[n*index+1]
@@ -256,54 +159,14 @@ def get_next_same_axial_index(ind,ax,mat,dim):
         else: return ind
     else: return ind
 
-def get_indices_of_same_neighbors(indices,mat):
-    d = len(mat)
-    val = mat[tuple(indices[0])]
-    neighbors = []
-    for ind in indices:
-        for ax in range(3):
-            for dir in range(2):
-                dir = 2*dir-1
-                ind2 = ind.copy()
-                ind2[ax] = ind2[ax]+dir
-                if ind2[ax]>=0 and ind2[ax]<d:
-                    val2 = mat[tuple(ind2)]
-                    if val==val2:
-                        neighbors.append(ind2)
-    if len(neighbors)>0:
-        neighbors = np.array(neighbors)
-        neighbors = np.unique(neighbors, axis=0)
-    return neighbors
-
-def is_connected_to_fixed_side(indices,mat,fixed_sides):
-    connected = False
-    val = mat[tuple(indices[0])]
-    d = len(mat)
-    for ind in indices:
-        for ax,dir in fixed_sides:
-            if ind[ax]==0 and dir==0:
-                connected=True
-                break
-            elif ind[ax]==d-1 and dir==1:
-                connected=True
-                break
-        if connected: break
-    if not connected:
-        neighbors = get_indices_of_same_neighbors(indices,mat)
-        if len(neighbors)>0:
-            new_indices = np.concatenate([indices,neighbors])
-            new_indices = np.unique(new_indices, axis=0)
-            if len(new_indices)>len(indices):
-                connected = is_connected_to_fixed_side(new_indices,mat,fixed_sides)
-    return connected
-
 # Create vertex lists functions
 
-def joint_vertices(self,comp,r,g,b):
+def joint_vertices(self,n):
     vertices = []
+    r = g = b = 0.0
     # Add all vertices of the dim*dim*dim voxel cube
     ax = 2
-    if comp=="B" and self.joint_type!="I": ax = 0
+    if n==1 and self.joint_type!="I": ax = 0
     for i in range(self.dim+1):
         for j in range(self.dim+1):
             for k in range(self.dim+1):
@@ -474,7 +337,7 @@ def milling_path_vertices(self,n):
 
 # Create index lists functions
 
-def joint_face_indicies(self,all_indices,mat,fixed_sides,n,offset):
+def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset):
     # Make indices of faces for drawing method GL_QUADS
     # 1. Faces of joint
     indices = []
@@ -529,194 +392,6 @@ def joint_face_indicies(self,all_indices,mat,fixed_sides,n,offset):
     indices_ends_prop = ElementProperties(GL_QUADS, len(indices_ends), len(all_indices), n)
     all_indices = np.concatenate([all_indices, indices_ends])
     indices_all_prop = ElementProperties(GL_QUADS, len(indices)+len(indices_ends), indices_prop.start_index, n)
-    # Return
-    return indices_prop, indices_ends_prop, indices_all_prop, all_indices
-
-def joint_face_fab_indicies(self,all_indices,mat,fixed_sides,n,offset,offset_extra):
-    offset_extra = offset_extra-offset
-    fab_ax = self.sliding_direction[0]
-    other_axes = [0,1,2]
-    other_axes.pop(fab_ax)
-    # Matrix of rounded corners
-    mat_shape = [self.dim+1,self.dim+1,self.dim+1,4]
-    mat_shape[fab_ax] = self.dim
-    rounded_corners = np.full(tuple(mat_shape), False, dtype=bool)
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==3 or (cnt==2 and diagonal):
-                    rounded_corners[i][j][k] = np.array(vals!=n)
-                cnt_other,vals_other = line_neighbors(self,ind,fab_ax,1-n)
-                if cnt_other==3 and cnt>0:
-                    rounded_corners_other = np.array(vals_other!=(1-n))
-                    for index in range(4):
-                        if rounded_corners_other[index]:
-                            rounded_corners[i][j][k][index] = True
-    # Make indices of faces for drawing method GL_QUADS
-    # 1. Faces of joint
-    indices = []
-    indices_ends = []
-    d = self.dim+1
-    indices = []
-    for i in range(d):
-        for j in range(d):
-            for k in range(d):
-                ind = [i,j,k]
-                for ax in range(3):
-                    test_ind = np.array([i,j,k])
-                    test_ind = np.delete(test_ind,ax)
-                    if np.any(test_ind==self.dim): continue
-                    cnt = face_neighbors(mat,ind,ax,n,fixed_sides)
-                    if cnt==1: # if a face is to be drawn at all
-                        # Normal case, no rounded corner
-                        face_indexes = []
-                        for x in range(2):
-                            for y in range(2):
-                                add = [x,y]
-                                add.insert(ax,0)
-                                index = get_index(ind,add,self.dim)
-                                face_indexes.append(index)
-                        # Axis not perpendicular to fabrication direciton, check for rounded corners
-                        if ax!=fab_ax:
-                            # start-side
-                            a,b,add = 2,3,1
-                            if ax==other_axes[0]: a,b,add = 1,3,3
-                            if rounded_corners[i][j][k][a] or rounded_corners[i][j][k][b]:
-                                face_indexes[0] = 4*face_indexes[0]+offset_extra+add
-                                face_indexes[1] = 4*face_indexes[1]+offset_extra+add
-                            # end side
-                            a,b,add = 0,1,0
-                            if ax==other_axes[0]: a,b,add = 0,2,2
-                            add1 = [1,1,1]
-                            add1[fab_ax] = 0
-                            add1[ax] = 0
-                            inda = [i+add1[0],j+add1[1],k+add1[2],a]
-                            indb = [i+add1[0],j+add1[1],k+add1[2],b]
-                            if rounded_corners[tuple(inda)] or rounded_corners[tuple(indb)]:
-                                face_indexes[2] = 4*face_indexes[2]+offset_extra+add
-                                face_indexes[3] = 4*face_indexes[3]+offset_extra+add
-                        # Make triangles
-                        tris = [face_indexes[0],face_indexes[1],face_indexes[3]]
-                        tri2 = [face_indexes[0],face_indexes[3],face_indexes[2]]
-                        tris.extend(tri2)
-                        if ax==fab_ax and ind[fab_ax]>-n and ind[fab_ax]<self.dim+1-n: #top face, might have one or more rounded corners
-                            rcorners =  [False,False,False,False]
-                            box_inds = [3,2,1,0]
-                            for x in range(2):
-                                for y in range(2):
-                                    add = [x,y]
-                                    add.insert(fab_ax,-1+n)
-                                    box_i = box_inds[2*x+y]
-                                    cor_i = [i+add[0],j+add[1],k+add[2],box_i]
-                                    if rounded_corners[tuple(cor_i)]:
-                                        rcorners[2*x+y]=True
-                            if np.any(np.array(rcorners)):
-                                face_indexes.append(offset_extra+4*face_indexes[0]+1) #wrong
-                                face_indexes.append(offset_extra+4*face_indexes[0]+3)
-                                face_indexes.append(offset_extra+4*face_indexes[1]+2)
-                                face_indexes.append(offset_extra+4*face_indexes[1]+1)
-                                face_indexes.append(offset_extra+4*face_indexes[3]+0)
-                                face_indexes.append(offset_extra+4*face_indexes[3]+2)
-                                face_indexes.append(offset_extra+4*face_indexes[2]+3)
-                                face_indexes.append(offset_extra+4*face_indexes[2]+0)
-                                tris = [face_indexes[9],face_indexes[6],face_indexes[5]]
-                                tri2 = [face_indexes[5],face_indexes[9],face_indexes[10]]
-                                tri3 = [face_indexes[9],face_indexes[8],face_indexes[6]]
-                                tri4 = [face_indexes[8],face_indexes[7],face_indexes[6]]
-                                tri5 = [face_indexes[10],face_indexes[11],face_indexes[4]]
-                                tri6 = [face_indexes[10],face_indexes[5],face_indexes[4]]
-                                tris.extend(tri2)
-                                tris.extend(tri3)
-                                tris.extend(tri4)
-                                tris.extend(tri5)
-                                tris.extend(tri6)
-                                if not rcorners[0]: tris.extend([face_indexes[0],face_indexes[4],face_indexes[5]])
-                                if not rcorners[1]: tris.extend([face_indexes[6],face_indexes[1],face_indexes[7]])
-                                if not rcorners[2]: tris.extend([face_indexes[2],face_indexes[11],face_indexes[10]])
-                                if not rcorners[3]: tris.extend([face_indexes[9],face_indexes[8],face_indexes[3]])
-                        ### Seperate end grains...
-                        if len(fixed_sides)>0 and fixed_sides[0][0]==ax:
-                            indices_ends.extend(tris)
-                        else: indices.extend(tris)
-    # Make corner long edge
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==1 or cnt==3 or (cnt==2 and diagonal): # If a face is to be drawn at all
-                    add = [0,0,0]
-                    add[fab_ax] = 1
-                    start_i = get_index(ind,[0,0,0],self.dim)
-                    end_i = get_index(ind,add,self.dim)
-                    if np.any(rounded_corners[i][j][k]):
-                        for index in range(4):
-                            rounded_i = [i,j,k,index]
-                            if rounded_corners[tuple(rounded_i)]==True:
-                                u,v = int(index/2), 2+index%2
-                                # Vertical lines
-                                su_i = offset_extra+4*start_i+u
-                                eu_i = offset_extra+4*end_i+u
-                                sv_i = offset_extra+4*start_i+v
-                                ev_i = offset_extra+4*end_i+v
-                                tris = [su_i,eu_i,sv_i,sv_i,ev_i,eu_i]
-                                indices.extend(tris)
-                                below_i = rounded_i.copy()
-                                above_i = rounded_i.copy()
-                                below_i[fab_ax] -= 1
-                                above_i[fab_ax] += 1
-                                if n==0 or cnt!=1:
-                                    if below_i[fab_ax]<0 or rounded_corners[tuple(below_i)]==False:
-                                        if len(fixed_sides)>0 and fixed_sides[0][0]==fab_ax:
-                                            indices_ends.extend([start_i,su_i,sv_i])
-                                        else: indices.extend([start_i,su_i,sv_i])
-                                if n==1 or cnt!=1:
-                                    if above_i[fab_ax]>=self.dim or rounded_corners[tuple(above_i)]==False:
-                                        if len(fixed_sides)>0 and fixed_sides[0][0]==fab_ax:
-                                            indices_ends.extend([end_i,eu_i,ev_i])
-                                        else: indices.extend([end_i,eu_i,ev_i])
-
-        # 2. Faces of component base
-        d = self.dim+1
-        start = d*d*d
-        if len(fixed_sides)>0:
-            for ax,dir in fixed_sides:
-                a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
-                step = 2
-                if self.joint_type=="X" or (self.joint_type=="T" and n==1): step = 1
-                off = 24*ax+12*dir+4*step
-                a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
-                # Add component side to indices
-                indices_ends.extend([a0,b0,d0]) #bottom face
-                indices_ends.extend([a0,d0,c0]) # bottom face
-                indices.extend([a0,b0,b1]) #side face 1
-                indices.extend([a0,b1,a1]) #side face 1
-                indices.extend([b0,d0,d1]) #side face 2
-                indices.extend([b0,d1,b1]) #side face 2
-                indices.extend([d0,c0,c1]) #side face 3
-                indices.extend([d0,c1,d1]) #side face 3
-                indices.extend([c0,a0,a1]) ##side face 4
-                indices.extend([c0,a1,c1]) ##side face 4
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    indices = indices + offset
-    indices_ends = np.array(indices_ends, dtype=np.uint32)
-    indices_ends = indices_ends + offset
-    # Store
-    indices_prop = ElementProperties(GL_TRIANGLES, len(indices), len(all_indices), n)
-    if len(all_indices)>0: all_indices = np.concatenate([all_indices, indices])
-    else: all_indices = indices
-    indices_ends_prop = ElementProperties(GL_TRIANGLES, len(indices_ends), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices_ends])
-    indices_all_prop = ElementProperties(GL_TRIANGLES, len(indices)+len(indices_ends), indices_prop.start_index, n)
     # Return
     return indices_prop, indices_ends_prop, indices_all_prop, all_indices
 
@@ -781,18 +456,17 @@ def joint_top_face_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, indices_tops_prop, all_indices
 
-def joint_selected_top_line_indices(self,selected,all_indices):
+def joint_selected_top_line_indices(self,select,all_indices):
     # Make indices of lines for drawing method GL_LINES
-    n = selected.n
+    n = select.n
     offset = n*self.vn
-    sax=self.sliding_direction[0]
-    h = self.height_field[tuple(selected.selected_faces[0])]
+    sax = self.sliding_direction[0]
+    h = self.height_field[tuple(select.faces[0])]
     # 1. Outline of selected top faces of joint
     indices = []
-    for face in selected.selected_faces:
+    for face in select.faces:
         ind = [int(face[0]),int(face[1])]
         ind.insert(sax,h)
-        #print(ind)
         other_axes = [0,1,2]
         other_axes.pop(sax)
         for i in range(2):
@@ -803,7 +477,7 @@ def joint_selected_top_line_indices(self,selected,all_indices):
                 nface = np.array(nface, dtype=np.uint32)
                 if np.all(nface>=0) and np.all(nface<self.dim):
                     unique = True
-                    for face2 in selected.selected_faces:
+                    for face2 in select.faces:
                         if nface[0]==face2[0] and nface[1]==face2[1]:
                             unique = False
                             break
@@ -823,7 +497,7 @@ def joint_selected_top_line_indices(self,selected,all_indices):
     # Return
     return indices_prop, all_indices
 
-def joint_line_indicies(self,all_indices,n,offset):
+def joint_line_indices(self,all_indices,n,offset):
     fixed_sides = self.fixed_sides[n]
     fab_ax = self.sliding_direction[0]
     # Make indices for draw elements method GL_LINES
@@ -863,137 +537,7 @@ def joint_line_indicies(self,all_indices,n,offset):
     # Return
     return indices_prop, all_indices
 
-def joint_line_fab_indicies(self,all_indices,n,offset,offset_extra):
-    offset_extra = offset_extra-offset
-    fixed_sides = self.fixed_sides[n]
-    fab_ax = self.sliding_direction[0]
-    other_axes = [0,1,2]
-    other_axes.pop(fab_ax)
-    d = self.dim+1
-    indices = []
-    # Matrix of rounded corners
-    mat_shape = [self.dim+1,self.dim+1,self.dim+1,4]
-    mat_shape[fab_ax] = self.dim
-    rounded_corners = np.full(tuple(mat_shape), False, dtype=bool)
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==3 or (cnt==2 and diagonal):
-                    rounded_corners[i][j][k] = np.array(vals!=n)
-                cnt_other,vals_other = line_neighbors(self,ind,fab_ax,1-n)
-                if cnt_other==3 and cnt>0:
-                    rounded_corners_other = np.array(vals_other!=(1-n))
-                    for index in range(4):
-                        if rounded_corners_other[index]:
-                            rounded_corners[i][j][k][index] = True
-    # Make line indices
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                for ax in range(3):
-                    if ind[ax]==self.dim: continue
-                    cnt,vals = line_neighbors(self,ind,ax,n)
-                    diagonal = False
-                    if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                    if cnt==1 or cnt==3 or (cnt==2 and diagonal): # If a line is to be drawn at all
-                        add = [0,0,0]
-                        add[ax] = 1
-                        start_i = get_index(ind,[0,0,0],self.dim)
-                        end_i = get_index(ind,add,self.dim)
-                        if ax!=fab_ax:
-                            ind_above = ind.copy()
-                            ind_below = ind.copy()
-                            ind_below[fab_ax] -= 1
-                            inds = []
-                            if ind_above[fab_ax]>=0 and ind_above[fab_ax]<self.dim:
-                                inds.append(ind_above)
-                            if ind_below[fab_ax]>=0 and ind_below[fab_ax]<self.dim:
-                                inds.append(ind_below)
-                            for ind0 in inds:
-                                a,b,add = 2,3,1
-                                if ax==other_axes[1]: a,b,add = 1,3,3
-                                ind1 = ind0.copy()
-                                ind1.append(a)
-                                ind1b = ind1.copy()
-                                ind1b[3] = b
-                                if rounded_corners[tuple(ind1)]==True or rounded_corners[tuple(ind1b)]==True:
-                                    start_i = offset_extra+4*start_i+add
-                                ind2 = ind0.copy()
-                                ind2[ax] += 1
-                                a,b,add = 0,1,0
-                                if ax==other_axes[1]: a,b,add = 0,2,2
-                                ind2.append(a)
-                                ind2b = ind2.copy()
-                                ind2b[3] = b
-                                if rounded_corners[tuple(ind2)]==True or rounded_corners[tuple(ind2b)]==True:
-                                    end_i = offset_extra+4*end_i+add
-                            indices.extend([start_i,end_i])
-                        elif np.all(rounded_corners[i][j][k]==False):
-                            indices.extend([start_i,end_i])
-                        else:
-                            for index in range(4):
-                                rounded_i = [i,j,k,index]
-                                if rounded_corners[tuple(rounded_i)]==True:
-                                    u,v = int(index/2), 2+index%2
-                                    # Vertical lines
-                                    indices.extend([offset_extra+4*start_i+u, offset_extra+4*end_i+u])
-                                    indices.extend([offset_extra+4*start_i+v, offset_extra+4*end_i+v])
-                                    # Horizontal lines
-                                    below_i = rounded_i.copy()
-                                    above_i = rounded_i.copy()
-                                    below_i[fab_ax] -= 1
-                                    above_i[fab_ax] += 1
-                                    if below_i[fab_ax]<0 or rounded_corners[tuple(below_i)]==False:
-                                        indices.extend([offset_extra+4*start_i+u, offset_extra+4*start_i+v])
-                                        if below_i[fab_ax]>=0:
-                                            below_i.pop()
-                                            cnt,vals = line_neighbors(self,below_i,ax,n)
-                                            diagonal = False
-                                            if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                                            if cnt==2 and not diagonal:
-                                                if vals[0]==vals[2]:
-                                                    indices.extend([offset_extra+4*start_i+u,start_i])
-                                                else:
-                                                    indices.extend([offset_extra+4*start_i+v,start_i])
-
-                                    if above_i[fab_ax]>=self.dim or rounded_corners[tuple(above_i)]==False:
-                                        indices.extend([offset_extra+4*end_i+u, offset_extra+4*end_i+v]) #bot a, top b
-                                        if above_i[fab_ax]>=0:
-                                            above_i.pop()
-                                            cnt,vals = line_neighbors(self,above_i,ax,n)
-                                            diagonal = False
-                                            if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                                            if cnt==2 and not diagonal:
-                                                if vals[0]==vals[2]:
-                                                    indices.extend([offset_extra+4*end_i+u,end_i])
-                                                else:
-                                                    indices.extend([offset_extra+4*end_i+v,end_i])
-    #Outline of component base
-    start = d*d*d
-    for ax,dir in fixed_sides:
-        a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
-        step = 2
-        if self.joint_type=="X" or ( self.joint_type=="T" and n==1): step = 1
-        off = 24*ax+12*dir+4*step
-        a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
-        indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
-        indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    indices = indices + offset
-    # Store
-    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices])
-    # Return
-    return indices_prop, all_indices
-
-def open_line_indicies(self,all_indices,n,offset):
+def open_line_indices(self,all_indices,n,offset):
     ax,dir = self.sliding_direction
     other_axes = np.array([0,1,2])
     other_axes = np.delete(other_axes,np.where(other_axes==ax))
@@ -1051,251 +595,27 @@ def arrow_indices(self,all_indices,slide_dirs,n,offset):
     # Return
     return line_indices_prop, face_indices_prop, all_indices
 
-def milling_path_indices(self,all_indices,no,start,n):
-    indices = []
-    for i in range(start,start+no):
-        indices.append(int(i))
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    # Store
-    indices_prop = ElementProperties(GL_LINE_LOOP, len(indices), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices])
-    # Return
-    return indices_prop, all_indices
-
-# Analyze joint functions
-
-def get_friction(mat,slides):
-    friction = 0
-    # Define which axes are acting in friction
-    axes = [0,1,2]
-    bad_axes = []
-    for n in range(2): #for each material
-        for item in slides[n]: #for each sliding direction
-            bad_axes.append(item[0])
-    axes = [x for x in axes if x not in bad_axes]
-    # Check neighbors in relevant axes. If neighbor is other, friction is acting!
-    indices = np.argwhere(mat==0)
-    for ind in indices:
-        for ax in axes:
-            n_indices,n_values = get_axial_neighbors(mat,ind,ax)
-            for n_val in n_values:
-                if n_val==1: friction += 1
-    return friction
-
-def is_connected(mat,n):
-    connected = False
-    all_same = np.count_nonzero(mat==n) # Count number of ones in matrix
-    if all_same>0:
-        ind = tuple(np.argwhere(mat==n)[0]) # Pick a random one
-        inds = get_all_same_connected(mat,[ind]) # Get all its neighbors (recursively)
-        connected_same = len(inds)
-        if connected_same==all_same: connected = True
-    return connected
-
-def get_sliding_directions(mat):
-    sliding_directions = []
-    for n in range(2): # Browse the components (0, 1 / two materials)
-        mat_sliding = []
-        for ax in range(3): # Browse the three possible sliding axes
-            for dir in range(2): # Browse the two possible directions of the axis
-                slides_in_this_direction = True
-                cols = get_columns(mat,ax) # Columns corresponding to this direction
-                if dir==0: cols = reverse_columns(cols)
-                for col in cols:
-                    first_same = False
-                    for i in range(len(col)):
-                        if col[i]==n: first_same = True; continue
-                        elif first_same==True and (col[i]==1-n):
-                            slides_in_this_direction=False; break
-                    if slides_in_this_direction==False: break #stop checking further columns if one was blocking the slide
-                if slides_in_this_direction==True:
-                    mat_sliding.append([ax,dir])
-        sliding_directions.append(mat_sliding)
-    return sliding_directions
-
-def get_milling_path_length(self,path):
-    return "x"
-
-def get_same_height_neighbors(hfield,inds):
-    dim = len(hfield)
-    val = hfield[tuple(inds[0])]
-    new_inds = list(inds)
-    for ind in inds:
-        for ax in range(2):
-            for dir in range(-1,2,2):
-                ind2 = ind.copy()
-                ind2[ax] += dir
-                if np.all(ind2>=0) and np.all(ind2<dim):
-                    val2 = hfield[tuple(ind2)]
-                    if val2==val:
-                        unique = True
-                        for ind3 in new_inds:
-                            if ind2[0]==ind3[0] and ind2[1]==ind3[1]:
-                                unique = False
-                                break
-                        if unique: new_inds.append(ind2)
-    if len(new_inds)>len(inds):
-        new_inds = get_same_height_neighbors(hfield,new_inds)
-    return new_inds
-
-class Selection:
-    def __init__(self,parent,x,y,n):
-        self.parent = parent
-        self.x = x
-        self.y = y
-        self.x2 = x
-        self.y2 = y
-        self.n = n
-        self.pos = np.array([self.x,self.y])
-        self.active = False
-        self.start_pos = self.current_pos = None
-        self.start_height = self.current_height = None
-        self.val = 0
-        self.clicked_mouse_pos = [0,0]
-        self.refresh = False
-        self.mouse_pressed = False
-        self.selection_mode = False
-        self.nc = 2
-        if parent.shift:
-            self.selected_faces = [self.pos]
-        else:
-            self.selected_faces = get_same_height_neighbors(parent.height_field,[self.pos])
-
-    def activate(self,mouse_pos):
-        self.active=True
-        self.selection_mode = False
-        self.start_pos = np.array([mouse_pos[0],-mouse_pos[1]])
-        self.start_height = self.parent.height_field[self.x][self.y]
-        Geometries.create_and_buffer_indicies(self.parent)
-
-    def add(self,mouse_pos):
-        self.clicked_mouse_pos = np.array([mouse_pos[0],-mouse_pos[1]])
-        unique = True
-        for face in self.selected_faces:
-            if face[0]==self.x2 and face[1]==self.y2:
-                unique = False
-                break
-        if unique:
-            self.selected_faces.append(np.array([self.x2,self.y2]))
-            Geometries.create_and_buffer_indicies(self.parent)
-
-    def set_current(self,x,y):
-        self.x2 = x
-        self.y2 = y
-
-    def edit(self,mouse_pos,screen_xrot,screen_yrot):
-        self.current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
-        self.current_height = self.start_height
-        ## Mouse vector
-        mouse_vec = self.current_pos-self.start_pos
-        mouse_vec[0] = mouse_vec[0]/800
-        mouse_vec[1] = mouse_vec[1]/800
-        ## Sliding direction vector
-        sdir_vec = [0,0,0]
-        ax = self.parent.sliding_direction[0]
-        dir = self.parent.sliding_direction[1]
-        sdir_vec[ax] = (2*dir-1)*self.parent.voxel_size
-        rot_x = pyrr.Matrix33.from_x_rotation(screen_xrot)
-        rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
-        sdir_vec = np.dot(sdir_vec,rot_x*rot_y)
-        sdir_vec = np.delete(sdir_vec,2) # delete Z-value
-        ## Calculate angle between mouse vector and sliding direction vector
-        cosang = np.dot(mouse_vec, sdir_vec) # Negative / positive depending on direction
-        #sinang = linalg.norm(np.cross(mouse_vec, joint_vec))
-        #ang = math.degrees(np.arctan2(sinang, cosang))
-        val = int(linalg.norm(mouse_vec)/linalg.norm(sdir_vec)+0.5)
-        if cosang!=None and cosang>0: val = -val
-        if self.start_height + val>self.parent.dim: val = self.parent.dim-self.start_height
-        elif self.start_height+val<0: val = -self.start_height
-        self.current_height = self.start_height + val
-        self.val = int(val)
-
-class ElementProperties:
-    def __init__(self, draw_type, count, start_index, n):
-        self.draw_type = draw_type
-        self.count = count
-        self.start_index = start_index
-        self.n = n
-
 class Geometries:
     def __init__(self):
-        self.shift = False
-        self.outline_selected_faces = None
         self.joint_type = "I"
         self.fixed_sides = get_fixed_sides(self.joint_type)
         self.sliding_direction = [2,0]
         self.dim = 3
-        self.fab_geometry = False
+        self.noc = 2 #number of components
         self.component_size = 0.275
         self.voxel_size = self.component_size/self.dim
         self.component_length = 0.5*self.component_size
-        self.rad = 0.015 #milling bit radius
-        self.dep = 0.015 #milling depth
         self.height_field = get_random_height_field(self.dim)
         self.pre_height_field = self.height_field
-        self.slides = []
-        self.connected = True
-        self.Selected = None
-        self.fab_a = self.fab_b = None
+        self.select = Selection(self)
         self.voxel_matrix = None
         self.voxel_matrix_with_sides = None
-        self.voxel_matrix_connected = None
-        self.voxel_matrix_unconnected = None
-        self.voxel_matrix_unbridged_1 = None
-        self.voxel_matrix_unbridged_2 = None
-        self.ifA = self.ifeA = self.ilA = None
-        self.ifB = self.ifeB = self.ilB = None
-        self.ifuA = self.ifuB = None
-        self.iopen = None
-        self.iftA = self.ifntA = self.iftB = self.ifntB = None
-        self.v_faces_A = self.v_faces_B = None
-        self.vertex_no_info = 8
-        self.connected_A = self.connected_B = True
-        self.bridged_A = self.bridged_B = True
+        self.eval = None
         self.voxel_matrix_from_height_field()
         self.vn = self.ven = self.vmA = self.vmB = None
-        image = Image.open("textures/end_grain.jpg")
-        self.img_data = np.array(list(image.getdata()), np.uint8)
-        self.milling_path_A = self.milling_path_B = None
-
-        #Element property class variables
-        self.f_not_ends_a = self.f_ends_a = None
-        self.f_connected_a = self.f_unconnected_a = None
-        self.faces_all_a = None
-        self.lines_a = None
-        self.f_not_ends_b = self.f_ends_b =None
-        self.f_connected_b = self.f_unconnected_b = None
-        self.faces_all_b = None
-        self.lines_b = None
-        self.faces_unbridged_1_a = self.faces_unbridged_2_a = None
-        self.faces_unbridged_1_b = self.faces_unbridged_2_b = None
-        self.lines_open_a = self.lines_open_b = None
-        self.faces_not_tops_a = self.faces_tops_a = None
-        self.faces_not_tops_b = self.faces_tops_b = None
-        self.arrow_lines_a = self.arrow_faces_a = None
-        self.arrow_lines_b = self.arrow_faces_b = None
-        self.arrow_other_lines_a = self.arrow_other_faces_a = None
-        self.arrow_other_lines_b = self.arrow_other_faces_b = None
-        self.lines_mill_a = self.lines_mill_b = None
-
-        self.VBO = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
-        self.EBO = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        self.create_and_buffer_vertices()
-        self.create_and_buffer_indicies()
-
-    def save(self):
-        np.save("data/saved_height_field.npy",self.height_field)
-        np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
-        np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
-        np.save("data/saved_fixed_sides.npy",self.fixed_sides)
-
-    def load(self):
-        self.height_field = np.load("data/saved_height_field.npy")
-        self.voxel_matrix_from_height_field()
-        self.create_and_buffer_indicies()
+        self.buff = Buffer(self)
+        self.vertices = self.create_vertices()
+        self.indices = self.create_indices()
 
     def voxel_matrix_from_height_field(self):
         vox_mat = np.zeros(shape=(self.dim,self.dim,self.dim))
@@ -1308,95 +628,33 @@ class Geometries:
         vox_mat = np.array(vox_mat)
         vox_mat = np.swapaxes(vox_mat,2,ax)
         self.voxel_matrix = vox_mat
-        self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
-        # check connections
-        self.voxel_matrix_connected = self.voxel_matrix.copy()
-        self.voxel_matrix_unconnected = None
-        self.connected_A = is_connected(self.voxel_matrix_with_sides,0)
-        self.connected_B = is_connected(self.voxel_matrix_with_sides,1)
-        self.bridged_A=True
-        self.bridged_B=True
-        if not self.connected_A or not self.connected_B:
-            self.seperate_unconnected()
-            if self.joint_type=="T" or self.joint_type=="X":
-                voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, self.fixed_sides)
-                self.bridged_A = is_connected(voxel_matrix_connected_with_sides,0)
-                if self.bridged_A==False:
-                    self.voxel_matrix_unbridged_A_1, self.voxel_matrix_unbridged_A_2 = self.seperate_unbridged(0)
-                self.bridged_B = is_connected(voxel_matrix_connected_with_sides,1)
-                if self.bridged_B==False:
-                    self.voxel_matrix_unbridged_B_1, self.voxel_matrix_unbridged_B_2 = self.seperate_unbridged(1)
-        self.evaluate_joint()
-
-    def seperate_unconnected(self):
-        connected_mat = np.zeros((self.dim,self.dim,self.dim))-1
-        unconnected_mat = np.zeros((self.dim,self.dim,self.dim))-1
-        for i in range(self.dim):
-            for j in range(self.dim):
-                for k in range(self.dim):
-                    connected = False
-                    ind = [i,j,k]
-                    val = self.voxel_matrix[tuple(ind)]
-                    connected = is_connected_to_fixed_side(np.array([ind]),self.voxel_matrix,self.fixed_sides[int(val)])
-                    if connected: connected_mat[tuple(ind)] = val
-                    else: unconnected_mat[tuple(ind)] = val
-        self.voxel_matrix_connected = connected_mat
-        self.voxel_matrix_unconnected = unconnected_mat
-
-    def seperate_unbridged(self, n):
-        unbridged_1 = np.zeros((self.dim,self.dim,self.dim))-1
-        unbridged_2 = np.zeros((self.dim,self.dim,self.dim))-1
-        for i in range(self.dim):
-            for j in range(self.dim):
-                for k in range(self.dim):
-                    ind = [i,j,k]
-                    val = self.voxel_matrix[tuple(ind)]
-                    if val!=n: continue
-                    conn_1 = is_connected_to_fixed_side(np.array([ind]),self.voxel_matrix,[self.fixed_sides[n][0]])
-                    conn_2 = is_connected_to_fixed_side(np.array([ind]),self.voxel_matrix,[self.fixed_sides[n][1]])
-                    if conn_1: unbridged_1[tuple(ind)] = val
-                    if conn_2: unbridged_2[tuple(ind)] = val
-        return unbridged_1, unbridged_2
+        self.eval = Evaluation(self)
 
     def update_sliding_direction(self,sliding_direction_):
         self.sliding_direction = sliding_direction_
         self.voxel_matrix_from_height_field()
-        self.create_and_buffer_vertices()
-        self.create_and_buffer_indicies()
-
-    def init_selection(self,x,y,n):
-        self.Selected = Selection(self,x,y,n)
-
-    def finalize_selection(self):
-        self.pre_height_field = self.height_field.copy()
-        if self.Selected.val!=0:
-            for ind in self.Selected.selected_faces:
-                self.height_field[tuple(ind)] = self.Selected.current_height
-            self.voxel_matrix_from_height_field()
-            self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
-            self.create_and_buffer_indicies()
-        self.Selected = None
-
-    def undo(self):
-        print("undoing...")
-        temp = self.height_field.copy()
-        self.height_field = self.pre_height_field.copy()
-        self.pre_height_field = temp
-        self.voxel_matrix_from_height_field()
-        self.voxel_matrix_with_sides = add_fixed_sides(self.voxel_matrix, self.fixed_sides)
-        self.create_and_buffer_indicies()
+        self.create_vertices()
+        self.create_indices()
 
     def randomize_height_field(self):
         self.pre_height_field = self.height_field.copy()
         self.height_field = get_random_height_field(self.dim)
+        self.eval = Evaluation(self)
         self.voxel_matrix_from_height_field()
-        self.create_and_buffer_indicies()
+        self.create_indices()
 
     def clear_height_field(self):
         self.pre_height_field = self.height_field.copy()
         self.height_field = np.zeros((self.dim,self.dim))
         self.voxel_matrix_from_height_field()
-        self.create_and_buffer_indicies()
+        self.create_indices()
+
+    def edit_height_field(self,faces,h):
+        self.pre_height_field = self.height_field.copy()
+        for ind in faces:
+            self.height_field[tuple(ind)] = h
+            self.voxel_matrix_from_height_field()
+            self.create_indices()
 
     def update_joint_type(self,joint_type_):
         self.joint_type = joint_type_
@@ -1404,11 +662,10 @@ class Geometries:
             self.update_sliding_direction([1,0])
         self.fixed_sides = get_fixed_sides(self.joint_type)
         self.voxel_matrix_from_height_field()
-        self.create_and_buffer_vertices()
-        self.create_and_buffer_indicies()
-        self.evaluate_joint()
+        self.create_vertices()
+        self.create_indices()
 
-    def update_dimension(self,dim_): # not always working OS error
+    def update_dimension(self,dim_):
         pdim = self.dim
         self.dim = dim_
         self.voxel_size = self.component_size/self.dim
@@ -1435,165 +692,129 @@ class Geometries:
                     hf[i][j] = int(f*sum/cnt+0.5)
             self.height_field = hf
         self.voxel_matrix_from_height_field()
-        self.create_and_buffer_vertices()
-        self.create_and_buffer_indicies()
-        self.evaluate_joint()
+        self.create_vertices()
+        self.create_indices()
 
     def update_number_of_components(self,num):
-        self.nc = num
-        self.create_and_buffer_indicies()        
+        self.noc = num
+        self.create_indices()
 
-    def create_and_buffer_vertices(self):
+    def create_vertices(self):
 
         ### VERTICIES FOR JOINT ###
-        self.v_A = joint_vertices(self,"A",0.0,0.0,0.0)
-        self.v_B = joint_vertices(self,"B",0.0,0.0,0.0)
+        self.v_A = joint_vertices(self,0)
+        self.v_B = joint_vertices(self,1)
 
         ### EXTRA VERTICIES FOR ROUNDED CORNERS OF FABRICATED JOINT ###
-        ve_A = joint_extra_vertices(self,"A",0.0,0.0,0.0)
-        ve_B = joint_extra_vertices(self,"B",0.0,0.0,0.0)
+        #ve_A = joint_extra_vertices(self,"A",0.0,0.0,0.0)
+        #ve_B = joint_extra_vertices(self,"B",0.0,0.0,0.0)
 
         ### VERTICIES FOR ARROWS DISPLAYING SLIDING DIRECTIONS ###
         va = arrow_vertices(self)
 
         ### VERTICIES FOR MILLING PATHS ###
-        vm_A = milling_path_vertices(self,0)
-        self.fab_a = Fabrication(vm_A,self.component_size,self.sliding_direction,self.joint_type,0)
-        vm_B = milling_path_vertices(self,1)
-        self.fab_b = Fabrication(vm_B,self.component_size,self.sliding_direction,self.joint_type,1)
+        #vm_A = milling_path_vertices(self,0)
+        #self.fab_a = Fabrication(vm_A,self.component_size,self.sliding_direction,self.joint_type,0)
+        #vm_B = milling_path_vertices(self,1)
+        #self.fab_b = Fabrication(vm_B,self.component_size,self.sliding_direction,self.joint_type,1)
 
-        vertices_all = np.concatenate([self.v_A,  self.v_B, ve_A, ve_B, va, vm_A, vm_B])
-
-        try:
-            glBufferData(GL_ARRAY_BUFFER, 6*len(vertices_all), vertices_all, GL_DYNAMIC_DRAW)
-        except:
-            print("--------------------------ERROR IN ARRAY BUFFER WRAPPER -------------------------------------")
-            print("All vertices:",vertices_all)
-
-        # vertex attribute pointers
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0)) #position
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12)) #color
-        glEnableVertexAttribArray(1)
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24)) #texture
-        glEnableVertexAttribArray(2)
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, self.img_data)
+        self.vertices = np.concatenate([self.v_A,self.v_B, va])#, vm_A, vm_B])
+        #[self.v_A,self.v_B, ve_A, ve_B, va])#, vm_A, vm_B])
 
         self.vn =  int(len(self.v_A)/8)
-        self.ven = int(len(ve_A)/8)
-        self.var = int(len(va)/8)
-        self.vmA = int(len(vm_A)/8)
-        self.vmB = int(len(vm_B)/8)
-        self.vmA_start = 2*self.vn+2*self.ven+self.var
-        self.vmB_start = self.vmA_start+self.vmA
+        self.ven = 0
+        #self.ven = int(len(ve_A)/8)
+        #self.var = int(len(va)/8)
+        #self.vmA = int(len(vm_A)/8)
+        #self.vmB = int(len(vm_B)/8)
+        #self.vmA_start = 2*self.vn+2*self.ven+self.var
+        #self.vmB_start = self.vmA_start+self.vmA
+        Buffer.buffer_vertices(self.buff)
 
-    def create_and_buffer_indicies(self):
-        all_indices = []
+    def create_indices(self):
+        all_inds = []
 
-        ### INDICES FOR COMPONENT A ###
+        self.indices_fend = []
+        self.indices_not_fend = []
+        self.indices_fcon = []
+        self.indices_not_fcon = []
+        self.indices_fall = []
+        self.indices_lns = []
+        self.indices_open_lines = []
+        self.indices_not_fbridge = []
+        self.indices_arrows = []
+        self.indices_ftop = []
+        self.indices_not_ftop = []
+        self.outline_selected_faces = None
 
-        # Faces of not ends grains and end grains
-        if not self.fab_geometry:
-            self.f_not_ends_a,self.f_ends_a,self.f_connected_a,all_indices = joint_face_indicies(self,
-                                    all_indices,self.voxel_matrix_connected, self.fixed_sides[0],0,0)
-        else:
-            self.f_not_ends_a,self.f_ends_a,self.f_connected_a,all_indices = joint_face_fab_indicies(self,
-                                    all_indices,self.voxel_matrix_connected, self.fixed_sides[0],0,0,2*self.vn)
-        count_all = self.f_connected_a.count
-        # Faces of unconnected
-        if not self.connected_A:
-            fnend,fend,self.f_unconnected_a,all_indices = joint_face_indicies(self,
-                                all_indices,self.voxel_matrix_unconnected,[],0,0)
-            count_all += self.f_unconnected_a.count
-        # All faces
-        self.faces_all_a = ElementProperties(self.f_ends_a.draw_type, count_all, self.f_not_ends_a.start_index, 0)
-        # Lines
-        if not self.fab_geometry:
-            self.lines_a, all_indices = joint_line_indicies(self,all_indices,0,0)
-        else:
-            self.lines_a, all_indices = joint_line_fab_indicies(self,all_indices,0,0,2*self.vn)
+        for n in range(self.noc):
+            #Faces
+            nend,end,con,all_inds = joint_face_indices(self, all_inds,
+                    self.eval.voxel_matrix_connected,self.fixed_sides[n],n,n*self.vn)
+            if not self.eval.connected[n]:
+                fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,n*self.vn)
+                self.indices_not_fcon.append(uncon)
+                all = ElementProperties(GL_QUADS, con.count+uncon.count, con.start_index, n)
+            else:
+                self.indices_not_fcon.append(None)
+                all = con
+            if not self.eval.bridged[n]:
+                unbris = []
+                for m in range(2):
+                    fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.fixed_sides[n][m]],n,n*self.vn)
+                    unbris.append(unbri)
+            else: unbris = None
 
-        ### INDICES FOR COMPONENT B ###
+            #picking faces
+            faces_not_tops, faces_tops, all_inds = joint_top_face_indices(self,all_inds,n,n*self.vn)
 
-        # Faces of not ends grains and end grain
-        if not self.fab_geometry:
-            self.f_not_ends_b,self.f_ends_b,self.f_connected_b,all_indices = joint_face_indicies(self,
-                                    all_indices, self.voxel_matrix_connected,self.fixed_sides[1],1,self.vn)
-        else:
-            self.f_not_ends_b,self.f_ends_b,self.f_connected_b,all_indices = joint_face_fab_indicies(self,
-                                    all_indices, self.voxel_matrix_connected,self.fixed_sides[1],1,self.vn,2*self.vn+self.ven)
-        count_all = self.f_connected_b.count
-        # Faces of unconnected
-        if not self.connected_B:
-            fnend,fend,self.f_unconnected_b,all_indices = joint_face_indicies(self,
-                                all_indices, self.voxel_matrix_unconnected,[],1,self.vn)
-            count_all += self.f_unconnected_b.count
-        # All faces
-        self.faces_all_b = ElementProperties(self.f_ends_b.draw_type, count_all, self.f_not_ends_b.start_index, 1)
-        # Lines
-        if not self.fab_geometry:
-            self.lines_b,all_indices = joint_line_indicies(self,all_indices,1,self.vn)
-        else:
-            self.lines_b, all_indices = joint_line_fab_indicies(self,all_indices,1,self.vn,2*self.vn+self.ven)
+            #Lines
+            lns,all_inds = joint_line_indices(self,all_inds,n,n*self.vn)
+            open,all_inds = open_line_indices(self,all_inds,n,n*self.vn)
 
-        ### INDICES FOR UNBRIDGED COMPONENTS ###
-        if not self.bridged_A:
-            fnend,fend,self.faces_unbridged_1_a,all_indices = joint_face_indicies(self,
-                                all_indices,self.voxel_matrix_unbridged_A_1,[self.fixed_sides[0][0]],0,self.vn)
-            fnend,fend,self.faces_unbridged_2_a,all_indices = joint_face_indicies(self,
-                                all_indices, self.voxel_matrix_unbridged_A_2,[self.fixed_sides[0][1]],0,self.vn)
-        if not self.bridged_B:
-            fnend,fend,self.faces_unbridged_1_b,all_indices = joint_face_indicies(self,
-                                all_indices,self.voxel_matrix_unbridged_B_1,[self.fixed_sides[1][0]],1,self.vn)
-            fnend,fend,self.faces_unbridged_2_b,all_indices = joint_face_indicies(self,
-                                all_indices,self.voxel_matrix_unbridged_B_2,[self.fixed_sides[1][1]],1,self.vn)
+            #arrows
+            larr, farr, all_inds = arrow_indices(self, all_inds,[self.sliding_direction],n,2*self.vn+2*self.ven)
+            lsub, fsub, all_inds = arrow_indices(self, all_inds,self.eval.slides[0],n,2*self.vn+2*self.ven)
+            arrows = [larr,farr,lsub,fsub]
 
-        ### INDICES OPENING LINES ###
-        self.lines_open_a, all_indices = open_line_indicies(self,all_indices,0,0)
-        self.lines_open_b, all_indices = open_line_indicies(self,all_indices,1,self.vn)
+            # Append lists
+            self.indices_fend.append(end)
+            self.indices_not_fend.append(nend)
+            self.indices_fcon.append(con)
+            self.indices_fall.append(all)
+            self.indices_lns.append(lns)
+            self.indices_open_lines.append(open)
+            self.indices_not_fbridge.append(unbris)
+            self.indices_arrows.append(arrows)
+            self.indices_ftop.append(faces_tops)
+            self.indices_not_ftop.append(faces_not_tops)
 
-        ### INDICES OF TOP FACES FOR PICKING ###
-        self.faces_not_tops_a, self.faces_tops_a, all_indices = joint_top_face_indices(self,all_indices,0,0)
-        self.faces_not_tops_b, self.faces_tops_b, all_indices = joint_top_face_indices(self,all_indices,1,self.vn)
+        #outline of selected faces
+        if self.select.state==2:
+            self.outline_selected_faces, all_inds = joint_selected_top_line_indices(self,self.select,all_inds)
 
-        ### INDICES OUTLINE OF ACTIVE SELECTED FACE OF MANY FACES ###
-        if self.Selected!=None and self.Selected.active:
-            self.outline_selected_faces, all_indices = joint_selected_top_line_indices(self,self.Selected,all_indices)
-
-        ### Indicies for arrows ###
-        self.arrow_lines_a, self.arrow_faces_a, all_indices = arrow_indices(self,
-                                all_indices,[self.sliding_direction],0,2*self.vn+2*self.ven)
-        self.arrow_lines_b, self.arrow_faces_b, all_indices = arrow_indices(self,
-                                all_indices,[self.sliding_direction],1,2*self.vn+2*self.ven)
-
-        self.arrow_other_lines_a, self.arrow_other_faces_a, all_indices = arrow_indices(self,
-                                all_indices,self.slides[0],0,2*self.vn+2*self.ven)
-        self.arrow_other_lines_b, self.arrow_other_faces_b, all_indices = arrow_indices(self,
-                                all_indices,self.slides[0],1,2*self.vn+2*self.ven)
+        self.indices = all_inds
+        Buffer.buffer_indices(self.buff)
 
         ### INDICES FOR MILLING PATHS ###
-        self.lines_mill_a, all_indices = milling_path_indices(self, all_indices, self.vmA, self.vmA_start, 0)
-        self.lines_mill_b, all_indices = milling_path_indices(self, all_indices, self.vmB, self.vmB_start, 1)
+        #self.lines_mill_a, all_indices = milling_path_indices(self, all_indices, self.vmA, self.vmA_start, 0)
+        #self.lines_mill_b, all_indices = milling_path_indices(self, all_indices, self.vmB, self.vmB_start, 1)
 
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4*len(all_indices), all_indices, GL_DYNAMIC_DRAW)
+    def save(self):
+        np.save("data/saved_height_field.npy",self.height_field)
+        np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
+        np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
+        np.save("data/saved_fixed_sides.npy",self.fixed_sides)
 
-    def evaluate_joint(self):
-        connected_A = is_connected(self.voxel_matrix_with_sides,0)
-        connected_B = is_connected(self.voxel_matrix_with_sides,1)
-        if connected_A and connected_B: self.connected = True
-        else: self.connected=False
-        self.slides = get_sliding_directions(self.voxel_matrix_with_sides)
-        if len(self.slides[0])!=len(self.slides[1]): print("Sliding calculation error")
-        friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
-        #path_length = get_milling_path_length(milling_path_A,milling_path_B)
-        #print("\n---JOINT EVALUATION---")
-        #print("Connected:",self.connected)
-        #print("Slidings: ", len(slides[0]))
-        #print("Friction: ", friciton)
-        #print("Milling path:", path_length, "meters")
+    def load(self):
+        self.height_field = np.load("data/saved_height_field.npy")
+        self.voxel_matrix_from_height_field()
+        self.create_and_buffer_indices()
+
+    def undo(self):
+        print("undoing...")
+        temp = self.height_field.copy()
+        self.height_field = self.pre_height_field.copy()
+        self.pre_height_field = temp
+        self.voxel_matrix_from_height_field()
+        self.create_and_buffer_indices()
