@@ -126,19 +126,17 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
         elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
         elif key==glfw.KEY_M:
-            Geometries.create_and_buffer_vertices(mesh)
-            Geometries.create_and_buffer_indicies(mesh)
             view_opt.show_milling_path = not view_opt.show_milling_path
+            if view_opt.show_milling_path:
+                Geometries.create_vertices(mesh)
+                Geometries.create_indices(mesh)
         elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
         elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
         elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
         elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
         elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
         elif key==glfw.KEY_P: save_screenshot(window)
-        elif key==glfw.KEY_K:
-            Geometries.create_and_buffer_vertices(mesh)
-            mesh.fab_a.export_gcode("joint_side_a")
-            mesh.fab_b.export_gcode("joint_side_b")
+        elif key==glfw.KEY_K: mesh.fab.export_gcode()
         elif key==glfw.KEY_Z: Geometries.undo(mesh)
     elif action==glfw.RELEASE:
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
@@ -411,9 +409,9 @@ def display_milling_paths(window,mesh,view_opt):
     if view_opt.show_milling_path:
         glLineWidth(1)
         glUniform3f(5,0.0,1.0,0.0)
-        draw_geometries(window,[mesh.lines_mill_a])
+        draw_geometries(window,[mesh.indices_milling_path[0]])
         glUniform3f(5,0.0,0.8,1.0)
-        draw_geometries(window,[mesh.lines_mill_b])
+        draw_geometries(window,[mesh.indices_milling_path[1]])
 
 def pick(window, mesh, view_opt, shader_col):
 
@@ -519,7 +517,7 @@ def main():
         #display_joint_faces(window,mesh,view_opt) ### for debugging
         #display_joint_geometry_lines(window,mesh,view_opt)  ### for debugging
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
-        #if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
+        if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
 
         glfw.swap_buffers(window)
 

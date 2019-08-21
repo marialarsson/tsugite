@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 def joint_face_fab_indicies(self,all_indices,mat,fixed_sides,n,offset,offset_extra):
     offset_extra = offset_extra-offset
@@ -318,75 +319,62 @@ def joint_line_fab_indicies(self,all_indices,n,offset,offset_extra):
     # Return
     return indices_prop, all_indices
 
-def milling_path_indices(self,all_indices,no,start,n):
-    indices = []
-    for i in range(start,start+no):
-        indices.append(int(i))
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    # Store
-    indices_prop = ElementProperties(GL_LINE_LOOP, len(indices), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices])
-    # Return
-    return indices_prop, all_indices
-
+class Fabrication:
+    def __init__(self,parent):
+        self.parent = parent
+        self.real_component_size = 36 #mm
+        self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 0.015 #milling bit radius
         self.dep = 0.015 #milling depth
-        self.milling_path_A = self.milling_path_B = None
-        
-class Fabrication:
-    def __init__(self, path_vertices, virtual_component_size, sliding_direction, joint_type, n):
-        self.path_vertices = path_vertices
-        self.sliding_direction = sliding_direction
-        self.n = n
-        self.real_component_size = 36 #mm
-        self.ratio = self.real_component_size/virtual_component_size
-        if self.sliding_direction[0]==2: self.coords = [0,1,2]
-        elif self.sliding_direction[0]==1: self.coords = [2,0,1]
-        #if n==1: self.coords[2] = -self.coords[2]
 
     def export_gcode(self,file_name):
+        self.path_vertices = [self.parent.vm_A,self.parent.vm_B]
+        if self.parent.sliding_direction[0]==2: coords = [0,1,2]
+        elif self.parent.sliding_direction[0]==1: coords = [2,0,1]
         d = 3 # =precision / no of decimals to write
-        file = open("gcode/"+file_name+".gcode","w")
-        ###initialization
-        file.write("%\n")
-        file.write("G90 (Absolute [G91 is incremental])\n")
-        file.write("G21 (set unit[mm])\n")
-        file.write("G54\n")
-        file.write("F1000.0S6000 (Feeding 2000mm/min, Spindle 6000rpm)\n")
-        file.write("G17 (set XY plane for circle path)\n")
-        file.write("M03 (spindle start)\n")
-        speed = 400
-        ###content
-        x_ = str(9999999999)
-        y_ = str(9999999999)
-        z_ = str(9999999999)
-        for i in range(0,len(self.path_vertices),8):
-            x = self.path_vertices[i]
-            y = self.path_vertices[i+1]
-            z = self.path_vertices[i+2]
-            #convert from virtul dimensions to mm
-            x = self.ratio*x
-            y = self.ratio*y
-            z = self.ratio*z
-            #sawp
-            xyz = [x,y,z]
-            xyz = xyz[self.coords[0]],xyz[self.coords[1]],xyz[self.coords[2]]
-            x,y,z = xyz[0],xyz[1],xyz[2]
-            #move z down, flip if component b
-            z = -(2*self.n-1)*z-0.5*self.real_component_size
-            #string
-            x = str(round(x,d))
-            y = str(round(y,d))
-            z = str(round(z,d))
-            #write to file
-            if x_!=x or y_!=y: file.write("G01 X "+x+" Y "+y+" F "+str(speed)+"\n")
-            if z_!=z: file.write("G01 Z "+z+" F "+str(speed)+"\n")
-            x_ = x
-            y_ = y
-            z_ = z
-        ###end
-        file.write("M05 (Spindle stop)\n")
-        file.write("M02(end of program)\n")
-        file.write("%\n")
-        file.close()
+        names = ["A","B","C","D"]
+        for n in range(parent.noc):
+            file_name = "joint_"+names[n]
+            file = open("gcode/"+file_name+".gcode","w")
+            ###initialization
+            file.write("%\n")
+            file.write("G90 (Absolute [G91 is incremental])\n")
+            file.write("G21 (set unit[mm])\n")
+            file.write("G54\n")
+            file.write("F1000.0S6000 (Feeding 2000mm/min, Spindle 6000rpm)\n")
+            file.write("G17 (set XY plane for circle path)\n")
+            file.write("M03 (spindle start)\n")
+            speed = 400
+            ###content
+            x_ = str(9999999999)
+            y_ = str(9999999999)
+            z_ = str(9999999999)
+            for i in range(0,len(self.path_vertices[n]),8):
+                x = self.path_vertices[n][i]
+                y = self.path_vertices[n][i+1]
+                z = self.path_vertices[n][i+2]
+                #convert from virtul dimensions to mm
+                x = self.ratio*x
+                y = self.ratio*y
+                z = self.ratio*z
+                #sawp
+                xyz = [x,y,z]
+                xyz = xyz[coords[0]],xyz[coords[1]],xyz[coords[2]]
+                x,y,z = xyz[0],xyz[1],xyz[2]
+                #move z down, flip if component b
+                z = -(2*self.n-1)*z-0.5*self.real_component_size
+                #string
+                x = str(round(x,d))
+                y = str(round(y,d))
+                z = str(round(z,d))
+                #write to file
+                if x_!=x or y_!=y: file.write("G01 X "+x+" Y "+y+" F "+str(speed)+"\n")
+                if z_!=z: file.write("G01 Z "+z+" F "+str(speed)+"\n")
+                x_ = x
+                y_ = y
+                z_ = z
+            ###end
+            file.write("M05 (Spindle stop)\n")
+            file.write("M02(end of program)\n")
+            file.write("%\n")
+            file.close()
