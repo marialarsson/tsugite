@@ -36,17 +36,22 @@ class Selection:
         self.n = n
         self.x = x
         self.y = y
-        if self.shift: self.faces = get_same_height_neighbors(self.parent.height_field,self.faces)
+        if self.shift:
+            if self.n!=2:
+                self.faces = get_same_height_neighbors(self.parent.height_field,[np.array([x,y])])
+            else:
+                self.faces = get_same_height_neighbors(self.parent.height_field2,[np.array([x,y])])
         else: self.faces = [np.array([x,y])]
 
     def start_pull(self,mouse_pos):
         self.state=2
         self.start_pos = np.array([mouse_pos[0],-mouse_pos[1]])
-        self.start_height = self.parent.height_field[self.x][self.y]
+        if self.n!=2: self.start_height = self.parent.height_field[self.x][self.y]
+        else: self.start_height = self.parent.height_field2[self.x][self.y]
         self.parent.create_indices() # for selection area
 
     def end_pull(self):
-        if self.val!=0: self.parent.edit_height_field(self.faces,self.current_height)
+        if self.val!=0: self.parent.edit_height_field(self.faces,self.current_height,self.n)
         self.state=-1
         self.refresh = True
 
@@ -59,9 +64,10 @@ class Selection:
         mouse_vec[1] = mouse_vec[1]/800
         ## Sliding direction vector
         sdir_vec = [0,0,0]
-        ax = self.parent.sliding_direction[0]
-        dir = self.parent.sliding_direction[1]
+        ax = self.parent.sliding_directions[self.n][0][0]
+        dir = self.parent.sliding_directions[self.n][0][1]
         sdir_vec[ax] = (2*dir-1)*self.parent.voxel_size
+        if self.n==1: sdir_vec[ax] = -sdir_vec[ax] 
         rot_x = pyrr.Matrix33.from_x_rotation(screen_xrot)
         rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
         sdir_vec = np.dot(sdir_vec,rot_x*rot_y)

@@ -75,7 +75,7 @@ def face_neighbors(mat,ind,ax,n,fixed_sides):
         values.append(val)
     values = np.array(values)
     count = np.count_nonzero(values==n)
-    return count
+    return count,values
 
 def get_count(ind,neighbors,fixed_sides,voxel_matrix,dim):
     cnt = 0
@@ -121,7 +121,7 @@ def line_neighbors(self,ind,ax,n):
             if np.all(ind2>=0) and np.all(ind2<self.dim):
                 val = self.voxel_matrix[tuple(ind2)]
             else:
-                for n2 in range(2):
+                for n2 in range(self.noc):
                     for fixed_side in self.fixed_sides[n2]:
                         ind3 = np.delete(ind2,fixed_side[0])
                         if np.all(ind3>=0) and np.all(ind3<self.dim):
@@ -132,12 +132,24 @@ def line_neighbors(self,ind,ax,n):
     count = np.count_nonzero(values==n)
     return count,values
 
-def get_fixed_sides(joint_type):
+def get_fixed_sides(joint_type,noc):
     fixed_sides = []
-    if joint_type=="I":   fixed_sides = [[[2,0]], [[2,1]]]
-    elif joint_type=="L": fixed_sides = [[[2,0]], [[0,0]]]
-    elif joint_type=="T": fixed_sides = [[[2,0]], [[0,0],[0,1]]]
-    elif joint_type=="X": fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
+    if noc==2:
+        if joint_type=="I":
+            fixed_sides = [[[2,0]], [[2,1]]]
+        elif joint_type=="L":
+            fixed_sides = [[[2,0]], [[0,0]]]
+        elif joint_type=="T":
+            fixed_sides = [[[2,0]], [[0,0],[0,1]]]
+        elif joint_type=="X":
+            fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
+    if noc==3:
+        if joint_type=="L":
+            fixed_sides = [[[2,0]], [[0,0]], [[1,0]]]
+        elif joint_type=="T":
+            fixed_sides = [[[2,0]], [[0,0],[0,1]], [[1,0]]]
+        elif joint_type=="X":
+            fixed_sides = [[[2,0]], [[0,0],[0,1]], [[1,0],[1,1]]]
     return fixed_sides
 
 def get_vertex(index,verts,n):
@@ -158,14 +170,44 @@ def get_next_same_axial_index(ind,ax,mat,dim):
         else: return ind
     else: return ind
 
+def mat_from_field(hf,ax):
+    dim = len(hf)
+    mat = np.zeros(shape=(dim,dim,dim))
+    for i in range(dim):
+        for j in range(dim):
+            for k in range(dim):
+                h = hf[i][j]
+                if k>=h: mat[i,j,k]=1
+    mat = np.array(mat)
+    mat = np.swapaxes(mat,2,ax)
+    return mat
+
+def get_top_corner_heights(mat,n,ax,dir):
+    heights = []
+    dim = len(mat)
+    for i in range(2):
+        i = i*(dim-1)
+        temp = []
+        for j in range(2):
+            j = j*(dim-1)
+            top_cor = 0
+            for k in range(dim):
+                ind = [i,j]
+                ind.insert(ax,k)
+                val = mat[tuple(ind)]
+                if val==n: top_cor=k
+            if dir==1: top_cor = dim-top_cor
+            temp.append(top_cor)
+        heights.append(temp)
+    return heights
+
 # Create vertex lists functions
 
 def joint_vertices(self,n):
     vertices = []
     r = g = b = 0.0
     # Add all vertices of the dim*dim*dim voxel cube
-    ax = 2
-    if n==1 and self.joint_type!="I": ax = 0
+    ax = self.fixed_sides[n][0][0]
     for i in range(self.dim+1):
         for j in range(self.dim+1):
             for k in range(self.dim+1):
@@ -194,12 +236,11 @@ def joint_vertices(self,n):
     vertices = np.array(vertices, dtype = np.float32) #converts to correct format
     return vertices
 
-def joint_extra_vertices(self,comp,r,g,b):
+def joint_extra_vertices(self,n,r,g,b):
     vertices = []
     # Add all vertices of the dim*dim*dim voxel cube
-    fab_ax = self.sliding_direction[0]
-    comp_ax = 2
-    if comp=="B" and self.joint_type!="I": comp_ax = 0
+    fab_ax = self.sliding_directions[n][0][0]
+    comp_ax = self.fixed_sides[n][0][0]
     for i in range(self.dim+1):
         for j in range(self.dim+1):
             for k in range(self.dim+1):
@@ -268,11 +309,8 @@ def milling_path_vertices(self,n):
     w = (self.voxel_size-2*self.fab.rad)/(no_lanes-1)
     no_z = int(self.voxel_size/self.fab.dep)
     dep = self.voxel_size/no_z
-    # Get reference vertices
-    if n==0: verts = self.v_A
-    else: verts = self.v_B
     # Defines axes
-    ax = self.sliding_direction[0] # mill bit axis
+    ax = self.sliding_directions[n][0][0] # mill bit axis
     axes = [0,1,2]
     axes.pop(ax)
     mill_ax = axes[0] # primary milling direction axis
@@ -307,8 +345,8 @@ def milling_path_vertices(self,n):
                 add[mill_ax]=1
                 i_b = get_index(ind_next,add,self.dim)
                 # get x y z vertices corresponding to the indexes
-                pt_a = get_vertex(i_a,verts,self.vertex_no_info)
-                pt_b = get_vertex(i_b,verts,self.vertex_no_info)
+                pt_a = get_vertex(i_a,self.jverts[n],self.vertex_no_info)
+                pt_b = get_vertex(i_b,self.jverts[n],self.vertex_no_info)
                 # define offsetted verticies
                 layer_vertices = []
                 for num in range(no_lanes):
@@ -351,7 +389,7 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset):
                     test_ind = np.array([i,j,k])
                     test_ind = np.delete(test_ind,ax)
                     if np.any(test_ind==self.dim): continue
-                    cnt = face_neighbors(mat,ind,ax,n,fixed_sides)
+                    cnt,vals = face_neighbors(mat,ind,ax,n,fixed_sides)
                     if cnt==1:
                         for x in range(2):
                             for y in range(2):
@@ -401,32 +439,40 @@ def joint_top_face_indices(self,all_indices,n,offset):
     indices_tops = []
     d = self.dim+1
     indices = []
+    sax = self.sliding_directions[n][0][0]
+    sdir = self.sliding_directions[n][0][1]
     for i in range(d):
         for j in range(d):
+            one_face_added = False
             for k in range(d):
                 ind = [i,j]
-                ind.insert(self.sliding_direction[0],k)
+                if sdir==0: k = d-k-1
+                ind.insert(sax,k)
                 for ax in range(3):
+                    # make sure that the index is withing range
                     test_ind = np.array(ind)
                     test_ind = np.delete(test_ind,ax)
                     if np.any(test_ind==self.dim): continue
-                    cnt = face_neighbors(self.voxel_matrix,ind,ax,n,self.fixed_sides[n])
+                    # count number of neigbors (0, 1, or 2)
+                    cnt,vals = face_neighbors(self.voxel_matrix,ind,ax,n,self.fixed_sides[n])
                     on_free_base = False
-                    if ax==self.sliding_direction[0] and ax!=self.fixed_sides[n][0][0]:
-                        dir = abs(self.sliding_direction[1]-n)
-                        base = dir*self.dim
+                    if ax==sax and ax!=self.fixed_sides[n][0][0]:
+                        base = sdir*self.dim
                         if ind[ax]==base: on_free_base=True
-                    if cnt==1 or (cnt!=1 and on_free_base==True):
+                    if cnt==1 or (cnt!=1 and on_free_base):
                         for x in range(2):
                             for y in range(2):
                                 add = [x,abs(y-x)]
                                 add.insert(ax,0)
                                 index = get_index(ind,add,self.dim)
-                                if ax==self.sliding_direction[0] and on_free_base==False:
-                                    indices_tops.append(index)
-                                elif cnt!=1 and on_free_base==True:
-                                    indices_tops.append(index)
+                                if ax==sax and not one_face_added:
+                                    if ax==sax and not on_free_base:
+                                        indices_tops.append(index)
+                                    elif cnt!=1 and on_free_base:
+                                        indices_tops.append(index)
+                                    else: indices.append(index)
                                 else: indices.append(index)
+                        if ax==sax: one_face_added = True
     # 2. Faces of component base
     d = self.dim+1
     start = d*d*d
@@ -459,7 +505,7 @@ def joint_selected_top_line_indices(self,select,all_indices):
     # Make indices of lines for drawing method GL_LINES
     n = select.n
     offset = n*self.vn
-    sax = self.sliding_direction[0]
+    sax = self.sliding_directions[n][0][0]
     h = self.height_field[tuple(select.faces[0])]
     # 1. Outline of selected top faces of joint
     indices = []
@@ -471,8 +517,9 @@ def joint_selected_top_line_indices(self,select,all_indices):
         for i in range(2):
             ax = other_axes[i]
             for j in range(2):
+                # Check neighboring faces
                 nface = face.copy()
-                nface[ax] += 2*j-1
+                nface[i] += 2*j-1
                 nface = np.array(nface, dtype=np.uint32)
                 if np.all(nface>=0) and np.all(nface<self.dim):
                     unique = True
@@ -498,8 +545,6 @@ def joint_selected_top_line_indices(self,select,all_indices):
 
 def joint_line_indices(self,all_indices,n,offset):
     fixed_sides = self.fixed_sides[n]
-    fab_ax = self.sliding_direction[0]
-    # Make indices for draw elements method GL_LINES
     d = self.dim+1
     indices = []
     for i in range(d):
@@ -536,26 +581,29 @@ def joint_line_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, all_indices
 
-def open_line_indices(self,all_indices,n,offset):
-    ax,dir = self.sliding_direction
+def open_line_indices(self,all_indices,n,slide_dir,offset):
+    indices = []
+    ax,dir = slide_dir
     other_axes = np.array([0,1,2])
     other_axes = np.delete(other_axes,np.where(other_axes==ax))
     ind = np.array([0,0,0])
     #ind[ax] = dir*self.dim
     d = self.dim-1
-    heights = [[self.height_field[0][0], self.height_field[0][d]],
-              [self.height_field[d][0],  self.height_field[d][d]]]
+    heights = get_top_corner_heights(self.voxel_matrix,n,ax,dir)
+    #heights = [[self.height_field2[0][0], self.height_field2[0][d]],
+    #          [self.height_field2[d][0],  self.height_field2[d][d]]]
     d = self.dim+1
-    indices = []
-    if n==0: dir = 1-dir
+    #if n==0: dir = 1-dir
     for x in range(2):
         for y in range(2):
             add = np.array([0,0,0])
             add[other_axes[0]] = x*self.dim
             add[other_axes[1]] = y*self.dim
-            add[ax] = heights[x][y]
+            #add[ax] = heights[x][y]
+            add[ax] = dir*self.dim
             start = get_index(ind,add,self.dim)
-            end = d*d*d+24*ax+12*dir+2*x+y
+            end = d*d*d+24*ax+12*(1-dir)+2*x+y
+            #off = 24*ax+12*dir+4*step
             indices.extend([start,end])
     # Format
     indices = np.array(indices, dtype=np.uint32)
@@ -609,73 +657,77 @@ def milling_path_indices(self,all_indices,no,start,n):
 class Geometries:
     def __init__(self):
         self.joint_type = "I"
-        self.fixed_sides = get_fixed_sides(self.joint_type)
-        self.sliding_direction = [2,0]
-        self.dim = 3
         self.noc = 2 #number of components
+        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
+        self.sliding_directions = [[[2,0]],[[2,1]]]
+        self.dim = 3
         self.component_size = 0.275
         self.voxel_size = self.component_size/self.dim
         self.component_length = 0.5*self.component_size
         self.vertex_no_info = 8
         self.height_field = get_random_height_field(self.dim)
+        self.height_field2 =get_random_height_field(self.dim)
         self.pre_height_field = self.height_field
+        self.pre_height_field2 = self.height_field2
         self.select = Selection(self)
         self.fab = Fabrication(self)
-        self.voxel_matrix = None
-        self.voxel_matrix_with_sides = None
-        self.eval = None
-        self.voxel_matrix_from_height_field()
-        self.vn = self.ven = self.vmA = self.vmB = None
+        self.voxel_matrix_from_height_fields()
         self.buff = Buffer(self)
         self.vertices = self.create_vertices()
         self.indices = self.create_indices()
 
-
-    def voxel_matrix_from_height_field(self):
-        vox_mat = np.zeros(shape=(self.dim,self.dim,self.dim))
-        ax = self.sliding_direction[0]
-        for i in range(self.dim):
-            for j in range(self.dim):
-                for k in range(self.dim):
-                    h = self.height_field[i][j]
-                    if k>=h: vox_mat[i,j,k]=1
-        vox_mat = np.array(vox_mat)
-        vox_mat = np.swapaxes(vox_mat,2,ax)
+    def voxel_matrix_from_height_fields(self):
+        ax = self.sliding_directions[0][0][0]
+        vox_mat = mat_from_field(self.height_field,ax)
+        if self.noc==3:
+            ax = self.sliding_directions[2][0][0]
+            vox_mat2 = mat_from_field(self.height_field2,ax)
+            # combine matrices
+            for i in range(self.dim):
+                for j in range(self.dim):
+                    for k in range(self.dim):
+                        ind = tuple([i,j,k])
+                        if vox_mat[ind]==1 and vox_mat2[ind]==0: vox_mat[ind]=2
         self.voxel_matrix = vox_mat
         self.eval = Evaluation(self)
 
-    def update_sliding_direction(self,sliding_direction_):
-        self.sliding_direction = sliding_direction_
-        self.voxel_matrix_from_height_field()
+    def update_sliding_direction(self,sliding_directions):
+        self.sliding_directions = sliding_directions
+        self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
 
     def randomize_height_field(self):
         self.pre_height_field = self.height_field.copy()
+        self.pre_height_field2 = self.height_field2.copy()
         self.height_field = get_random_height_field(self.dim)
-        self.eval = Evaluation(self)
-        self.voxel_matrix_from_height_field()
+        self.height_field2 = get_random_height_field(self.dim)
+        self.voxel_matrix_from_height_fields()
         self.create_indices()
 
     def clear_height_field(self):
         self.pre_height_field = self.height_field.copy()
+        self.pre_height_field2 = self.height_field2.copy()
         self.height_field = np.zeros((self.dim,self.dim))
-        self.voxel_matrix_from_height_field()
+        self.height_field2 = np.zeros((self.dim,self.dim))
+        self.voxel_matrix_from_height_fields()
         self.create_indices()
 
-    def edit_height_field(self,faces,h):
+    def edit_height_field(self,faces,h,n):
         self.pre_height_field = self.height_field.copy()
+        self.pre_height_field2 = self.height_field2.copy()
         for ind in faces:
-            self.height_field[tuple(ind)] = h
-            self.voxel_matrix_from_height_field()
+            if n!=2: self.height_field[tuple(ind)] = h
+            else: self.height_field2[tuple(ind)] = h
+            self.voxel_matrix_from_height_fields()
             self.create_indices()
 
     def update_joint_type(self,joint_type_):
         self.joint_type = joint_type_
-        if self.joint_type=="X" and self.sliding_direction==[2,0]:
-            self.update_sliding_direction([1,0])
-        self.fixed_sides = get_fixed_sides(self.joint_type)
-        self.voxel_matrix_from_height_field()
+        if self.joint_type=="X" and self.sliding_directions[0][0]==[2,0]:
+            self.update_sliding_direction([[[1,0]],[[1,1]]])
+        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
+        self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
 
@@ -705,19 +757,24 @@ class Geometries:
                             cnt +=1
                     hf[i][j] = int(f*sum/cnt+0.5)
             self.height_field = hf
-        self.voxel_matrix_from_height_field()
+        self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
 
     def update_number_of_components(self,num):
         self.noc = num
+        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
+        self.sliding_directions = [ [[2,0]], [[2,1],[1,1]], [[1,0]] ]
+        self.voxel_matrix_from_height_fields()
+        self.create_vertices()
         self.create_indices()
 
     def create_vertices(self):
 
         ### VERTICIES FOR JOINT ###
-        self.v_A = joint_vertices(self,0)
-        self.v_B = joint_vertices(self,1)
+        self.jverts = []
+        for n in range(self.noc):
+            self.jverts.append(joint_vertices(self,n))
 
         ### EXTRA VERTICIES FOR ROUNDED CORNERS OF FABRICATED JOINT ###
         #ve_A = joint_extra_vertices(self,"A",0.0,0.0,0.0)
@@ -727,24 +784,26 @@ class Geometries:
         va = arrow_vertices(self)
 
         ### VERTICIES FOR MILLING PATHS ###
-        self.vm_A = milling_path_vertices(self,0)
-        self.vm_B = milling_path_vertices(self,1)
+        #self.mverts = []
+        #for n in range(self.noc):
+        #    self.mverts.append(milling_path_vertices(self,n))
 
-        self.vertices = np.concatenate([self.v_A, self.v_B, va, self.vm_A, self.vm_B])
-        #[self.v_A,self.v_B, ve_A, ve_B, va])#, vm_A, vm_B])
+        jverts = np.concatenate(self.jverts)
+        #mverts = np.concatenate(self.mverts)
+        self.vertices = np.concatenate([jverts, va])
 
-        self.vn =  int(len(self.v_A)/8)
+        self.vn =  int(len(self.jverts[0])/8)
         self.ven = 0
         van = int(len(va)/8)
-        sa = 2*self.vn+2*self.ven+van
-        sb = sa + int(len(self.vm_A)/8)
-        self.m_start = [sa,sb]
+        #self.m_start = []
+        #mst = 2*self.vn+2*self.ven+van
+        #for n in range(self.noc):
+        #    self.m_start.append(mst)
+        #    mst += int(len(self.mverts[n])/8)
         Buffer.buffer_vertices(self.buff)
 
     def create_indices(self):
         all_inds = []
-
-        path_vertices = [self.vm_A,self.vm_B]
 
         self.indices_fend = []
         self.indices_not_fend = []
@@ -777,19 +836,22 @@ class Geometries:
                     fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.fixed_sides[n][m]],n,n*self.vn)
                     unbris.append(unbri)
             else: unbris = None
-            mill,all_inds = milling_path_indices(self,all_inds,len(path_vertices[n]),self.m_start[n],n)
+            #mill,all_inds = milling_path_indices(self,all_inds,len(self.mverts[n]),self.m_start[n],n)
 
             #picking faces
             faces_not_tops, faces_tops, all_inds = joint_top_face_indices(self,all_inds,n,n*self.vn)
 
             #Lines
             lns,all_inds = joint_line_indices(self,all_inds,n,n*self.vn)
-            open,all_inds = open_line_indices(self,all_inds,n,n*self.vn)
+
+            for m in range(len(self.sliding_directions[n])):
+                open,all_inds = open_line_indices(self,all_inds,n,self.sliding_directions[n][m],n*self.vn)
+                self.indices_open_lines.append(open)
 
             #arrows
-            larr, farr, all_inds = arrow_indices(self, all_inds,[self.sliding_direction],n,2*self.vn+2*self.ven)
-            lsub, fsub, all_inds = arrow_indices(self, all_inds,self.eval.slides[0],n,2*self.vn+2*self.ven)
-            arrows = [larr,farr,lsub,fsub]
+            #larr, farr, all_inds = arrow_indices(self, all_inds,[self.sliding_directions[0]],n,self.noc*self.vn+2*self.ven)
+            larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,self.noc*self.vn+2*self.ven)
+            arrows = [larr,farr]
 
             # Append lists
             self.indices_fend.append(end)
@@ -797,12 +859,11 @@ class Geometries:
             self.indices_fcon.append(con)
             self.indices_fall.append(all)
             self.indices_lns.append(lns)
-            self.indices_open_lines.append(open)
             self.indices_not_fbridge.append(unbris)
             self.indices_arrows.append(arrows)
             self.indices_ftop.append(faces_tops)
             self.indices_not_ftop.append(faces_not_tops)
-            self.indices_milling_path.append(mill)
+            #self.indices_milling_path.append(mill)
 
         #outline of selected faces
         if self.select.state==2:
@@ -813,19 +874,24 @@ class Geometries:
 
     def save(self):
         np.save("data/saved_height_field.npy",self.height_field)
-        np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
-        np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
-        np.save("data/saved_fixed_sides.npy",self.fixed_sides)
+        np.save("data/saved_height_field2.npy",self.height_field2)
+        #np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
+        #np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
+        #np.save("data/saved_fixed_sides.npy",self.fixed_sides)
 
     def load(self):
         self.height_field = np.load("data/saved_height_field.npy")
-        self.voxel_matrix_from_height_field()
-        self.create_and_buffer_indices()
+        self.height_field2 = np.load("data/saved_height_field2.npy")
+        self.voxel_matrix_from_height_fields()
+        self.create_indices()
 
     def undo(self):
         print("undoing...")
         temp = self.height_field.copy()
         self.height_field = self.pre_height_field.copy()
         self.pre_height_field = temp
-        self.voxel_matrix_from_height_field()
-        self.create_and_buffer_indices()
+        temp = self.height_field2.copy()
+        self.height_field2 = self.pre_height_field2.copy()
+        self.pre_height_field2 = temp
+        self.voxel_matrix_from_height_fields()
+        self.create_indices()

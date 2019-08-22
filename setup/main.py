@@ -6,15 +6,12 @@ from numpy import linalg
 import pyrr
 import sys
 from Geometries import Geometries
-#from Geometries import ElementProperties
 from ViewSettings import ViewSettings
 from Buffer import ElementProperties
-#from Fabrication import Fabrication
-#from Selection import Selection
-#from Evaluation import Evaluation
 import ctypes
 import math
 import cv2
+import random
 
 def create_texture_shaders():
     vertex_shader = """
@@ -96,7 +93,7 @@ def keyCallback(window,key,scancode,action,mods):
             mesh.select.shift = True
             mesh.select.refresh = True
         # Joint geometry
-        elif key==glfw.KEY_C: Geometries.clear_height_field(mesh)
+        elif key==glfw.KEY_E: Geometries.clear_height_field(mesh)
         # Joint type
         elif key==glfw.KEY_I and mesh.joint_type!="I":
             Geometries.update_joint_type(mesh,"I")
@@ -107,22 +104,26 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_X and mesh.joint_type!="X":
             Geometries.update_joint_type(mesh,"X")
         elif key==glfw.KEY_Y:
-            Geometries.update_number_of_components(mesh,3)
+            if mesh.noc==2:
+                if mesh.joint_type=="I": Geometries.update_joint_type(mesh,"L")
+                Geometries.update_number_of_components(mesh,3)
+            else: Geometries.update_number_of_components(mesh,2)
         # Sliding direction
-        elif key==glfw.KEY_UP and mesh.sliding_direction!=[2,0]:
+        elif key==glfw.KEY_UP and mesh.sliding_directions!=[[[2,0]],[[2,1]]]:
             if mesh.joint_type!="X":
-                Geometries.update_sliding_direction(mesh,[2,0])
-        elif key==glfw.KEY_RIGHT and mesh.sliding_direction!=[1,0]:
-            Geometries.update_sliding_direction(mesh,[1,0])
+                Geometries.update_sliding_direction(mesh,[[[2,0]],[[2,1]]])
+        elif key==glfw.KEY_RIGHT and mesh.sliding_directions!=[[[1,0]],[[1,1]]]:
+            Geometries.update_sliding_direction(mesh,[[[1,0]],[[1,1]]])
         # Preview options
         elif key==glfw.KEY_A: view_opt.hidden[0] = not view_opt.hidden[0]
         elif key==glfw.KEY_B: view_opt.hidden[1] = not view_opt.hidden[1]
+        elif key==glfw.KEY_C: view_opt.hidden[2] = not view_opt.hidden[2]
         elif key==glfw.KEY_D: view_opt.show_arrows = not view_opt.show_arrows
         elif key==glfw.KEY_H: view_opt.show_hidden_lines = not view_opt.show_hidden_lines
         elif key==glfw.KEY_F:
             mesh.fab_geometry = not mesh.fab_geometry
             Geometries.create_and_buffer_indicies(mesh)
-        elif key==glfw.KEY_O: view_opt.open_joint = not view_opt.open_joint
+        elif key==glfw.KEY_O: view_opt.open_joint = (view_opt.open_joint+1)%mesh.noc
         elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
         elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
         elif key==glfw.KEY_M:
@@ -165,17 +166,20 @@ def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.arra
     mesh, view_opt = glfw.get_window_user_pointer(window)
     # Define translation matrices for opening of joint for components A and B
     move_vec = [0,0,0]
-    move_vec[mesh.sliding_direction[0]] = (2*mesh.sliding_direction[1]-1)*view_opt.distance
+    move_vec[mesh.sliding_directions[0][0][0]] = (2*mesh.sliding_directions[0][0][1]-1)*view_opt.distance
     move_vec = np.array(move_vec)
-    move_vec = move_vec + translation_vec
-    move_A = pyrr.matrix44.create_from_translation(move_vec)
-    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec))
-    moves = [move_A,move_B]
+    move_vec = move_vec
+    move_vec2 = [0,0,0]
+    if mesh.noc>2: move_vec2[mesh.sliding_directions[2][0][0]] = (2*mesh.sliding_directions[2][0][1]-1)*view_opt.distance2
+    move_vec2 = np.array(move_vec2)
+    move_A = pyrr.matrix44.create_from_translation(move_vec-move_vec2+translation_vec)
+    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec)-move_vec2+translation_vec)
+    move_C = pyrr.matrix44.create_from_translation(np.negative(move_vec)+move_vec2+translation_vec)
+    moves = [move_A,move_B,move_C]
     if clear_depth_buffer: glClear(GL_DEPTH_BUFFER_BIT)
     for geo in geos:
         if geo==None: continue
-        if view_opt.hidden[0]==True and geo.n==0: continue
-        if view_opt.hidden[1]==True and geo.n==1: continue
+        if view_opt.hidden[geo.n]: continue
         glUniformMatrix4fv(4, 1, GL_FALSE, moves[geo.n])
         glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
 
@@ -183,15 +187,21 @@ def draw_geometries_with_excluded_area(window, show_geos, screen_geos, translati
     mesh, view_opt = glfw.get_window_user_pointer(window)
     # Define translation matrices for opening of joint for components A and B
     move_vec = [0,0,0]
-    move_vec[mesh.sliding_direction[0]] = (2*mesh.sliding_direction[1]-1)*view_opt.distance
+    move_vec[mesh.sliding_directions[0][0][0]] = (2*mesh.sliding_directions[0][0][1]-1)*view_opt.distance
     move_vec = np.array(move_vec)
     move_vec_show = move_vec + translation_vec
-    move_A = pyrr.matrix44.create_from_translation(move_vec)
-    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec))
-    moves = [move_A,move_B]
-    move_A_show = pyrr.matrix44.create_from_translation(move_vec_show)
-    move_B_show = pyrr.matrix44.create_from_translation(np.negative(move_vec_show))
-    moves_show = [move_A_show,move_B_show]
+    move_vec2 = [0,0,0]
+    if mesh.noc>2:
+        move_vec2[mesh.sliding_directions[2][0][0]] = (2*mesh.sliding_directions[2][0][1]-1)*view_opt.distance2
+    move_vec2 = np.array(move_vec2)
+    move_A = pyrr.matrix44.create_from_translation(move_vec-move_vec2)
+    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec)-move_vec2)
+    move_C = pyrr.matrix44.create_from_translation(np.negative(move_vec)+move_vec2)
+    moves = [move_A,move_B,move_C]
+    move_A_show = pyrr.matrix44.create_from_translation(move_vec_show-move_vec2)
+    move_B_show = pyrr.matrix44.create_from_translation(np.negative(move_vec_show)-move_vec2)
+    move_C_show = pyrr.matrix44.create_from_translation(np.negative(move_vec_show)+move_vec2)
+    moves_show = [move_A_show,move_B_show,move_C_show]
     #
     glClear(GL_DEPTH_BUFFER_BIT)
     glDisable(GL_DEPTH_TEST)
@@ -201,8 +211,7 @@ def draw_geometries_with_excluded_area(window, show_geos, screen_geos, translati
     glStencilOp(GL_REPLACE,GL_REPLACE,GL_REPLACE)
     for geo in show_geos:
         if geo==None: continue
-        if view_opt.hidden[0]==True and geo.n==0: continue
-        if view_opt.hidden[1]==True and geo.n==1: continue
+        if view_opt.hidden[geo.n]: continue
         glUniformMatrix4fv(4, 1, GL_FALSE, moves_show[geo.n])
         glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
     glEnable(GL_DEPTH_TEST)
@@ -210,16 +219,14 @@ def draw_geometries_with_excluded_area(window, show_geos, screen_geos, translati
     glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP)
     for geo in screen_geos:
         if geo==None: continue
-        if view_opt.hidden[0]==True and geo.n==0: continue
-        if view_opt.hidden[1]==True and geo.n==1: continue
+        if view_opt.hidden[geo.n]: continue
         glUniformMatrix4fv(4, 1, GL_FALSE, moves[geo.n])
         glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
     glDisable(GL_STENCIL_TEST)
     glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
     for geo in show_geos:
         if geo==None: continue
-        if view_opt.hidden[0]==True and geo.n==0: continue
-        if view_opt.hidden[1]==True and geo.n==1: continue
+        if view_opt.hidden[geo.n]: continue
         glUniformMatrix4fv(4, 1, GL_FALSE, moves_show[geo.n])
         glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
 
@@ -286,19 +293,13 @@ def display_unconnected(window,mesh):
     draw_geometries_with_excluded_area(window,G0,G1)
 
 def display_unbridged(window,mesh,view_opt):
-    # Select colors
-    col_yellow = [1.0, 1.0, 0.6]
-    col_turkoise = [0.6, 1.0, 1.0]
-    col_pink =  [1.0, 0.6, 1.0]
-    col_orange = [1.0, 0.8, 0.6]
-    cols = [[col_yellow,col_turkoise],[col_pink,col_orange]]
-
     # Draw colored faces when unbridged
     for n in range(mesh.noc):
         if not mesh.eval.bridged[n]:
             for m in range(2): # browse the two parts
                 # a) Unbridge part 1
-                glUniform3f(5, cols[n][m][0],  cols[n][m][1],  cols[n][m][2])
+                col = view_opt.unbridge_colors[n][m]
+                glUniform3f(5, col[0], col[1], col[2])
                 G0 = [mesh.indices_not_fbridge[n][m]]
                 G1 = [mesh.indices_not_fbridge[n][1-m], mesh.indices_fall[1-n], mesh.indices_not_fcon[n]] # needs reformulation for 3 components
                 draw_geometries_with_excluded_area(window,G0,G1)
@@ -319,15 +320,12 @@ def display_selected(window,mesh,view_opt):
         glLineWidth(3)
         glEnable(GL_LINE_STIPPLE)
         glLineStipple(2, 0xAAAA)
-        ax = mesh.sliding_direction[0]
+        ax = mesh.sliding_directions[mesh.select.n][0][0]
         for val in range(0,abs(mesh.select.val)+1):
             if mesh.select.val<0: val = -val
             pulled_vec = [0,0,0]
-            pulled_vec[ax] = -(2*mesh.select.n-1)*val*mesh.voxel_size
+            pulled_vec[ax] = val*mesh.voxel_size
             draw_geometries(window,[mesh.outline_selected_faces],translation_vec=np.array(pulled_vec))
-            #index = int(mesh.dim* mesh.select.faces[0][0]+ mesh.select.faces[0][1])
-            #top = ElementProperties(GL_LINE_LOOP, 4, mesh.indices_ftop[mesh.select.n].start_index+4*index, mesh.select.n)
-            #draw_geometries(window,[top],translation_vec=np.array(pulled_vec))
         glPopAttrib()
 
 def display_joint_geometry(window,mesh,view_opt):
@@ -351,11 +349,18 @@ def display_joint_geometry(window,mesh,view_opt):
     draw_geometries_with_excluded_area(window,G0,G1)
     ################ When joint is fully open, draw dahsed lines ################
     if not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.distance==mesh.component_size:
+        #if view_opt.open_joint==1:
+        #    for geo in mesh.indices_open_lines:
+        #        geo.count = 8
+        #    if len(mesh.indices_open_lines)>2: mesh.indices_open_lines.pop()
         glPushAttrib(GL_ENABLE_BIT)
         glLineWidth(2)
         glLineStipple(1, 0x00FF)
         glEnable(GL_LINE_STIPPLE)
-        G0 = mesh.indices_open_lines
+        G0 = []
+        for n in range(len(mesh.indices_open_lines)):
+            if view_opt.distance2==mesh.component_size or n<2:
+                G0.append(mesh.indices_open_lines[n])
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
         glPopAttrib()
@@ -385,25 +390,15 @@ def display_arrows(window,mesh,view_opt):
         for n in range(mesh.noc):
             glLineWidth(3)
             G1 = mesh.indices_fall
-            G0 = [mesh.indices_arrows[n][0],mesh.indices_arrows[n][1],mesh.indices_arrows[n][3]]
-            G0_other = [mesh.indices_arrows[n][2]]
+            G0 = mesh.indices_arrows[n]
             d0 = 3*mesh.component_length+0.55*mesh.component_size
             d1 = 2*mesh.component_length+0.55*mesh.component_size
-            vec = np.array([0,0,-d0])
-            if mesh.joint_type=="X": vec = np.array([0,0,-d1])
-            if n==1:
-                if mesh.joint_type=="L": vec = np.array([d0,0,0])
-                elif mesh.joint_type=="T" or mesh.joint_type=="X": vec = np.array([d1,0,0])
-            vecs = [vec]
-            if mesh.joint_type=="X": vecs.append(np.negative(vec))
-            elif n==1 and mesh.joint_type=="T": vecs.append(np.negative(vec))
-            for vec in vecs:
+            if len(mesh.fixed_sides[n])==2: d0 = d1
+            if n>0: d0 = -d0 ###quick fix, not sure why???
+            for ax,dir in mesh.fixed_sides[n]:
+                vec = np.array([0,0,0],dtype=np.float)
+                vec[ax] = (2*dir-1)*d0
                 draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
-                glPushAttrib(GL_ENABLE_BIT)
-                glLineStipple(1, 0x00FF)
-                glEnable(GL_LINE_STIPPLE)
-                draw_geometries_with_excluded_area(window,G0_other,G1,translation_vec=vec)
-                glPopAttrib()
 
 def display_milling_paths(window,mesh,view_opt):
     if view_opt.show_milling_path:
@@ -428,53 +423,45 @@ def pick(window, mesh, view_opt, shader_col):
 
     ########################## Draw colorful top faces ##########################
 
-    # Draw body geometry of A
-    glUniform3f(5, 1.0, 0.0, 0.0)
-    draw_geometries(window,[mesh.indices_not_ftop[0]],clear_depth_buffer=False)
-    # Draw faces of A
-    for i in range(mesh.dim*mesh.dim):
-        i_ = int(i/mesh.dim)
-        j = i%mesh.dim
-        glUniform3f(5, 1.0, (i_+1)/(mesh.dim+2), (j+1)/(mesh.dim+2)) # color
-        top = ElementProperties(GL_QUADS, 4, mesh.indices_ftop[0].start_index+4*i, 0)
-        draw_geometries(window,[top],clear_depth_buffer=False)
-
-    # Draw body geometry of B
-    glUniform3f(5, 0.0, 0.0, 1.0)
-    draw_geometries(window,[mesh.indices_not_ftop[1]],clear_depth_buffer=False)
-    # Draw faces of B
-    for i in range(mesh.dim*mesh.dim):
-        i_ = int(i/mesh.dim)
-        j = i%mesh.dim
-        glUniform3f(5, (i_+1)/(mesh.dim+2), (j+1)/(mesh.dim+2), 1.0) # color
-        top = ElementProperties(GL_QUADS, 4, mesh.indices_ftop[1].start_index+4*i, 1)
-        draw_geometries(window,[top],clear_depth_buffer=False)
+    # Draw colorful geometries
+    for n in range(mesh.noc):
+        col = [0.0,0.0,0.0]
+        col[n] = 1.0
+        glUniform3f(5, col[0], col[1], col[2])
+        draw_geometries(window,[mesh.indices_not_ftop[n]],clear_depth_buffer=False)
+        # Draw top faces
+        for i in range(mesh.dim*mesh.dim):
+            i_ = int(i/mesh.dim)
+            j = i%mesh.dim
+            col = [(i_+1)/(mesh.dim+2), (j+1)/(mesh.dim+2)]
+            col.insert(n,1.0)
+            glUniform3f(5, col[0], col[1], col[2])
+            top = ElementProperties(GL_QUADS, 4, mesh.indices_ftop[n].start_index+4*i, n)
+            draw_geometries(window,[top],clear_depth_buffer=False)
 
     ############### Read pixel color at mouse position ###############
 
     xpos,ypos = glfw.get_cursor_pos(window)
     mouse_pixel = glReadPixelsub(xpos, 1600-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
+    mouse_pixel = np.array(mouse_pixel)
     pick_n = pick_x = pick_y = None
-    if mouse_pixel[0]==255 and mouse_pixel[1]!=255:
-        pick_n=0
-        if mouse_pixel[2]!=0:
-            pick_x=int(mouse_pixel[1]*(mesh.dim+2)/255-1)
-            pick_y=int(mouse_pixel[2]*(mesh.dim+2)/255-1)
-    elif mouse_pixel[2]==255 and mouse_pixel[1]!=255:
-        pick_n=1
-        if mouse_pixel[0]!=0:
-            pick_x=int(mouse_pixel[0]*(mesh.dim+2)/255-1)
-            pick_y=int(mouse_pixel[1]*(mesh.dim+2)/255-1)
+    if not np.all(mouse_pixel==255) and np.any(mouse_pixel==255):
+        pick_n = np.where(mouse_pixel==255)[0][0]
+        xyi = [0,1,2]
+        xyi.pop(pick_n)
+        pick_x=int(mouse_pixel[xyi[0]]*(mesh.dim+2)/255-1)
+        pick_y=int(mouse_pixel[xyi[1]]*(mesh.dim+2)/255-1)
 
     ### Update selection
     if pick_x !=None and pick_y!=None:
-        ### Initialize selection
-        new_pos = False
-        if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
-            mesh.select.update_pick(pick_x,pick_y,pick_n)
-            mesh.select.refresh = False
-        mesh.select.state = 0 # hovering
-    else: mesh.select.state = -1
+        if pick_x!=-1 and pick_y!=-1:
+            ### Initialize selection
+            new_pos = False
+            if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
+                mesh.select.update_pick(pick_x,pick_y,pick_n)
+                mesh.select.refresh = False
+            mesh.select.state = 0 # hovering
+        else: mesh.select.state = -1
     glClearColor(1.0, 1.0, 1.0, 1.0)
 
 def main():
@@ -517,7 +504,7 @@ def main():
         #display_joint_faces(window,mesh,view_opt) ### for debugging
         #display_joint_geometry_lines(window,mesh,view_opt)  ### for debugging
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
-        if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
+        #if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
 
         glfw.swap_buffers(window)
 

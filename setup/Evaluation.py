@@ -28,9 +28,9 @@ def is_connected(mat,n):
         if connected_same==all_same: connected = True
     return connected
 
-def get_sliding_directions(mat):
+def get_sliding_directions(mat,noc):
     sliding_directions = []
-    for n in range(2): # Browse the components (0, 1 / two materials)
+    for n in range(noc): # Browse the components
         mat_sliding = []
         for ax in range(3): # Browse the three possible sliding axes
             for dir in range(2): # Browse the two possible directions of the axis
@@ -41,7 +41,7 @@ def get_sliding_directions(mat):
                     first_same = False
                     for i in range(len(col)):
                         if col[i]==n: first_same = True; continue
-                        elif first_same==True and (col[i]==1-n):
+                        elif first_same==True and (col[i]!=n and col[i]>0):
                             slides_in_this_direction=False; break
                     if slides_in_this_direction==False: break #stop checking further columns if one was blocking the slide
                 if slides_in_this_direction==True:
@@ -53,14 +53,14 @@ def add_fixed_sides(mat,fixed_sides):
     dim = len(mat)
     pad_loc = [[0,0],[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1],[-1,-1]]
-    for n in range(2):
+    for n in range(len(fixed_sides)):
         for ax,dir in fixed_sides[n]:
             pad_loc[ax][dir] = 1
             pad_val[ax][dir] = n
     pad_loc = tuple(map(tuple, pad_loc))
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
-    # Take care of corners
+    # Take care of corners ########################needs to be adjusted for 3 components....!!!!!!!!!!!!!!!!!!
     for ax,dir in fixed_sides[0]:
         for ax2,dir2 in fixed_sides[1]:
             if ax==ax2: continue
@@ -205,7 +205,7 @@ class Evaluation:
     def update(self,parent):
         self.voxel_matrix_with_sides = add_fixed_sides(parent.voxel_matrix, parent.fixed_sides)
         # Sliding directions
-        self.slides = get_sliding_directions(self.voxel_matrix_with_sides)
+        self.slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
         # Friction
         friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
         # Voxel connection and bridgeing

@@ -3,7 +3,7 @@ import math
 
 def joint_face_fab_indicies(self,all_indices,mat,fixed_sides,n,offset,offset_extra):
     offset_extra = offset_extra-offset
-    fab_ax = self.sliding_direction[0]
+    fab_ax = self.sliding_directions[n][0][0]
     other_axes = [0,1,2]
     other_axes.pop(fab_ax)
     # Matrix of rounded corners
@@ -192,7 +192,7 @@ def joint_face_fab_indicies(self,all_indices,mat,fixed_sides,n,offset,offset_ext
 def joint_line_fab_indicies(self,all_indices,n,offset,offset_extra):
     offset_extra = offset_extra-offset
     fixed_sides = self.fixed_sides[n]
-    fab_ax = self.sliding_direction[0]
+    fab_ax = self.sliding_directions[n][0][0]
     other_axes = [0,1,2]
     other_axes.pop(fab_ax)
     d = self.dim+1
@@ -329,8 +329,8 @@ class Fabrication:
 
     def export_gcode(self,file_name):
         self.path_vertices = [self.parent.vm_A,self.parent.vm_B]
-        if self.parent.sliding_direction[0]==2: coords = [0,1,2]
-        elif self.parent.sliding_direction[0]==1: coords = [2,0,1]
+        if self.parent.sliding_directions[0][0][0]==2: coords = [0,1,2]
+        elif self.parent.sliding_directions[0][0][0]==1: coords = [2,0,1]
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D"]
         for n in range(parent.noc):

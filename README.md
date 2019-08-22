@@ -49,6 +49,15 @@ Edit voxel cube dimension with keys 2, 3 (default), 4 and 5:
   <img src="/Screenshots/screenshot_dim_5.png" width="210" />
 </p>
 
+### Number of components
+Change between 2 and 3 components with key Y:
+<p float="left">
+  <img src="/Screenshots/screenshot_2_closed.png" width="210" />
+  <img src="/Screenshots/screenshot_2_open.png" width="210" />
+  <img src="/Screenshots/screenshot_3_closed.png" width="210" />
+  <img src="/Screenshots/screenshot_3_open.png" width="210" />
+</p>
+
 ### Feedback
 
 Unconnected voxels and unbridged components are colored:
