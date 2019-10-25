@@ -96,18 +96,15 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_E: Geometries.clear_height_field(mesh)
         # Joint type
         elif key==glfw.KEY_I and mesh.joint_type!="I":
-            Geometries.update_joint_type(mesh,"I")
+            Geometries.update_joint_type(mesh,"I",mesh.noc)
         elif key==glfw.KEY_L and mesh.joint_type!="L":
-            Geometries.update_joint_type(mesh,"L")
+            Geometries.update_joint_type(mesh,"L",mesh.noc)
         elif key==glfw.KEY_T and mesh.joint_type!="T":
-            Geometries.update_joint_type(mesh,"T")
+            Geometries.update_joint_type(mesh,"T",mesh.noc)
         elif key==glfw.KEY_X and mesh.joint_type!="X":
-            Geometries.update_joint_type(mesh,"X")
+            Geometries.update_joint_type(mesh,"X",mesh.noc)
         elif key==glfw.KEY_Y:
-            if mesh.noc==2:
-                if mesh.joint_type=="I": Geometries.update_joint_type(mesh,"L")
-                Geometries.update_number_of_components(mesh,3)
-            else: Geometries.update_number_of_components(mesh,2)
+            Geometries.update_joint_type(mesh,mesh.joint_type,5-mesh.noc)
         # Sliding direction
         elif key==glfw.KEY_UP and mesh.sliding_directions!=[[[2,0]],[[2,1]]]:
             if mesh.joint_type!="X":
@@ -129,15 +126,15 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_M:
             view_opt.show_milling_path = not view_opt.show_milling_path
             if view_opt.show_milling_path:
-                Geometries.create_vertices(mesh)
-                Geometries.create_indices(mesh)
+                Geometries.create_vertices(mesh,True)
+                Geometries.create_indices(mesh,True)
         elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
         elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
         elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
         elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
         elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
         elif key==glfw.KEY_P: save_screenshot(window)
-        elif key==glfw.KEY_K: mesh.fab.export_gcode()
+        elif key==glfw.KEY_K: mesh.fab.export_gcode("joint")
         elif key==glfw.KEY_Z: Geometries.undo(mesh)
     elif action==glfw.RELEASE:
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
@@ -401,6 +398,7 @@ def display_arrows(window,mesh,view_opt):
                 draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
 
 def display_milling_paths(window,mesh,view_opt):
+    if len(mesh.indices_milling_path)==0: view_opt.show_milling_path = False
     if view_opt.show_milling_path:
         glLineWidth(1)
         glUniform3f(5,0.0,1.0,0.0)
@@ -482,13 +480,13 @@ def main():
 
         glfw.poll_events()
 
-        # Update Rotation
+        # Update view rotation
         view_opt.update_rotation(window)
 
-        # Update opening opening distance
+        # Update joint opening distance
         view_opt.set_joint_opening_distance(mesh)
 
-        # Picking
+        # Pick faces
         if mesh.select.state!=2: pick(window, mesh, view_opt, shader_col)
         else: mesh.select.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
 
@@ -501,10 +499,8 @@ def main():
         if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
         if mesh.select.state!=-1: display_selected(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
-        #display_joint_faces(window,mesh,view_opt) ### for debugging
-        #display_joint_geometry_lines(window,mesh,view_opt)  ### for debugging
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
-        #if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
+        if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
 
         glfw.swap_buffers(window)
 
@@ -513,15 +509,15 @@ def main():
 if __name__ == "__main__":
     print("Left mouse button - edit joint")
     print("Right mouse button - rotate view")
-    print("C - clear joint")
     print("R - randomize joint")
     print("I L T X - edit joint type")
     print("2 3 4 5 - change voxel resolution")
     print("Arrow keys - edit joint sliding direction")
     print("O - open joint")
-    print("A B - hide components")
+    print("A B C - hide components")
     print("H - hide hidden lines")
     print("M - show milling path")
+    print("K - export gcode for milling path")
     print("S - save")
     print("G - open")
     print("P - save screenshot")

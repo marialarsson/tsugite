@@ -324,16 +324,15 @@ class Fabrication:
         self.parent = parent
         self.real_component_size = 36 #mm
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 0.015 #milling bit radius
-        self.dep = 0.015 #milling depth
+        self.rad = 0.025 #milling bit radius meters
+        self.dep = 0.01 #milling depth meters ?
 
     def export_gcode(self,file_name):
-        self.path_vertices = [self.parent.vm_A,self.parent.vm_B]
         if self.parent.sliding_directions[0][0][0]==2: coords = [0,1,2]
         elif self.parent.sliding_directions[0][0][0]==1: coords = [2,0,1]
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D"]
-        for n in range(parent.noc):
+        for n in range(self.parent.noc):
             file_name = "joint_"+names[n]
             file = open("gcode/"+file_name+".gcode","w")
             ###initialization
@@ -349,10 +348,10 @@ class Fabrication:
             x_ = str(9999999999)
             y_ = str(9999999999)
             z_ = str(9999999999)
-            for i in range(0,len(self.path_vertices[n]),8):
-                x = self.path_vertices[n][i]
-                y = self.path_vertices[n][i+1]
-                z = self.path_vertices[n][i+2]
+            for i in range(0,len(self.parent.mverts[n]),8):
+                x = self.parent.mverts[n][i]
+                y = self.parent.mverts[n][i+1]
+                z = self.parent.mverts[n][i+2]
                 #convert from virtul dimensions to mm
                 x = self.ratio*x
                 y = self.ratio*y
@@ -362,7 +361,7 @@ class Fabrication:
                 xyz = xyz[coords[0]],xyz[coords[1]],xyz[coords[2]]
                 x,y,z = xyz[0],xyz[1],xyz[2]
                 #move z down, flip if component b
-                z = -(2*self.n-1)*z-0.5*self.real_component_size
+                z = -(2*n-1)*z-0.5*self.real_component_size
                 #string
                 x = str(round(x,d))
                 y = str(round(y,d))

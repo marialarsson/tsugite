@@ -299,7 +299,6 @@ def arrow_vertices(self):
     return vertices
 
 def milling_path_vertices(self,n):
-    #if n==1: self.coords[2] = -self.coords[2]
     vertices = []
     # Parameters
     r = g = b = tx = ty = 0.0
@@ -329,7 +328,7 @@ def milling_path_vertices(self,n):
                 ind = [j,k]
                 ind.insert(ax,n_*(self.dim-n_)+(2*n-1)*i) # 0 when n is 1, dim-1 when n is 0
                 val = self.voxel_matrix[tuple(ind)]
-                if val==n: continue # dont cut out if material is there, continue
+                if int(val)==n: continue # dont cut out if material is there, continue
                 # if previous was mill axis neighbor, its already been cut, continue
                 if ind[mill_ax]>0:
                     ind_pre = ind.copy()
@@ -618,7 +617,6 @@ def arrow_indices(self,all_indices,slide_dirs,n,offset):
     line_indices = []
     face_indices = []
     for ax,dir in slide_dirs:
-        if n==1: dir = 1-dir
         #arrow line
         start = 1+10*ax+5*dir
         line_indices.extend([0, start])
@@ -642,14 +640,14 @@ def arrow_indices(self,all_indices,slide_dirs,n,offset):
     # Return
     return line_indices_prop, face_indices_prop, all_indices
 
-def milling_path_indices(self,all_indices,no,start,n):
+def milling_path_indices(self,all_indices,count,start,n):
     indices = []
-    for i in range(start,start+no):
-        indices.append(int(i))
+    for i in range(count):
+        indices.append(int(start+i))
     # Format
     indices = np.array(indices, dtype=np.uint32)
     # Store
-    indices_prop = ElementProperties(GL_LINE_LOOP, len(indices), len(all_indices), n)
+    indices_prop = ElementProperties(GL_LINE_STRIP, len(indices), len(all_indices), n)
     all_indices = np.concatenate([all_indices, indices])
     # Return
     return indices_prop, all_indices
@@ -722,10 +720,17 @@ class Geometries:
             self.voxel_matrix_from_height_fields()
             self.create_indices()
 
-    def update_joint_type(self,joint_type_):
-        self.joint_type = joint_type_
-        if self.joint_type=="X" and self.sliding_directions[0][0]==[2,0]:
+    def update_joint_type(self,joint_type,noc):
+        self.joint_type = joint_type
+        if self.noc!=noc:
+            if noc==3: self.sliding_directions = [ [[2,0]], [[2,1],[1,1]], [[1,0]] ]
+            else: self.sliding_directions = [ [[2,0]], [[2,1]] ]
+        self.noc = noc
+        if self.joint_type=="X" and self.sliding_directions[0][0]==[2,0] and self.noc==2:
             self.update_sliding_direction([[[1,0]],[[1,1]]])
+        if self.joint_type=="I" and self.noc==3:
+            self.joint_type="L"
+
         self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
@@ -761,20 +766,14 @@ class Geometries:
         self.create_vertices()
         self.create_indices()
 
-    def update_number_of_components(self,num):
-        self.noc = num
-        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
-        self.sliding_directions = [ [[2,0]], [[2,1],[1,1]], [[1,0]] ]
-        self.voxel_matrix_from_height_fields()
-        self.create_vertices()
-        self.create_indices()
+    def create_vertices(self, milling_path=False):
 
-    def create_vertices(self):
-
-        ### VERTICIES FOR JOINT ###
+        ### VERTICIES FOR JOINT and VERTICIES FOR MILLING PATHS ###
         self.jverts = []
+        self.mverts = []
         for n in range(self.noc):
             self.jverts.append(joint_vertices(self,n))
+            if milling_path: self.mverts.append(milling_path_vertices(self,n))
 
         ### EXTRA VERTICIES FOR ROUNDED CORNERS OF FABRICATED JOINT ###
         #ve_A = joint_extra_vertices(self,"A",0.0,0.0,0.0)
@@ -783,26 +782,25 @@ class Geometries:
         ### VERTICIES FOR ARROWS DISPLAYING SLIDING DIRECTIONS ###
         va = arrow_vertices(self)
 
-        ### VERTICIES FOR MILLING PATHS ###
-        #self.mverts = []
-        #for n in range(self.noc):
-        #    self.mverts.append(milling_path_vertices(self,n))
-
         jverts = np.concatenate(self.jverts)
-        #mverts = np.concatenate(self.mverts)
-        self.vertices = np.concatenate([jverts, va])
+        if not milling_path: self.vertices = np.concatenate([jverts, va])
+        else:
+            mverts = np.concatenate(self.mverts)
+            self.vertices = np.concatenate([jverts, va, mverts])
+
 
         self.vn =  int(len(self.jverts[0])/8)
         self.ven = 0
-        van = int(len(va)/8)
-        #self.m_start = []
-        #mst = 2*self.vn+2*self.ven+van
-        #for n in range(self.noc):
-        #    self.m_start.append(mst)
-        #    mst += int(len(self.mverts[n])/8)
+        self.van = int(len(va)/8)
+        if milling_path:
+            self.m_start = []
+            mst = 2*self.vn +2*self.ven+self.van
+            for n in range(self.noc):
+                self.m_start.append(mst)
+                mst += int(len(self.mverts[n])/8)
         Buffer.buffer_vertices(self.buff)
 
-    def create_indices(self):
+    def create_indices(self, milling_path=False):
         all_inds = []
 
         self.indices_fend = []
@@ -836,7 +834,7 @@ class Geometries:
                     fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.fixed_sides[n][m]],n,n*self.vn)
                     unbris.append(unbri)
             else: unbris = None
-            #mill,all_inds = milling_path_indices(self,all_inds,len(self.mverts[n]),self.m_start[n],n)
+
 
             #picking faces
             faces_not_tops, faces_tops, all_inds = joint_top_face_indices(self,all_inds,n,n*self.vn)
@@ -849,9 +847,11 @@ class Geometries:
                 self.indices_open_lines.append(open)
 
             #arrows
-            #larr, farr, all_inds = arrow_indices(self, all_inds,[self.sliding_directions[0]],n,self.noc*self.vn+2*self.ven)
             larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,self.noc*self.vn+2*self.ven)
             arrows = [larr,farr]
+
+            if milling_path:
+                mill,all_inds = milling_path_indices(self,all_inds,int(len(self.mverts[n])/8),self.m_start[n],n)
 
             # Append lists
             self.indices_fend.append(end)
@@ -863,7 +863,9 @@ class Geometries:
             self.indices_arrows.append(arrows)
             self.indices_ftop.append(faces_tops)
             self.indices_not_ftop.append(faces_not_tops)
-            #self.indices_milling_path.append(mill)
+            if milling_path:
+                self.indices_milling_path.append(mill)
+
 
         #outline of selected faces
         if self.select.state==2:
@@ -875,7 +877,7 @@ class Geometries:
     def save(self):
         np.save("data/saved_height_field.npy",self.height_field)
         np.save("data/saved_height_field2.npy",self.height_field2)
-        #np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
+        np.save("data/saved_voxel_matrix.npy",self.voxel_matrix)
         #np.save("data/saved_voxel_matrix_with_fixed_sides.npy",self.voxel_matrix_with_sides)
         #np.save("data/saved_fixed_sides.npy",self.fixed_sides)
 

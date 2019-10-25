@@ -33,17 +33,26 @@ def get_sliding_directions(mat,noc):
     for n in range(noc): # Browse the components
         mat_sliding = []
         for ax in range(3): # Browse the three possible sliding axes
+            oax = [0,1,2]
+            oax.remove(ax)
             for dir in range(2): # Browse the two possible directions of the axis
                 slides_in_this_direction = True
-                cols = get_columns(mat,ax) # Columns corresponding to this direction
-                if dir==0: cols = reverse_columns(cols)
-                for col in cols:
-                    first_same = False
-                    for i in range(len(col)):
-                        if col[i]==n: first_same = True; continue
-                        elif first_same==True and (col[i]!=n and col[i]>0):
-                            slides_in_this_direction=False; break
-                    if slides_in_this_direction==False: break #stop checking further columns if one was blocking the slide
+                for i in range(mat.shape[oax[0]]):
+                    for j in range(mat.shape[oax[1]]):
+                        first_same = False
+                        for k in range(mat.shape[ax]):
+                            if dir==0: k = mat.shape[ax]-k-1
+                            ind = [i,j]
+                            ind.insert(ax,k)
+                            val = mat[tuple(ind)]
+                            if val==n:
+                                first_same = True
+                                continue
+                            elif first_same and val!=-1:
+                                slides_in_this_direction=False
+                                break
+                        if slides_in_this_direction==False: break
+                    if slides_in_this_direction==False: break
                 if slides_in_this_direction==True:
                     mat_sliding.append([ax,dir])
         sliding_directions.append(mat_sliding)
@@ -61,14 +70,19 @@ def add_fixed_sides(mat,fixed_sides):
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
     # Take care of corners ########################needs to be adjusted for 3 components....!!!!!!!!!!!!!!!!!!
-    for ax,dir in fixed_sides[0]:
-        for ax2,dir2 in fixed_sides[1]:
-            if ax==ax2: continue
-            for i in range(dim):
-                ind = [i,i,i]
-                ind[ax] =  dir*(mat.shape[ax]-1)
-                ind[ax2] = dir2*(mat.shape[ax2]-1)
-                mat[tuple(ind)] = -1
+    for fixed_sides_1 in fixed_sides:
+        for fixed_sides_2 in fixed_sides:
+            for ax,dir in fixed_sides_1:
+                for ax2,dir2 in fixed_sides_2:
+                    if ax==ax2: continue
+                    for i in range(dim+2):
+                        ind = [i,i,i]
+                        ind[ax] =  dir*(mat.shape[ax]-1)
+                        ind[ax2] = dir2*(mat.shape[ax2]-1)
+                        try:
+                            mat[tuple(ind)] = -1
+                        except:
+                            a = 0
     return mat
 
 def get_columns(mat,ax):
@@ -204,6 +218,8 @@ class Evaluation:
 
     def update(self,parent):
         self.voxel_matrix_with_sides = add_fixed_sides(parent.voxel_matrix, parent.fixed_sides)
+        #print(parent.voxel_matrix)
+        #print(self.voxel_matrix_with_sides)
         # Sliding directions
         self.slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
         # Friction
@@ -228,6 +244,7 @@ class Evaluation:
                     if not self.bridged[n]:
                         voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(parent,n)
                         self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
+        #print("Valid sliding directions",self.slides)
 
     def seperate_unconnected(self,parent):
         connected_mat = np.zeros((parent.dim,parent.dim,parent.dim))-1
