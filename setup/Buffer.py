@@ -17,7 +17,7 @@ class Buffer:
         self.EBO = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
         self.vertex_no_info = 8
-        image = Image.open("textures/end_grain.jpg")
+        image = Image.open("textures/end_grain_rect.jpg")
         self.img_data = np.array(list(image.getdata()), np.uint8)
 
     def buffer_vertices(self):

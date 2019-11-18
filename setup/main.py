@@ -119,10 +119,11 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_H: view_opt.show_hidden_lines = not view_opt.show_hidden_lines
         elif key==glfw.KEY_F:
             mesh.fab_geometry = not mesh.fab_geometry
-            Geometries.create_and_buffer_indicies(mesh)
-        elif key==glfw.KEY_O: view_opt.open_joint = (view_opt.open_joint+1)%mesh.noc
-        elif key==glfw.KEY_S: print("Saving..."); Geometries.save(mesh)
-        elif key==glfw.KEY_G: print("Loading..."); Geometries.load(mesh)
+            Geometries.create_vertices(mesh)
+            Geometries.create_indices(mesh)
+        elif key==glfw.KEY_SPACE: view_opt.open_joint = (view_opt.open_joint+1)%mesh.noc
+        elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(mesh)
+        elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(mesh)
         elif key==glfw.KEY_M:
             view_opt.show_milling_path = not view_opt.show_milling_path
             if view_opt.show_milling_path:
@@ -134,8 +135,11 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
         elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
         elif key==glfw.KEY_P: save_screenshot(window)
-        elif key==glfw.KEY_K: mesh.fab.export_gcode("joint")
+        elif key==glfw.KEY_G: mesh.fab.export_gcode("joint")
         elif key==glfw.KEY_Z: Geometries.undo(mesh)
+        elif key==glfw.KEY_N:
+            mesh.grain_rotation = (mesh.grain_rotation+(math.pi/4))%(2*math.pi)
+            print(mesh.grain_rotation)
     elif action==glfw.RELEASE:
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
             mesh.select.shift = False
@@ -158,6 +162,7 @@ def save_screenshot(window):
     image = np.flip(image,axis=0)
     image = np.flip(image,axis=2)
     cv2.imwrite("screenshot.png", image)
+    print("Saved screenshot.png.")
 
 def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
     mesh, view_opt = glfw.get_window_user_pointer(window)
@@ -495,8 +500,8 @@ def main():
         init_shader(shader_tex, view_opt)
         display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
-        if not all(mesh.eval.connected): display_unconnected(window,mesh)
-        if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
+        if not all(mesh.eval.connected) and not mesh.fab_geometry: display_unconnected(window,mesh)
+        if not all(mesh.eval.bridged) and not mesh.fab_geometry: display_unbridged(window,mesh,view_opt)
         if mesh.select.state!=-1: display_selected(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
@@ -513,13 +518,13 @@ if __name__ == "__main__":
     print("I L T X - edit joint type")
     print("2 3 4 5 - change voxel resolution")
     print("Arrow keys - edit joint sliding direction")
-    print("O - open joint")
+    print("SPACE - open joint")
     print("A B C - hide components")
     print("H - hide hidden lines")
     print("M - show milling path")
-    print("K - export gcode for milling path")
+    print("G - export gcode for milling path")
     print("S - save")
-    print("G - open")
+    print("O - open")
     print("P - save screenshot")
     print("ESC - quit\n")
     main()
