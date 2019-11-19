@@ -285,6 +285,18 @@ def get_diff_neighbors(mat2,inds,val):
         new_inds = get_diff_neighbors(mat2,new_inds,val)
     return new_inds
 
+def get_neighbors_in_out(ind,reg_inds):
+    in_out = []
+    for add0 in range(2):
+        temp = []
+        for add1 in range(2):
+            ind0 = [ind[0]+add0,ind[1]+add1]
+            if ind0 in reg_inds: temp.append(True)
+            else: temp.append(False)
+        in_out.append(temp)
+    return in_out
+
+
 # Create vertex lists functions
 
 def joint_vertices(self,n):
@@ -421,11 +433,16 @@ def milling_path_vertices(self,n):
             reg_inds = get_diff_neighbors(lay_mat,[inds[0]],n)
             for reg_ind in reg_inds: lay_mat[tuple(reg_ind)]=n # overwrite detedted regin in original matrix
 
-            # Get all edge vertices of the region
+            # Get all edge vertices of the outline of the region
+            voxverts = []
+            for i in range(self.dim):
+                for j in range(self.dim):
+                    ind = [i,j]
+                    neigbors = get_neighbors_in_out(ind,reg_inds)
+                    print(neigbors)
+"""
+                    ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num)
 
-            # Define outline of region
-            outline = []
-            for reg_ind in reg_inds:
 
                 reg_ind = [reg_ind[0],reg_ind[1]]
                 reg_ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num)
@@ -449,7 +466,7 @@ def milling_path_vertices(self,n):
                 outline.extend([pt1,pt2,pt3,pt4,pt1])
             vertices.extend(get_layered_vertices(self,outline,n,lay_num,ax,no_z,dep,r,g,b,tx,ty))
 
-        """
+
         for j in range(self.dim):
             for k in range(self.dim):
                 ind = [j,k]

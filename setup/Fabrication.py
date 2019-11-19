@@ -7,6 +7,15 @@ class Region:
         self.verts = []
         self.voxels = []
 
+class VoxelVertex:
+    def __init__(self):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.i = i
+        self.j = j
+        self.lay_num = lay_num
+
 
 class Fabrication:
     def __init__(self,parent):
