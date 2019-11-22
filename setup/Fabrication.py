@@ -1,21 +1,16 @@
 import numpy as np
 import math
 
-class Region:
-    def __init__(self,parent,layer):
-        self.layer = layer()
-        self.verts = []
-        self.voxels = []
+class RegionVertex:
+    def __init__(self,ind,neighbors,flat_neighbors):
+        self.ind = ind
+        self.i = ind[0]
+        self.j = ind[1]
+        self.neighbors = neighbors
+        self.flat_neighbors = flat_neighbors
 
-class VoxelVertex:
-    def __init__(self):
-        self.x = x
-        self.y = y
-        self.z = z
-        self.i = i
-        self.j = j
-        self.lay_num = lay_num
-
+    def set_pos(self,pos):
+        self.pos = pos
 
 class Fabrication:
     def __init__(self,parent):
@@ -56,6 +51,28 @@ class Fabrication:
                 x = self.parent.mverts[n][i]
                 y = self.parent.mverts[n][i+1]
                 z = self.parent.mverts[n][i+2]
+                # check segment angle
+                arc = False
+                if i>0:
+                    px = self.parent.mverts[n][i-8]
+                    py = self.parent.mverts[n][i+1-8]
+                    pz = self.parent.mverts[n][i+2-8]
+                    pt = np.array([x,y,z],dtype=np.float64)
+                    ppt = np.array([px,py,pz],dtype=np.float64)
+                    if np.sum((ppt-pt)==0)==1:
+                        arc = True
+                        clockwise=False
+                        ppx = self.parent.mverts[n][i-16]
+                        ppy = self.parent.mverts[n][i+1-16]
+                        ppz = self.parent.mverts[n][i+2-16]
+                        pppt = np.array([ppx,ppy,ppz],dtype=np.float64)
+                        vec1 = ppt-pppt
+                        vec2 = pt-ppt
+                        crossp = np.cross(vec1,vec2)
+                        crossi = np.argwhere(crossp!=0)[0][0]
+                        crossv = crossp[crossi]
+                        if crossv<0 and n==1: clockwise=True
+                        elif crossv>0 and n==0: clockwise=True
                 #convert from virtul dimensions to mm
                 x = self.ratio*x
                 y = self.ratio*y
@@ -71,8 +88,13 @@ class Fabrication:
                 y = str(round(y,d))
                 z = str(round(z,d))
                 #write to file
-                if x_!=x or y_!=y: file.write("G01 X "+x+" Y "+y+" F "+str(speed)+"\n")
-                if z_!=z: file.write("G01 Z "+z+" F "+str(speed)+"\n")
+                if not arc:
+                    if x_!=x or y_!=y: file.write("G01 X "+x+" Y "+y+" F "+str(speed)+"\n")
+                    if z_!=z: file.write("G01 Z "+z+" F "+str(speed)+"\n")
+                elif clockwise:
+                    file.write("G02 X "+x+" Y "+y+" R "+str(self.dia)+" F "+str(speed)+"\n")
+                else:
+                    file.write("G03 X "+x+" Y "+y+" R "+str(self.dia)+" F "+str(speed)+"\n")
                 x_ = x
                 y_ = y
                 z_ = z
