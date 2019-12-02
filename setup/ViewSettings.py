@@ -25,7 +25,8 @@ class ViewSettings:
         self.distance2 = 0
 
         # Mouse rotation variables
-        self.xrot, self.yrot = 0.8, 0.4
+        #self.xrot, self.yrot = 0.8, 0.4
+        self.xrot, self.yrot = 1.2, 0.1
         self.xrot0, self.yrot0 = self.xrot, self.yrot
         self.xstart = self.ystart = 0.0
         self.dragged = False

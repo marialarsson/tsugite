@@ -157,8 +157,8 @@ def mouseCallback(window,button,action,mods):
         elif action==0: ViewSettings.end_rotation(view_opt)
 
 def save_screenshot(window):
-    image_buffer = glReadPixels(0, 0, 800, 800, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
-    image = np.frombuffer(image_buffer, dtype=np.uint8).reshape(800, 800, 3)
+    image_buffer = glReadPixels(0, 0, 1600, 1600, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
+    image = np.frombuffer(image_buffer, dtype=np.uint8).reshape(1600, 1600, 3)
     image = np.flip(image,axis=0)
     image = np.flip(image,axis=2)
     cv2.imwrite("screenshot.png", image)
@@ -237,7 +237,7 @@ def initialize():
     if not glfw.init():
         return
     # Create window
-    window = glfw.create_window(800, 800, "DISCO JOINT", None, None)
+    window = glfw.create_window(1600, 1600, "DISCO JOINT", None, None)
     if not window:
         glfw.terminate()
         return
@@ -445,7 +445,7 @@ def pick(window, mesh, view_opt, shader_col):
     ############### Read pixel color at mouse position ###############
 
     xpos,ypos = glfw.get_cursor_pos(window)
-    mouse_pixel = glReadPixelsub(xpos, 800-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
+    mouse_pixel = glReadPixelsub(xpos, 1600-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
     mouse_pixel = np.array(mouse_pixel)
     pick_n = pick_x = pick_y = None
     if not np.all(mouse_pixel==255) and np.any(mouse_pixel==255):
