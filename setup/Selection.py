@@ -64,10 +64,10 @@ class Selection:
         mouse_vec[1] = mouse_vec[1]/800
         ## Sliding direction vector
         sdir_vec = [0,0,0]
-        ax = self.parent.sliding_directions[self.n][0][0]
-        dir = self.parent.sliding_directions[self.n][0][1]
+        ax = self.parent.sax
+        dir = self.parent.fab_directions[self.n]
         sdir_vec[ax] = (2*dir-1)*self.parent.voxel_size
-        if self.n==1: sdir_vec[ax] = -sdir_vec[ax] 
+        if self.n==1: sdir_vec[ax] = -sdir_vec[ax]
         rot_x = pyrr.Matrix33.from_x_rotation(screen_xrot)
         rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
         sdir_vec = np.dot(sdir_vec,rot_x*rot_y)

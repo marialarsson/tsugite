@@ -53,13 +53,15 @@ class MillVertex:
         self.is_arc = is_arc
         self.arc_ctr = np.array(arc_ctr)
 
-    def scale_and_swap(self,ratio,real_component_size,coords,d,n):
+    def scale_and_swap(self,ax,dir,ratio,real_component_size,coords,d,n):
         #sawp
         xyz = [ratio*self.x,ratio*self.y,ratio*self.z]
+        if ax==2: xyz[1] = -xyz[1]
         xyz = xyz[coords[0]],xyz[coords[1]],xyz[coords[2]]
         self.x,self.y,self.z = xyz[0],xyz[1],xyz[2]
         #move z down, flip if component b
-        self.z = -(2*n-1)*self.z-0.5*real_component_size
+        self.z = -(2*dir-1)*self.z-0.5*real_component_size
+        self.y = -(2*dir-1)*self.y
         self.pt = np.array([self.x,self.y,self.z])
         self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
         self.xstr = str(round(self.x,d))
@@ -68,17 +70,43 @@ class MillVertex:
         ##
         if self.is_arc:
             self.arc_ctr = [ratio*self.arc_ctr[0],ratio*self.arc_ctr[1],ratio*self.arc_ctr[2]] #ratio*self.arc_ctr
+            if ax==2: self.arc_ctr[1] = -self.arc_ctr[1]
             self.arc_ctr = [self.arc_ctr[coords[0]],self.arc_ctr[coords[1]],self.arc_ctr[coords[2]]]
-            self.arc_ctr[2] = -(2*n-1)*self.arc_ctr[2]-0.5*real_component_size
+            self.arc_ctr[2] = -(2*dir-1)*self.arc_ctr[2]-0.5*real_component_size
+            self.arc_ctr[1] = -(2*dir-1)*self.arc_ctr[1]
+            self.arc_ctr = np.array(self.arc_ctr)
+
+    def rotate90(self,d):
+        self.x,self.y,self.z = self.y,-self.x,self.z
+        self.pt = np.array([self.x,self.y,self.z])
+        self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
+        self.xstr = str(round(self.x,d))
+        self.ystr = str(round(self.y,d))
+        self.zstr = str(round(self.z,d))
+        ##
+        if self.is_arc:
+            self.arc_ctr = [self.arc_ctr[1],-self.arc_ctr[0],self.arc_ctr[2]]
+            self.arc_ctr = np.array(self.arc_ctr)
+
+    def rotate180(self,d):
+        self.x,self.y,self.z = -self.x,-self.y,self.z
+        self.pt = np.array([self.x,self.y,self.z])
+        self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
+        self.xstr = str(round(self.x,d))
+        self.ystr = str(round(self.y,d))
+        self.zstr = str(round(self.z,d))
+        ##
+        if self.is_arc:
+            self.arc_ctr = [-self.arc_ctr[0],-self.arc_ctr[1],self.arc_ctr[2]]
             self.arc_ctr = np.array(self.arc_ctr)
 
 class Fabrication:
     def __init__(self,parent):
         self.parent = parent
-        self.real_component_size = 30 #44.45 #mm
+        self.real_component_size = 29.5 #44.45 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 2.0 #2.9 #milling bit radius in mm
+        self.rad = 2.85 #3.0 #milling bit radius in mm
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio
         self.vrad = self.rad/self.ratio
@@ -86,13 +114,20 @@ class Fabrication:
         self.vext = self.ext/self.ratio
         self.dep = 1.0 #milling depth in mm
 
-
     def export_gcode(self,file_name):
-        if self.parent.sliding_directions[0][0][0]==2: coords = [0,1,2]
-        elif self.parent.sliding_directions[0][0][0]==1: coords = [2,0,1]
+        # make sure that the z axis of the gcode is facing up
+        ax = self.parent.sax
+        coords = [0,1]
+        coords.insert(ax,2)
+        #
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
         for n in range(self.parent.noc):
+            fax = self.parent.fixed_sides[n][0][0]
+            fdir = self.parent.fixed_sides[n][0][1]
+            # rotate 90 degrees if L jonts
+            dir = self.parent.fab_directions[n]
+            #
             file_name = "joint_"+names[n]
             file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".gcode","w")
             ###initialization
@@ -106,7 +141,10 @@ class Fabrication:
             speed = 200
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
-                mv.scale_and_swap(self.ratio,self.real_component_size,coords,d,n)
+                mv.scale_and_swap(ax,dir,self.ratio,self.real_component_size,coords,d,n)
+                if fax!=ax:
+                    if fax==2: mv.rotate90(d)
+                    if fdir==1: mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False

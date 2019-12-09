@@ -6,27 +6,21 @@ import random
 class ViewSettings:
     def __init__(self):
         # Visibility variables
-        self.hidden = [False,False,False,False]
+        self.hidden = [False,False,False,False,False,False]
         self.show_hidden_lines = True
-        self.show_arrows = False
+        self.show_arrows = True
         self.show_milling_path = False
 
         # Joint opening variables
-        self.open_joint = 0 # 0 closed, 1 first open, 2 first and second open
+        self.open_joint = False
         self.open_start_time = None
         self.close_start_time = None
-        self.open_start_time2 = None
-        self.close_start_time2 = None
         self.open_start_dist = 0
-        self.open_start_dist2 = 0
         self.close_start_dist = 0
-        self.close_start_dist2 = 0
-        self.distance = 0
-        self.distance2 = 0
+        self.open_ratio = 0
 
         # Mouse rotation variables
-        #self.xrot, self.yrot = 0.8, 0.4
-        self.xrot, self.yrot = 1.2, 0.1
+        self.xrot, self.yrot = 0.8, 0.4
         self.xrot0, self.yrot0 = self.xrot, self.yrot
         self.xstart = self.ystart = 0.0
         self.dragged = False
@@ -40,41 +34,22 @@ class ViewSettings:
         col_grey = [0.95,0.95,0.95]
         self.unbridge_colors = [[col_yellow,col_turkoise],[col_pink,col_orange],[col_purple,col_grey]]
 
-    def set_joint_opening_distance(self,geometry):
-        if self.open_joint>0:
+    def set_joint_opening_distance(self,noc):
+        if self.open_joint: # open joint
             if self.open_start_time==None:
                 self.open_start_time = glfw.get_time()
                 self.close_start_time = None
-            self.distance = self.open_start_dist + 0.4 * (glfw.get_time()-self.open_start_time)
-            if self.distance>=geometry.component_size:
-                self.distance = geometry.component_size
-                if self.open_joint>1:
-                    if self.open_start_time2==None:
-                        self.open_start_time2 = glfw.get_time()
-                        self.close_start_time2 = None
-                    self.distance2 = self.open_start_dist2 + 0.4 * (glfw.get_time()-self.open_start_time2)
-                    if self.distance2>geometry.component_size:
-                        self.distance2 = geometry.component_size
-                else: self.distance2 = 0
-            self.close_start_dist = self.distance
-            self.close_start_dist2 = self.distance2
-        else:
+            self.open_ratio = self.open_start_dist + 1.2 * (glfw.get_time()-self.open_start_time)
+            if self.open_ratio>=noc-1:
+                self.open_ratio=noc-1
+            self.close_start_dist = self.open_ratio
+        else: # close joint
             if self.close_start_time==None:
                 self.close_start_time = glfw.get_time()
                 self.open_start_time = None
-                self.open_start_time2 = None
-            if geometry.noc==2:
-                self.distance2=0
-                self.close_start_dist2=0
-            self.distance2 = self.close_start_dist2 - 0.4 * (glfw.get_time()-self.close_start_time)
-            if self.distance2<=0:
-                self.distance2 = 0
-                self.distance = self.close_start_dist - 0.4 * (glfw.get_time()-self.close_start_time) + self.close_start_dist2
-                if self.distance<0: self.distance = 0
-            self.open_start_dist = self.distance
-            self.open_start_dist2 = self.distance2
-
-
+            self.open_ratio = self.close_start_dist - 1.2 * (glfw.get_time()-self.close_start_time)
+            if self.open_ratio<0: self.open_ratio = 0
+            self.open_start_dist = self.open_ratio
 
     def update_rotation(self, window):
         # Rotate view by dragging

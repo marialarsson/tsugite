@@ -205,25 +205,207 @@ def get_indices_of_same_neighbors(indices,mat):
         neighbors = np.unique(neighbors, axis=0)
     return neighbors
 
+def get_same_neighbors_2d(mat2,inds,val):
+    new_inds = list(inds)
+    for ind in inds:
+        for ax in range(2):
+            for dir in range(-1,2,2):
+                ind2 = ind.copy()
+                ind2[ax] += dir
+                if ind2[ax]>=0 and ind2[ax]<mat2.shape[ax]:
+                    val2 = mat2[tuple(ind2)]
+                    if val2!=val: continue
+                    unique = True
+                    for ind3 in new_inds:
+                        if ind2[0]==ind3[0] and ind2[1]==ind3[1]:
+                            unique = False
+                            break
+                    if unique: new_inds.append(ind2)
+    if len(new_inds)>len(inds):
+        new_inds = get_same_neighbors_2d(mat2,new_inds,val)
+    return new_inds
+
+def get_chessboard_vertics(mat,ax,noc):
+    chess = False
+    dim = len(mat)
+    verts = []
+    for i in range(dim):
+        for j in range(dim):
+            for k in range(dim):
+                ind3d = [i,j,k]
+                ind2d = ind3d.copy()
+                ind2d.pop(ax)
+                if ind2d[0]<1 or ind2d[1]<1: continue
+                neighbors = []
+                flat_neigbors = []
+                for x in range(-1,1,1):
+                    temp = []
+                    for y in range(-1,1,1):
+                        nind = ind2d.copy()
+                        nind[0]+=x
+                        nind[1]+=y
+                        nind.insert(ax,ind3d[ax])
+                        val = mat[tuple(nind)]
+                        temp.append(val)
+                        flat_neigbors.append(val)
+                    neighbors.append(temp)
+                flat_neigbors = np.array(flat_neigbors)
+                #print(neighbors,flat_neigbors)
+                counts = []
+                for n in range(noc):
+                    cnt = np.sum(flat_neigbors==n)
+                    counts.append(cnt)
+                counts = np.array(counts)
+                if np.sum(counts==2)==2: # count 2 for 2 materials
+                    if neighbors[0][1]==neighbors[1][0]: # diagonal
+                        chess = True
+                        verts.append(ind3d)
+    return chess,verts
+
+def is_connected_to_fixed_side_2d(inds,fixed_sides,ax,dim):
+    connected = False
+    for fax,fdir in fixed_sides:
+        fax2d = [0,0,0]
+        fax2d[fax] = 1
+        fax2d.pop(ax)
+        fax2d = fax2d.index(1)
+        for ind in inds:
+            if ind[fax2d]==fdir*(dim-1):
+                connected = True
+                break
+        if connected: break
+    return connected
+
+def get_breakable_voxels(mat,fixed_sides,sax,n):
+    breakable = False
+    indices = []
+    dim = len(mat)
+    gax = fixed_sides[0][0] # grain axis
+
+    if gax!=sax: # if grain direction does not equal to the sliding direction
+
+        paxes = [0,1,2]
+        paxes.pop(gax) # perpendicular to grain axis
+
+        for pax in paxes:
+            all_reg_inds = []
+            for lay_num in range(dim):
+                temp = []
+
+                lay_mat = layer_mat(mat,pax,dim,lay_num)
+
+                for reg_num in range(dim*dim): # region number
+
+                    # Get indices of a region
+                    inds = np.argwhere((lay_mat!=-1) & (lay_mat==n))
+                    if len(inds)==0: break
+                    reg_inds = get_same_neighbors_2d(lay_mat,[inds[0]],n)
+
+                    # Check if any item in this region is connected to a fixed side
+                    fixed = is_connected_to_fixed_side_2d(reg_inds,fixed_sides,pax,dim)
+
+                    if not fixed:
+                        breakable = True
+                        temp.append(reg_inds)
+
+                    # Overwrite detected regin in original matrix
+                    for reg_ind in reg_inds: lay_mat[tuple(reg_ind)]=-1
+                all_reg_inds.append(temp)
+
+            # Check more details, if it is really loose, and where to draw the section
+            for lay_num in range(dim):
+                temp = []
+                for reg_inds in all_reg_inds[lay_num]:
+                    # Is there SAME material above or below any voxel in this region
+                    up = False
+                    dn = False
+                    for reg_ind in reg_inds:
+
+                        # get 3d index
+                        ind3d = reg_ind.copy()
+                        ind3d = list(ind3d)
+                        ind3d.insert(pax,lay_num)
+
+                        # check up
+                        ind3d_up = ind3d.copy()
+                        ind3d_up[pax]+=1
+                        if ind3d_up[pax]<dim:
+                            val = mat[tuple(ind3d_up)]
+                            if val==n: up=True
+
+                        # check down
+                        ind3d_down = ind3d.copy()
+                        ind3d_down[pax]-=1
+                        if ind3d_down[pax]>=0:
+                            val = mat[tuple(ind3d_down)]
+                            if val==n: dn=True
+
+                        #if up and dn: break
+                    if up or dn:
+                        for reg_ind in reg_inds:
+                            out_up = []
+                            out_dn = []
+                            for x in range(2):
+                                for y in range(2):
+                                    oind = list(reg_ind.copy())
+                                    oind[0]+=x
+                                    oind[1]+=y
+                                    oind.insert(pax,lay_num)
+                                    if dn:
+                                        out_dn.append(oind)
+                                    if up:
+                                        oind[pax]+=1
+                                        out_up.append(oind)
+                            if dn: indices.extend([out_dn[0],out_dn[1],out_dn[1],out_dn[3],out_dn[3],out_dn[2],out_dn[2],out_dn[0]])
+                            if up: indices.extend([out_up[0],out_up[1],out_up[1],out_up[3],out_up[3],out_up[2],out_up[2],out_up[0]])
+
+    return breakable,indices
+
+def layer_mat(mat3d,ax,dim,lay_num):
+    mat2d = np.ndarray(shape=(dim,dim), dtype=int)
+    for i in range(dim):
+        for j in range(dim):
+            ind = [i,j]
+            ind.insert(ax,lay_num)
+            mat2d[i][j]=int(mat3d[tuple(ind)])
+    return mat2d
+
 class Evaluation:
     def __init__(self,parent):
         self.parent = parent
         self.slides = []
         self.connected = []
         self.bridged = []
+        self.breakable = []
+        self.chess = False
         self.voxel_matrix_connected = None
         self.voxel_matrix_unconnected = None
         self.voxel_matrices_unbridged = []
+        self.chessboard_vertices = []
+        self.breakable_voxel_inds = []
         self.update(parent)
 
     def update(self,parent):
         self.voxel_matrix_with_sides = add_fixed_sides(parent.voxel_matrix, parent.fixed_sides)
-        #print(parent.voxel_matrix)
-        #print(self.voxel_matrix_with_sides)
+
         # Sliding directions
         self.slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
+
         # Friction
-        friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
+        #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
+
+        sax = parent.sax # sliding axis
+
+        # Chessboard
+        self.chess, self.chess_vertices = get_chessboard_vertics(parent.voxel_matrix,sax,parent.noc)
+        ### needs to be further divided for when you have 3 or more components.
+
+        # Grain direction
+        for n in range(parent.noc):
+            brk,brk_inds = get_breakable_voxels(parent.voxel_matrix,parent.fixed_sides[n],sax,n)
+            self.breakable.append(brk)
+            self.breakable_voxel_inds.append(brk_inds)
+
         # Voxel connection and bridgeing
         self.connected = []
         self.bridged = []
@@ -237,14 +419,12 @@ class Evaluation:
         if not all(self.connected):
             self.seperate_unconnected(parent)
             # Bridging
-            if parent.joint_type=="T" or parent.joint_type=="X":
-                voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, parent.fixed_sides)
-                for n in range(parent.noc):
-                    self.bridged[n] = is_connected(voxel_matrix_connected_with_sides,n)
-                    if not self.bridged[n]:
-                        voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(parent,n)
-                        self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
-        #print("Valid sliding directions",self.slides)
+            voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, parent.fixed_sides)
+            for n in range(parent.noc):
+                self.bridged[n] = is_connected(voxel_matrix_connected_with_sides,n)
+                if not self.bridged[n]:
+                    voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(parent,n)
+                    self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
 
     def seperate_unconnected(self,parent):
         connected_mat = np.zeros((parent.dim,parent.dim,parent.dim))-1

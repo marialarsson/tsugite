@@ -93,35 +93,26 @@ def keyCallback(window,key,scancode,action,mods):
             mesh.select.shift = True
             mesh.select.refresh = True
         # Joint geometry
-        elif key==glfw.KEY_E: Geometries.clear_height_field(mesh)
-        # Joint type
-        elif key==glfw.KEY_I and mesh.joint_type!="I":
-            Geometries.update_joint_type(mesh,"I",mesh.noc)
-        elif key==glfw.KEY_L and mesh.joint_type!="L":
-            Geometries.update_joint_type(mesh,"L",mesh.noc)
-        elif key==glfw.KEY_T and mesh.joint_type!="T":
-            Geometries.update_joint_type(mesh,"T",mesh.noc)
-        elif key==glfw.KEY_X and mesh.joint_type!="X":
-            Geometries.update_joint_type(mesh,"X",mesh.noc)
-        elif key==glfw.KEY_Y:
-            Geometries.update_joint_type(mesh,mesh.joint_type,5-mesh.noc)
+        elif key==glfw.KEY_N: Geometries.clear_height_field(mesh)
+        elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
+        elif key==glfw.KEY_Z: Geometries.undo(mesh)
         # Sliding direction
-        elif key==glfw.KEY_UP and mesh.sliding_directions!=[[[2,0]],[[2,1]]]:
-            if mesh.joint_type!="X":
-                Geometries.update_sliding_direction(mesh,[[[2,0]],[[2,1]]])
-        elif key==glfw.KEY_RIGHT and mesh.sliding_directions!=[[[1,0]],[[1,1]]]:
-            Geometries.update_sliding_direction(mesh,[[[1,0]],[[1,1]]])
+        elif (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and mesh.sax!=2:
+            Geometries.update_sliding_direction(mesh,2)
+        elif key==glfw.KEY_RIGHT and mesh.sax!=1:
+            Geometries.update_sliding_direction(mesh,1)
+        elif key==glfw.KEY_LEFT and mesh.sax!=0:
+            Geometries.update_sliding_direction(mesh,0)
         # Preview options
         elif key==glfw.KEY_A: view_opt.hidden[0] = not view_opt.hidden[0]
         elif key==glfw.KEY_B: view_opt.hidden[1] = not view_opt.hidden[1]
         elif key==glfw.KEY_C: view_opt.hidden[2] = not view_opt.hidden[2]
-        elif key==glfw.KEY_D: view_opt.show_arrows = not view_opt.show_arrows
+        elif key==glfw.KEY_D: view_opt.hidden[3] = not view_opt.hidden[3]
+        elif key==glfw.KEY_E: view_opt.hidden[4] = not view_opt.hidden[4]
+        elif key==glfw.KEY_F: view_opt.hidden[5] = not view_opt.hidden[5]
+        elif key==glfw.KEY_X: view_opt.show_arrows = not view_opt.show_arrows
         elif key==glfw.KEY_H: view_opt.show_hidden_lines = not view_opt.show_hidden_lines
-        elif key==glfw.KEY_F:
-            mesh.fab_geometry = not mesh.fab_geometry
-            Geometries.create_vertices(mesh)
-            Geometries.create_indices(mesh)
-        elif key==glfw.KEY_SPACE: view_opt.open_joint = (view_opt.open_joint+1)%mesh.noc
+        elif key==glfw.KEY_SPACE: view_opt.open_joint = not view_opt.open_joint
         elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(mesh)
         elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(mesh)
         elif key==glfw.KEY_M:
@@ -129,17 +120,15 @@ def keyCallback(window,key,scancode,action,mods):
             if view_opt.show_milling_path:
                 Geometries.create_vertices(mesh,True)
                 Geometries.create_indices(mesh,True)
-        elif key==glfw.KEY_2 and mesh.dim!=2: Geometries.update_dimension(mesh,2)
-        elif key==glfw.KEY_3 and mesh.dim!=3: Geometries.update_dimension(mesh,3)
-        elif key==glfw.KEY_4 and mesh.dim!=4: Geometries.update_dimension(mesh,4)
-        elif key==glfw.KEY_5 and mesh.dim!=5: Geometries.update_dimension(mesh,5)
-        elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
+        elif key==glfw.KEY_RIGHT_BRACKET and mesh.dim<5: Geometries.update_dimension(mesh,mesh.dim+1)
+        elif key==glfw.KEY_LEFT_BRACKET and mesh.dim>2: Geometries.update_dimension(mesh,mesh.dim-1)
+        elif key==glfw.KEY_2 and mesh.noc!=2: Geometries.update_number_of_components(mesh,2)
+        elif key==glfw.KEY_3 and mesh.noc!=3: Geometries.update_number_of_components(mesh,3)
+        elif key==glfw.KEY_4 and mesh.noc!=4: Geometries.update_number_of_components(mesh,4)
+        elif key==glfw.KEY_5 and mesh.noc!=5: Geometries.update_number_of_components(mesh,5)
+        elif key==glfw.KEY_6 and mesh.noc!=6: Geometries.update_number_of_components(mesh,6)
         elif key==glfw.KEY_P: save_screenshot(window)
         elif key==glfw.KEY_G: mesh.fab.export_gcode("joint")
-        elif key==glfw.KEY_Z: Geometries.undo(mesh)
-        elif key==glfw.KEY_N:
-            mesh.grain_rotation = (mesh.grain_rotation+(math.pi/4))%(2*math.pi)
-            print(mesh.grain_rotation)
     elif action==glfw.RELEASE:
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
             mesh.select.shift = False
@@ -148,9 +137,9 @@ def keyCallback(window,key,scancode,action,mods):
 def mouseCallback(window,button,action,mods):
     mesh, view_opt = glfw.get_window_user_pointer(window)
     if button==glfw.MOUSE_BUTTON_LEFT:
-        if action==1: #pressed
+        if action==1 and mesh.select.state==0: #pressed and hovered
             mesh.select.start_pull(glfw.get_cursor_pos(window))
-        elif action==0: #released
+        elif action==0 and mesh.select.state==2: #released
             mesh.select.end_pull()
     elif button==glfw.MOUSE_BUTTON_RIGHT:
         if action==1: ViewSettings.start_rotation(view_opt, window)
@@ -166,18 +155,15 @@ def save_screenshot(window):
 
 def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
     mesh, view_opt = glfw.get_window_user_pointer(window)
-    # Define translation matrices for opening of joint for components A and B
+    # Define translation matrices for opening
     move_vec = [0,0,0]
-    move_vec[mesh.sliding_directions[0][0][0]] = (2*mesh.sliding_directions[0][0][1]-1)*view_opt.distance
+    move_vec[mesh.sax] = view_opt.open_ratio*mesh.component_size
     move_vec = np.array(move_vec)
-    move_vec = move_vec
-    move_vec2 = [0,0,0]
-    if mesh.noc>2: move_vec2[mesh.sliding_directions[2][0][0]] = (2*mesh.sliding_directions[2][0][1]-1)*view_opt.distance2
-    move_vec2 = np.array(move_vec2)
-    move_A = pyrr.matrix44.create_from_translation(move_vec-move_vec2+translation_vec)
-    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec)-move_vec2+translation_vec)
-    move_C = pyrr.matrix44.create_from_translation(np.negative(move_vec)+move_vec2+translation_vec)
-    moves = [move_A,move_B,move_C]
+    moves = []
+    for n in range(mesh.noc):
+        tot_move_vec = (2*n+1-mesh.noc)/(mesh.noc-1)*move_vec
+        move_mat = pyrr.matrix44.create_from_translation(tot_move_vec+translation_vec)
+        moves.append(move_mat)
     if clear_depth_buffer: glClear(GL_DEPTH_BUFFER_BIT)
     for geo in geos:
         if geo==None: continue
@@ -187,23 +173,18 @@ def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.arra
 
 def draw_geometries_with_excluded_area(window, show_geos, screen_geos, translation_vec=np.array([0,0,0])):
     mesh, view_opt = glfw.get_window_user_pointer(window)
-    # Define translation matrices for opening of joint for components A and B
+    # Define translation matrices for opening
     move_vec = [0,0,0]
-    move_vec[mesh.sliding_directions[0][0][0]] = (2*mesh.sliding_directions[0][0][1]-1)*view_opt.distance
+    move_vec[mesh.sax] = view_opt.open_ratio*mesh.component_size
     move_vec = np.array(move_vec)
-    move_vec_show = move_vec + translation_vec
-    move_vec2 = [0,0,0]
-    if mesh.noc>2:
-        move_vec2[mesh.sliding_directions[2][0][0]] = (2*mesh.sliding_directions[2][0][1]-1)*view_opt.distance2
-    move_vec2 = np.array(move_vec2)
-    move_A = pyrr.matrix44.create_from_translation(move_vec-move_vec2)
-    move_B = pyrr.matrix44.create_from_translation(np.negative(move_vec)-move_vec2)
-    move_C = pyrr.matrix44.create_from_translation(np.negative(move_vec)+move_vec2)
-    moves = [move_A,move_B,move_C]
-    move_A_show = pyrr.matrix44.create_from_translation(move_vec_show-move_vec2)
-    move_B_show = pyrr.matrix44.create_from_translation(np.negative(move_vec_show)-move_vec2)
-    move_C_show = pyrr.matrix44.create_from_translation(np.negative(move_vec_show)+move_vec2)
-    moves_show = [move_A_show,move_B_show,move_C_show]
+    moves = []
+    moves_show = []
+    for n in range(mesh.noc):
+        tot_move_vec = (2*n+1-mesh.noc)/(mesh.noc-1)*move_vec
+        move_mat = pyrr.matrix44.create_from_translation(tot_move_vec)
+        moves.append(move_mat)
+        move_mat_show = pyrr.matrix44.create_from_translation(tot_move_vec+translation_vec)
+        moves_show.append(move_mat_show)
     #
     glClear(GL_DEPTH_BUFFER_BIT)
     glDisable(GL_DEPTH_TEST)
@@ -322,11 +303,10 @@ def display_selected(window,mesh,view_opt):
         glLineWidth(3)
         glEnable(GL_LINE_STIPPLE)
         glLineStipple(2, 0xAAAA)
-        ax = mesh.sliding_directions[mesh.select.n][0][0]
         for val in range(0,abs(mesh.select.val)+1):
             if mesh.select.val<0: val = -val
             pulled_vec = [0,0,0]
-            pulled_vec[ax] = val*mesh.voxel_size
+            pulled_vec[mesh.sax] = val*mesh.voxel_size
             draw_geometries(window,[mesh.outline_selected_faces],translation_vec=np.array(pulled_vec))
         glPopAttrib()
 
@@ -350,18 +330,14 @@ def display_joint_geometry(window,mesh,view_opt):
     G1 = mesh.indices_fall
     draw_geometries_with_excluded_area(window,G0,G1)
     ################ When joint is fully open, draw dahsed lines ################
-    if not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.distance==mesh.component_size:
-        #if view_opt.open_joint==1:
-        #    for geo in mesh.indices_open_lines:
-        #        geo.count = 8
-        #    if len(mesh.indices_open_lines)>2: mesh.indices_open_lines.pop()
+    if not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio*mesh.component_size==mesh.component_size:
         glPushAttrib(GL_ENABLE_BIT)
         glLineWidth(2)
         glLineStipple(1, 0x00FF)
         glEnable(GL_LINE_STIPPLE)
         G0 = []
         for n in range(len(mesh.indices_open_lines)):
-            if view_opt.distance2==mesh.component_size or n<2:
+            if view_opt.open_ratio*mesh.component_size==mesh.component_size:
                 G0.append(mesh.indices_open_lines[n])
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
@@ -387,6 +363,7 @@ def display_joint_faces(window,mesh,view_opt):
     glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
 def display_arrows(window,mesh,view_opt):
+    glUniform3f(5, 0.0, 0.0, 0.0)
     ############################## Direction arrows ################################
     if view_opt.show_arrows:
         for n in range(mesh.noc):
@@ -396,11 +373,31 @@ def display_arrows(window,mesh,view_opt):
             d0 = 3*mesh.component_length+0.55*mesh.component_size
             d1 = 2*mesh.component_length+0.55*mesh.component_size
             if len(mesh.fixed_sides[n])==2: d0 = d1
-            if n>0: d0 = -d0 ###quick fix, not sure why???
             for ax,dir in mesh.fixed_sides[n]:
                 vec = np.array([0,0,0],dtype=np.float)
                 vec[ax] = (2*dir-1)*d0
                 draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
+
+def display_chess(window,mesh,view_opt):
+    # 1. Draw hidden geometry
+    glUniform3f(5, 1.0, 0.2, 0.0) # red orange
+    glLineWidth(8)
+    for n in range(mesh.noc):
+        draw_geometries(window,[mesh.indices_chess_lines[n]])
+    glUniform3f(5, 0.0, 0.0, 0.0) # back to black
+
+def display_breakable(window,mesh,view_opt):
+    # 1. Draw hidden geometry
+    glPushAttrib(GL_ENABLE_BIT)
+    glUniform3f(5, 1.0, 0.9, 0.0) # yellow
+    glLineWidth(3)
+    glEnable(GL_LINE_STIPPLE)
+    glLineStipple(4, 0xAAAA)
+    for n in range(mesh.noc):
+        G0 = [mesh.indices_breakable_lines[n]]
+        G1 = mesh.indices_fall
+        draw_geometries_with_excluded_area(window,G0,G1)
+    glPopAttrib()
 
 def display_milling_paths(window,mesh,view_opt):
     if len(mesh.indices_milling_path)==0: view_opt.show_milling_path = False
@@ -456,8 +453,8 @@ def pick(window, mesh, view_opt, shader_col):
         pick_y=int(mouse_pixel[xyi[1]]*(mesh.dim+2)/255-1)
 
     ### Update selection
-    if pick_x !=None and pick_y!=None:
-        if pick_x!=-1 and pick_y!=-1:
+    if pick_x !=None and pick_y!=None and pick_n!=None:
+        if pick_x!=-1 and pick_y!=-1 and pick_n!=-1:
             ### Initialize selection
             new_pos = False
             if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
@@ -465,6 +462,7 @@ def pick(window, mesh, view_opt, shader_col):
                 mesh.select.refresh = False
             mesh.select.state = 0 # hovering
         else: mesh.select.state = -1
+    else: mesh.select.state = -1
     glClearColor(1.0, 1.0, 1.0, 1.0)
 
 def main():
@@ -489,25 +487,27 @@ def main():
         view_opt.update_rotation(window)
 
         # Update joint opening distance
-        view_opt.set_joint_opening_distance(mesh)
+        if (view_opt.open_joint and view_opt.open_ratio<mesh.noc-1) or (not view_opt.open_joint and view_opt.open_ratio>0):
+            view_opt.set_joint_opening_distance(mesh.noc)
 
-        # Pick faces
-        if mesh.select.state!=2: pick(window, mesh, view_opt, shader_col)
+        # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
+        if not mesh.select.state==2: pick(window, mesh, view_opt, shader_col) # active pulling
         else: mesh.select.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
 
         # Display joint geometries
 
         init_display()
-        #init_shader(shader_tex, view_opt)
-        #display_end_grains(window,mesh)
+        init_shader(shader_tex, view_opt)
+        display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
-        if not all(mesh.eval.connected) and not mesh.fab_geometry: display_unconnected(window,mesh)
-        if not all(mesh.eval.bridged) and not mesh.fab_geometry: display_unbridged(window,mesh,view_opt)
+        if not all(mesh.eval.connected): display_unconnected(window,mesh)
+        if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
         if mesh.select.state!=-1: display_selected(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
+        if mesh.eval.chess: display_chess(window,mesh,view_opt)
+        if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
-        #display_vertex_points(window,mesh)
 
         glfw.swap_buffers(window)
 

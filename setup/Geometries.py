@@ -136,26 +136,6 @@ def line_neighbors(self,ind,ax,n):
     count = np.count_nonzero(values==n)
     return count,values
 
-def get_fixed_sides(joint_type,noc):
-    fixed_sides = []
-    if noc==2:
-        if joint_type=="I":
-            fixed_sides = [[[2,0]], [[2,1]]]
-        elif joint_type=="L":
-            fixed_sides = [[[2,0]], [[0,0]]]
-        elif joint_type=="T":
-            fixed_sides = [[[2,0]], [[0,0],[0,1]]]
-        elif joint_type=="X":
-            fixed_sides = [[[2,0],[2,1]], [[0,0],[0,1]]]
-    if noc==3:
-        if joint_type=="L":
-            fixed_sides = [[[2,0]], [[0,0]], [[1,0]]]
-        elif joint_type=="T":
-            fixed_sides = [[[2,0]], [[0,0],[0,1]], [[1,0]]]
-        elif joint_type=="X":
-            fixed_sides = [[[2,0]], [[0,0],[0,1]], [[1,0],[1,1]]]
-    return fixed_sides
-
 def get_vertex(index,verts,n):
     x = verts[n*index]
     y = verts[n*index+1]
@@ -262,7 +242,7 @@ def get_layered_vertices(self,outline,n,i,ax,no_z,dep):
 
     # add layers with Z-height
     for num in range(no_z):
-        for mv in outline:
+        for i,mv in enumerate(outline):
             pt = [mv.x,mv.y,mv.z]
             pt[ax] += num*(2*n-1)*dep
             if mv.is_arc:
@@ -271,7 +251,15 @@ def get_layered_vertices(self,outline,n,i,ax,no_z,dep):
                 mverts.append(MillVertex(pt, is_arc=True, arc_ctr=ctr))
             else:
                 mverts.append(MillVertex(pt))
-            verts.extend([pt[0],pt[1],pt[2],r,g,b,tx,ty])
+            if i>0:
+                pmv = outline[i-1]
+            if i>0 and mv.is_arc and pmv.is_arc and np.array_equal(mv.arc_ctr,pmv.arc_ctr):
+                ppt = [pmv.x,pmv.y,pmv.z]
+                ppt[ax] += num*(2*n-1)*dep
+                arc_pts = arc_points(ppt,pt,ctr,ax,10)
+                for arc_pt in arc_pts: verts.extend([arc_pt[0],arc_pt[1],arc_pt[2],r,g,b,tx,ty])
+            else:
+                verts.extend([pt[0],pt[1],pt[2],r,g,b,tx,ty])
         outline.reverse()
 
     # add enpoint
@@ -381,8 +369,8 @@ def rough_milling_path(self,rough_pixs,lay_num,n):
     lane_width = (self.voxel_size-self.fab.vdia)/(no_lanes-1)
 
     # Defines axes
-    ax = self.sliding_directions[n][0][0] # mill bit axis
-    dir = self.sliding_directions[n][0][1]
+    ax = self.sax # mill bit axis
+    dir = self.fab_directions[n]
     axes = [0,1,2]
     axes.pop(ax)
     dir_ax = axes[0] # primary milling direction axis
@@ -450,8 +438,8 @@ def rough_milling_path(self,rough_pixs,lay_num,n):
         pt2 = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
 
         ### REFINE THIS FUNCTION
-        dir_add1 = pix.neighbors[dir_ax][0]*3*self.fab.vrad*dir_vec
-        dir_add2 = -pix_end.neighbors[dir_ax][1]*3*self.fab.vrad*dir_vec
+        dir_add1 = pix.neighbors[dir_ax][0]*2.5*self.fab.vrad*dir_vec
+        dir_add2 = -pix_end.neighbors[dir_ax][1]*2.5*self.fab.vrad*dir_vec
 
         pt1 = pt1+self.fab.vrad*off_vec+dir_add1
         pt2 = pt2+self.fab.vrad*off_vec+dir_add2
@@ -515,6 +503,61 @@ def pad_layer_mat_with_fixed_sides(self,mat,ax):
                     mat[tuple(ind)] = -1
     return mat,pad_loc
 
+def arc_points(st,en,ctr,ax,cnt):
+    pts = []
+    # numpy arrays
+    st = np.array(st)
+    en = np.array(en)
+    ctr = np.array(ctr)
+    # cw or ccw?
+    clockwise = False
+    vec1 = en-ctr
+    vec1 = vec1/np.linalg.norm(vec1)
+    zvec = np.array([0,0,0])
+    zvec[ax] = 1
+    xvec = np.cross(vec1,zvec)
+    vec2 = st-ctr
+    vec2 = vec2/np.linalg.norm(vec2)
+    dist = np.linalg.norm(xvec-vec2)
+    if dist>0: clockwise = True
+    #
+    vec = st-ctr
+    vec = [vec[0],vec[1],vec[2]]
+    vec.pop(ax)
+    rad_x = vec[0]
+    rad_y = vec[1]
+    astep = 0.5*math.pi/cnt
+    if (clockwise and ax==2) or (not clockwise and ax!=2): astep = -astep
+    for i in range(1,cnt+1):
+        x = rad_x*math.cos(astep*i)-rad_y*math.sin(astep*i)
+        y = rad_y*math.cos(astep*i)+rad_x*math.sin(astep*i)
+        rad = [x,y]
+        rad.insert(ax,0)
+        rad = np.array(rad)
+        pt = ctr+rad
+        pts.append(pt)
+    return pts
+
+def next_fixed_sides(fixed_sides):
+    new_fixed_sides = []
+    for ax in range(3):
+        ax = 2-ax
+        for dir in range(2):
+            new_fixed_side = [ax,dir]
+            unique = True
+            for other_fixed_sides in fixed_sides:
+                for oax,odir in other_fixed_sides:
+                    if oax==ax and odir==dir:
+                        unique=False
+                        break
+                if not unique: break
+            if unique:
+                new_fixed_sides.append(new_fixed_side)
+                break
+        if len(new_fixed_sides)>0:
+            break
+    return new_fixed_sides
+
 # Create vertex lists functions
 
 def joint_vertices(self,n):
@@ -546,48 +589,6 @@ def joint_vertices(self,n):
                         if i==ax: new_vertex_param = new_vertex_param + (2*n-1)*step*self.component_length
                         new_vertex.append(new_vertex_param)
                     vertices.extend(new_vertex)
-    # Format
-    vertices = np.array(vertices, dtype = np.float32) #converts to correct format
-    return vertices
-
-def joint_extra_vertices(self,n):
-    vertices = []
-    r = g = b = 0.0
-    # Add all vertices of the dim*dim*dim voxel cube
-    fab_ax = self.sliding_directions[n][0][0]
-    comp_ax = self.fixed_sides[n][0][0]
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                x = (i-0.5*self.dim)*self.voxel_size
-                y = (j-0.5*self.dim)*self.voxel_size
-                z = (k-0.5*self.dim)*self.voxel_size
-                tex_coords = [i,j,k]
-                tex_coords.pop(comp_ax)
-                tx = tex_coords[0]/self.dim
-                ty = tex_coords[1]/self.dim
-                for u in range(-1,2,2):
-                    add = [self.fab.vrad*u,0]
-                    add.insert(fab_ax,0)
-                    x_ = x+add[0]
-                    y_ = y+add[1]
-                    z_ = z+add[2]
-                    tex_coords = [x_,y_,z_]
-                    tex_coords.pop(comp_ax)
-                    tx = (tex_coords[0]+0.5*self.component_size)/self.component_size
-                    ty = (tex_coords[1]+0.5*self.component_size)/self.component_size
-                    vertices.extend([x_, y_, z_, r,g,b, tx,ty])
-                for v in range(-1,2,2):
-                    add = [0,self.fab.vrad*v]
-                    add.insert(fab_ax,0)
-                    x_ = x+add[0]
-                    y_ = y+add[1]
-                    z_ = z+add[2]
-                    tex_coords = [x_,y_,z_]
-                    tex_coords.pop(comp_ax)
-                    tx = (tex_coords[0]+0.5*self.component_size)/self.component_size
-                    ty = (tex_coords[1]+0.5*self.component_size)/self.component_size
-                    vertices.extend([x_, y_, z_, r,g,b, tx,ty])
     # Format
     vertices = np.array(vertices, dtype = np.float32) #converts to correct format
     return vertices
@@ -624,8 +625,8 @@ def milling_path_vertices(self,n):
     dep = self.voxel_size/no_z
 
     # Defines axes
-    ax = self.sliding_directions[n][0][0] # mill bit axis
-    dir = self.sliding_directions[n][0][1]
+    ax = self.sax # mill bit axis
+    dir = self.fab_directions[n]
     axes = [0,1,2]
     axes.pop(ax)
     dir_ax = axes[0] # primary milling direction axis
@@ -886,7 +887,7 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset):
             for ax,dir in fixed_sides:
                 a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
                 step = 2
-                if self.joint_type=="X" or (self.joint_type=="T" and n==1): step = 1
+                if len(self.fixed_sides[n])==2: step = 1
                 off = 24*ax+12*dir+4*step
                 a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
                 # Add component side to indices
@@ -917,8 +918,8 @@ def joint_top_face_indices(self,all_indices,n,offset):
     indices_tops = []
     d = self.dim+1
     indices = []
-    sax = self.sliding_directions[n][0][0]
-    sdir = self.sliding_directions[n][0][1]
+    sax = self.sax
+    sdir = self.fab_directions[n]
     for i in range(d):
         for j in range(d):
             one_face_added = False
@@ -957,7 +958,7 @@ def joint_top_face_indices(self,all_indices,n,offset):
     for ax,dir in self.fixed_sides[n]:
         a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
         step = 2
-        if self.joint_type=="X" or (self.joint_type=="T" and n==1): step = 1
+        if len(self.fixed_sides[n])==2: step = 1
         off = 24*ax+12*dir+4*step
         a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
         # Add component side to indices
@@ -983,7 +984,7 @@ def joint_selected_top_line_indices(self,select,all_indices):
     # Make indices of lines for drawing method GL_LINES
     n = select.n
     offset = n*self.vn
-    sax = self.sliding_directions[n][0][0]
+    sax = self.sax
     h = self.height_field[tuple(select.faces[0])]
     # 1. Outline of selected top faces of joint
     indices = []
@@ -1045,7 +1046,7 @@ def joint_line_indices(self,all_indices,n,offset):
     for ax,dir in fixed_sides:
         a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
         step = 2
-        if self.joint_type=="X" or ( self.joint_type=="T" and n==1): step = 1
+        if len(self.fixed_sides[n])==2: step = 1
         off = 24*ax+12*dir+4*step
         a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
         indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
@@ -1059,30 +1060,56 @@ def joint_line_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, all_indices
 
-def open_line_indices(self,all_indices,n,slide_dir,offset):
+def open_line_indices(self,all_indices,n,offset):
     indices = []
-    ax,dir = slide_dir
+    dir = self.fab_directions[n]
     other_axes = np.array([0,1,2])
-    other_axes = np.delete(other_axes,np.where(other_axes==ax))
+    other_axes = np.delete(other_axes,np.where(other_axes==self.sax))
     ind = np.array([0,0,0])
-    #ind[ax] = dir*self.dim
     d = self.dim-1
-    heights = get_top_corner_heights(self.voxel_matrix,n,ax,dir)
-    #heights = [[self.height_field2[0][0], self.height_field2[0][d]],
-    #          [self.height_field2[d][0],  self.height_field2[d][d]]]
+    heights = get_top_corner_heights(self.voxel_matrix,n,self.sax,dir)
     d = self.dim+1
-    #if n==0: dir = 1-dir
     for x in range(2):
         for y in range(2):
             add = np.array([0,0,0])
             add[other_axes[0]] = x*self.dim
             add[other_axes[1]] = y*self.dim
-            #add[ax] = heights[x][y]
-            add[ax] = dir*self.dim
+            add[self.sax] = dir*self.dim
             start = get_index(ind,add,self.dim)
-            end = d*d*d+24*ax+12*(1-dir)+2*x+y
-            #off = 24*ax+12*dir+4*step
+            end = d*d*d+24*self.sax+12*(1-dir)+2*x+y
             indices.extend([start,end])
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    indices = indices + offset
+    # Store
+    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
+
+def chess_line_indices(self,all_indices,chess_verts,n,offset):
+    indices = []
+    for vert in chess_verts:
+        add = [0,0,0]
+        st = get_index(vert,add,self.dim)
+        add[self.sax]=1
+        en = get_index(vert,add,self.dim)
+        indices.extend([st,en])
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    indices = indices + offset
+    # Store
+    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
+
+def break_line_indices(self,all_indices,break_inds,n,offset):
+    indices = []
+    for ind3d in break_inds:
+        add = [0,0,0]
+        ind = get_index(ind3d,add,self.dim)
+        indices.append(ind)
     # Format
     indices = np.array(indices, dtype=np.uint32)
     indices = indices + offset
@@ -1132,341 +1159,23 @@ def milling_path_indices(self,all_indices,count,start,n):
     # Return
     return indices_prop, all_indices
 
-def joint_face_fab_indicies(self,all_indices,mat,fixed_sides,n,offset,offset_extra):
-    offset_extra = offset+offset_extra
-    fab_ax = self.sliding_directions[n][0][0]
-    other_axes = [0,1,2]
-    other_axes.pop(fab_ax)
-    # Matrix of rounded corners
-    mat_shape = [self.dim+1,self.dim+1,self.dim+1,4]
-    mat_shape[fab_ax] = self.dim
-    rounded_corners = np.full(tuple(mat_shape), False, dtype=bool)
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==3 or (cnt==2 and diagonal):
-                    rounded_corners[i][j][k] = np.array(vals!=n)
-                cnt_other,vals_other = line_neighbors(self,ind,fab_ax,1-n)
-                if cnt_other==3 and cnt>0:
-                    rounded_corners_other = np.array(vals_other!=(1-n))
-                    for index in range(4):
-                        if rounded_corners_other[index]:
-                            rounded_corners[i][j][k][index] = True
-    # Make indices of faces for drawing method GL_QUADS
-    # 1. Faces of joint
-    indices = []
-    indices_ends = []
-    d = self.dim+1
-    indices = []
-    for i in range(d):
-        for j in range(d):
-            for k in range(d):
-                ind = [i,j,k]
-                for ax in range(3):
-                    test_ind = np.array([i,j,k])
-                    test_ind = np.delete(test_ind,ax)
-                    if np.any(test_ind==self.dim): continue
-                    cnt = face_neighbors(mat,ind,ax,n,fixed_sides)
-                    if cnt==1: # if a face is to be drawn at all
-                        # Normal case, no rounded corner
-                        face_indexes = []
-                        for x in range(2):
-                            for y in range(2):
-                                add = [x,y]
-                                add.insert(ax,0)
-                                index = get_index(ind,add,self.dim)
-                                face_indexes.append(index)
-                        # Axis not perpendicular to fabrication direciton, check for rounded corners
-                        if ax!=fab_ax:
-                            # start-side
-                            a,b,add = 2,3,1
-                            if ax==other_axes[0]: a,b,add = 1,3,3
-                            if rounded_corners[i][j][k][a] or rounded_corners[i][j][k][b]:
-                                face_indexes[0] = 4*face_indexes[0]+offset_extra+add
-                                face_indexes[1] = 4*face_indexes[1]+offset_extra+add
-                            # end side
-                            a,b,add = 0,1,0
-                            if ax==other_axes[0]: a,b,add = 0,2,2
-                            add1 = [1,1,1]
-                            add1[fab_ax] = 0
-                            add1[ax] = 0
-                            inda = [i+add1[0],j+add1[1],k+add1[2],a]
-                            indb = [i+add1[0],j+add1[1],k+add1[2],b]
-                            if rounded_corners[tuple(inda)] or rounded_corners[tuple(indb)]:
-                                face_indexes[2] = 4*face_indexes[2]+offset_extra+add
-                                face_indexes[3] = 4*face_indexes[3]+offset_extra+add
-                        # Make triangles
-                        tris = [face_indexes[0],face_indexes[1],face_indexes[3]]
-                        tri2 = [face_indexes[0],face_indexes[3],face_indexes[2]]
-                        tris.extend(tri2)
-                        if ax==fab_ax and ind[fab_ax]>-n and ind[fab_ax]<self.dim+1-n: #top face, might have one or more rounded corners
-                            rcorners =  [False,False,False,False]
-                            box_inds = [3,2,1,0]
-                            for x in range(2):
-                                for y in range(2):
-                                    add = [x,y]
-                                    add.insert(fab_ax,-1+n)
-                                    box_i = box_inds[2*x+y]
-                                    cor_i = [i+add[0],j+add[1],k+add[2],box_i]
-                                    if rounded_corners[tuple(cor_i)]:
-                                        rcorners[2*x+y]=True
-                            if np.any(np.array(rcorners)):
-                                face_indexes.append(offset_extra+4*face_indexes[0]+1) #wrong
-                                face_indexes.append(offset_extra+4*face_indexes[0]+3)
-                                face_indexes.append(offset_extra+4*face_indexes[1]+2)
-                                face_indexes.append(offset_extra+4*face_indexes[1]+1)
-                                face_indexes.append(offset_extra+4*face_indexes[3]+0)
-                                face_indexes.append(offset_extra+4*face_indexes[3]+2)
-                                face_indexes.append(offset_extra+4*face_indexes[2]+3)
-                                face_indexes.append(offset_extra+4*face_indexes[2]+0)
-                                tris = [face_indexes[9],face_indexes[6],face_indexes[5]]
-                                tri2 = [face_indexes[5],face_indexes[9],face_indexes[10]]
-                                tri3 = [face_indexes[9],face_indexes[8],face_indexes[6]]
-                                tri4 = [face_indexes[8],face_indexes[7],face_indexes[6]]
-                                tri5 = [face_indexes[10],face_indexes[11],face_indexes[4]]
-                                tri6 = [face_indexes[10],face_indexes[5],face_indexes[4]]
-                                tris.extend(tri2)
-                                tris.extend(tri3)
-                                tris.extend(tri4)
-                                tris.extend(tri5)
-                                tris.extend(tri6)
-                                if not rcorners[0]: tris.extend([face_indexes[0],face_indexes[4],face_indexes[5]])
-                                if not rcorners[1]: tris.extend([face_indexes[6],face_indexes[1],face_indexes[7]])
-                                if not rcorners[2]: tris.extend([face_indexes[2],face_indexes[11],face_indexes[10]])
-                                if not rcorners[3]: tris.extend([face_indexes[9],face_indexes[8],face_indexes[3]])
-                        ### Seperate end grains...
-                        if len(fixed_sides)>0 and fixed_sides[0][0]==ax:
-                            indices_ends.extend(tris)
-                        else: indices.extend(tris)
-    # Make corner long edge
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==1 or cnt==3 or (cnt==2 and diagonal): # If a face is to be drawn at all
-                    add = [0,0,0]
-                    add[fab_ax] = 1
-                    start_i = get_index(ind,[0,0,0],self.dim)
-                    end_i = get_index(ind,add,self.dim)
-                    if np.any(rounded_corners[i][j][k]):
-                        for index in range(4):
-                            rounded_i = [i,j,k,index]
-                            if rounded_corners[tuple(rounded_i)]==True:
-                                u,v = int(index/2), 2+index%2
-                                # Vertical lines
-                                su_i = offset_extra+4*start_i+u
-                                eu_i = offset_extra+4*end_i+u
-                                sv_i = offset_extra+4*start_i+v
-                                ev_i = offset_extra+4*end_i+v
-                                tris = [su_i,eu_i,sv_i,sv_i,ev_i,eu_i]
-                                indices.extend(tris)
-                                below_i = rounded_i.copy()
-                                above_i = rounded_i.copy()
-                                below_i[fab_ax] -= 1
-                                above_i[fab_ax] += 1
-                                if n==0 or cnt!=1:
-                                    if below_i[fab_ax]<0 or rounded_corners[tuple(below_i)]==False:
-                                        if len(fixed_sides)>0 and fixed_sides[0][0]==fab_ax:
-                                            indices_ends.extend([start_i,su_i,sv_i])
-                                        else: indices.extend([start_i,su_i,sv_i])
-                                if n==1 or cnt!=1:
-                                    if above_i[fab_ax]>=self.dim or rounded_corners[tuple(above_i)]==False:
-                                        if len(fixed_sides)>0 and fixed_sides[0][0]==fab_ax:
-                                            indices_ends.extend([end_i,eu_i,ev_i])
-                                        else: indices.extend([end_i,eu_i,ev_i])
-
-        # 2. Faces of component base
-        d = self.dim+1
-        start = d*d*d
-        if len(fixed_sides)>0:
-            for ax,dir in fixed_sides:
-                a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
-                step = 2
-                if self.joint_type=="X" or (self.joint_type=="T" and n==1): step = 1
-                off = 24*ax+12*dir+4*step
-                a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
-                # Add component side to indices
-                indices_ends.extend([a0,b0,d0]) #bottom face
-                indices_ends.extend([a0,d0,c0]) # bottom face
-                indices.extend([a0,b0,b1]) #side face 1
-                indices.extend([a0,b1,a1]) #side face 1
-                indices.extend([b0,d0,d1]) #side face 2
-                indices.extend([b0,d1,b1]) #side face 2
-                indices.extend([d0,c0,c1]) #side face 3
-                indices.extend([d0,c1,d1]) #side face 3
-                indices.extend([c0,a0,a1]) ##side face 4
-                indices.extend([c0,a1,c1]) ##side face 4
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    indices = indices + offset
-    indices_ends = np.array(indices_ends, dtype=np.uint32)
-    indices_ends = indices_ends + offset
-    # Store
-    indices_prop = ElementProperties(GL_TRIANGLES, len(indices), len(all_indices), n)
-    if len(all_indices)>0: all_indices = np.concatenate([all_indices, indices])
-    else: all_indices = indices
-    indices_ends_prop = ElementProperties(GL_TRIANGLES, len(indices_ends), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices_ends])
-    indices_all_prop = ElementProperties(GL_TRIANGLES, len(indices)+len(indices_ends), indices_prop.start_index, n)
-    # Return
-    return indices_prop, indices_ends_prop, indices_all_prop, all_indices
-
-def joint_line_fab_indices(self,all_indices,n,offset,offset_extra):
-    offset_extra = offset+offset_extra
-    fixed_sides = self.fixed_sides[n]
-    fab_ax = self.sliding_directions[n][0][0]
-    other_axes = [0,1,2]
-    other_axes.pop(fab_ax)
-    d = self.dim+1
-    indices = []
-    # Matrix of rounded corners
-    mat_shape = [self.dim+1,self.dim+1,self.dim+1,4]
-    mat_shape[fab_ax] = self.dim
-    rounded_corners = np.full(tuple(mat_shape), False, dtype=bool)
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                if ind[fab_ax]==self.dim: continue
-                cnt,vals = line_neighbors(self,ind,fab_ax,n)
-                diagonal = False
-                if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                if cnt==3 or (cnt==2 and diagonal):
-                    rounded_corners[i][j][k] = np.array(vals!=n)
-                cnt_other,vals_other = line_neighbors(self,ind,fab_ax,1-n)
-                if cnt_other==3 and cnt>0:
-                    rounded_corners_other = np.array(vals_other!=(1-n))
-                    for index in range(4):
-                        if rounded_corners_other[index]:
-                            rounded_corners[i][j][k][index] = True
-    # Make line indices
-    for i in range(self.dim+1):
-        for j in range(self.dim+1):
-            for k in range(self.dim+1):
-                ind = [i,j,k]
-                for ax in range(3):
-                    if ind[ax]==self.dim: continue
-                    cnt,vals = line_neighbors(self,ind,ax,n)
-                    diagonal = False
-                    if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                    if cnt==1 or cnt==3 or (cnt==2 and diagonal): # If a line is to be drawn at all
-                        add = [0,0,0]
-                        add[ax] = 1
-                        start_i = get_index(ind,[0,0,0],self.dim)
-                        end_i = get_index(ind,add,self.dim)
-                        if ax!=fab_ax:
-                            ind_above = ind.copy()
-                            ind_below = ind.copy()
-                            ind_below[fab_ax] -= 1
-                            inds = []
-                            if ind_above[fab_ax]>=0 and ind_above[fab_ax]<self.dim:
-                                inds.append(ind_above)
-                            if ind_below[fab_ax]>=0 and ind_below[fab_ax]<self.dim:
-                                inds.append(ind_below)
-                            for ind0 in inds:
-                                a,b,add = 2,3,1
-                                if ax==other_axes[1]: a,b,add = 1,3,3
-                                ind1 = ind0.copy()
-                                ind1.append(a)
-                                ind1b = ind1.copy()
-                                ind1b[3] = b
-                                if rounded_corners[tuple(ind1)]==True or rounded_corners[tuple(ind1b)]==True:
-                                    start_i = offset_extra+4*start_i+add
-                                ind2 = ind0.copy()
-                                ind2[ax] += 1
-                                a,b,add = 0,1,0
-                                if ax==other_axes[1]: a,b,add = 0,2,2
-                                ind2.append(a)
-                                ind2b = ind2.copy()
-                                ind2b[3] = b
-                                if rounded_corners[tuple(ind2)]==True or rounded_corners[tuple(ind2b)]==True:
-                                    end_i = offset_extra+4*end_i+add
-                            indices.extend([start_i,end_i])
-                        elif np.all(rounded_corners[i][j][k]==False):
-                            indices.extend([start_i,end_i])
-                        else:
-                            for index in range(4):
-                                rounded_i = [i,j,k,index]
-                                if rounded_corners[tuple(rounded_i)]==True:
-                                    u,v = int(index/2), 2+index%2
-                                    # Vertical lines
-                                    indices.extend([offset_extra+4*start_i+u, offset_extra+4*end_i+u])
-                                    indices.extend([offset_extra+4*start_i+v, offset_extra+4*end_i+v])
-                                    # Horizontal lines
-                                    below_i = rounded_i.copy()
-                                    above_i = rounded_i.copy()
-                                    below_i[fab_ax] -= 1
-                                    above_i[fab_ax] += 1
-                                    if below_i[fab_ax]<0 or rounded_corners[tuple(below_i)]==False:
-                                        indices.extend([offset_extra+4*start_i+u, offset_extra+4*start_i+v])
-                                        if below_i[fab_ax]>=0:
-                                            below_i.pop()
-                                            cnt,vals = line_neighbors(self,below_i,ax,n)
-                                            diagonal = False
-                                            if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                                            if cnt==2 and not diagonal:
-                                                if vals[0]==vals[2]:
-                                                    indices.extend([offset_extra+4*start_i+u,start_i])
-                                                else:
-                                                    indices.extend([offset_extra+4*start_i+v,start_i])
-
-                                    if above_i[fab_ax]>=self.dim or rounded_corners[tuple(above_i)]==False:
-                                        indices.extend([offset_extra+4*end_i+u, offset_extra+4*end_i+v]) #bot a, top b
-                                        if above_i[fab_ax]>=0:
-                                            above_i.pop()
-                                            cnt,vals = line_neighbors(self,above_i,ax,n)
-                                            diagonal = False
-                                            if vals[0]==vals[3] or vals[1]==vals[2]: diagonal = True
-                                            if cnt==2 and not diagonal:
-                                                if vals[0]==vals[2]:
-                                                    indices.extend([offset_extra+4*end_i+u,end_i])
-                                                else:
-                                                    indices.extend([offset_extra+4*end_i+v,end_i])
-    #Outline of component base
-    start = d*d*d
-    for ax,dir in fixed_sides:
-        a1,b1,c1,d1 = get_corner_indices(ax,dir,self.dim)
-        step = 2
-        if self.joint_type=="X" or ( self.joint_type=="T" and n==1): step = 1
-        off = 24*ax+12*dir+4*step
-        a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
-        indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
-        indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    indices = indices + offset
-    # Store
-    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
-    all_indices = np.concatenate([all_indices, indices])
-    # Return
-    return indices_prop, all_indices
-
 class Geometries:
     def __init__(self):
-        self.joint_type = "T"
-        self.grain_rotation = 0
-        self.fab_geometry = False
+        self.grain_rotation = random.uniform(0,math.pi)
         self.noc = 2 #number of components
-        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
-        self.sliding_directions = [[[2,0]],[[2,1]]]
+        self.fixed_sides = [[[2,0]], [[2,1]]]
+        self.sax = 2 # sliding axis
+        self.fab_directions = []
+        for i in range(self.noc):
+            if i==0: self.fab_directions.append(0)
+            else: self.fab_directions.append(1)
         self.dim = 3
         self.component_size = 0.275
         self.voxel_size = self.component_size/self.dim
         self.component_length = 0.5*self.component_size
         self.vertex_no_info = 8
-        self.height_field = get_random_height_field(self.dim)
-        self.height_field2 =get_random_height_field(self.dim)
-        self.pre_height_field = self.height_field
-        self.pre_height_field2 = self.height_field2
+        self.height_fields = [get_random_height_field(self.dim)]
+        self.pre_height_fields = self.height_fields
         self.select = Selection(self)
         self.fab = Fabrication(self)
         self.voxel_matrix_from_height_fields()
@@ -1475,22 +1184,13 @@ class Geometries:
         self.indices = self.create_indices()
 
     def voxel_matrix_from_height_fields(self):
-        ax = self.sliding_directions[0][0][0]
-        vox_mat = mat_from_field(self.height_field,ax)
-        if self.noc==3:
-            ax = self.sliding_directions[2][0][0]
-            vox_mat2 = mat_from_field(self.height_field2,ax)
-            # combine matrices
-            for i in range(self.dim):
-                for j in range(self.dim):
-                    for k in range(self.dim):
-                        ind = tuple([i,j,k])
-                        if vox_mat[ind]==1 and vox_mat2[ind]==0: vox_mat[ind]=2
+        vox_mat = mat_from_field(self.height_fields[0],self.sax)
+        # ombine multiple hf:s somehow
         self.voxel_matrix = vox_mat
         self.eval = Evaluation(self)
 
-    def update_sliding_direction(self,sliding_directions):
-        self.sliding_directions = sliding_directions
+    def update_sliding_direction(self,sax):
+        self.sax = sax
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
@@ -1512,26 +1212,33 @@ class Geometries:
         self.create_indices()
 
     def edit_height_field(self,faces,h,n):
-        self.pre_height_field = self.height_field.copy()
-        self.pre_height_field2 = self.height_field2.copy()
+        self.pre_height_fields = copy.deepcopy(self.height_fields)
         for ind in faces:
             if n!=2: self.height_field[tuple(ind)] = h
             else: self.height_field2[tuple(ind)] = h
             self.voxel_matrix_from_height_fields()
             self.create_indices()
 
-    def update_joint_type(self,joint_type,noc):
-        self.joint_type = joint_type
-        if self.noc!=noc:
-            if noc==3: self.sliding_directions = [ [[2,0]], [[2,1],[1,1]], [[1,0]] ]
-            else: self.sliding_directions = [ [[2,0]], [[2,1]] ]
-        self.noc = noc
-        if self.joint_type=="X" and self.sliding_directions[0][0]==[2,0] and self.noc==2:
-            self.update_sliding_direction([[[1,0]],[[1,1]]])
-        if self.joint_type=="I" and self.noc==3:
-            self.joint_type="L"
+    def update_number_of_components(self,new_noc):
+        # Fab direction
+        new_fab_directions = []
+        for i in range(new_noc):
+            if i<self.noc and i!=new_noc-1:
+                new_fab_directions.append(self.fab_directions[i])
+            else: new_fab_directions.append(1)
+        self.fab_directions = new_fab_directions
 
-        self.fixed_sides = get_fixed_sides(self.joint_type,self.noc)
+        # Fixed sides
+        if new_noc<self.noc:
+            for i in range(self.noc-new_noc):
+                self.fixed_sides.pop()
+        else:
+            for i in range(new_noc-self.noc):
+                self.fixed_sides.insert(-1,next_fixed_sides(self.fixed_sides))
+        # Update noc
+        self.noc = new_noc
+
+        # Rebuffer
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
@@ -1539,6 +1246,7 @@ class Geometries:
     def update_dimension(self,dim_):
         pdim = self.dim
         self.dim = dim_
+        print(pdim,dim_)
         self.voxel_size = self.component_size/self.dim
         if self.dim>pdim:
             f = self.dim/pdim
@@ -1576,11 +1284,6 @@ class Geometries:
         for n in range(self.noc):
             self.jverts.append(joint_vertices(self,n))
 
-
-        if self.fab_geometry:
-            for n in range(self.noc):
-                self.everts.append(joint_extra_vertices(self,n))
-
         if milling_path:
             for n in range(self.noc):
                 mvs, gvs = milling_path_vertices(self,n)
@@ -1591,10 +1294,6 @@ class Geometries:
 
         # Combine
         jverts = np.concatenate(self.jverts)
-        if self.fab_geometry:
-            everts = np.concatenate(self.everts)
-            jverts = np.concatenate([jverts,everts])
-
 
         if milling_path and len(self.mverts[0])>0:
             mverts = np.concatenate(self.mverts)
@@ -1603,12 +1302,10 @@ class Geometries:
             self.vertices = np.concatenate([jverts, va])
 
         self.vn =  int(len(self.jverts[0])/8)
-        if self.fab_geometry: self.ven = int(len(self.everts[0])/8)
-        else: self.ven = 0
         self.van = int(len(va)/8)
         if milling_path and len(self.mverts[0])>0:
             self.m_start = []
-            mst = 2*self.vn +2*self.ven+self.van
+            mst = 2*self.vn+self.van
             for n in range(self.noc):
                 self.m_start.append(mst)
                 mst += int(len(self.mverts[n])/8)
@@ -1629,48 +1326,48 @@ class Geometries:
         self.indices_ftop = []
         self.indices_not_ftop = []
         self.outline_selected_faces = None
+        self.indices_chess_lines = []
+        self.indices_breakable_lines = []
         self.indices_milling_path = []
 
         for n in range(self.noc):
             #Faces
-            if self.fab_geometry:
-                nend,end,con,all_inds = joint_face_fab_indicies(self,all_inds,
-                        self.eval.voxel_matrix_connected,self.fixed_sides[n],n,n*self.vn,self.ven)
-                all = con
-                unbris = None
+            nend,end,con,all_inds = joint_face_indices(self, all_inds,
+                    self.eval.voxel_matrix_connected,self.fixed_sides[n],n,n*self.vn)
+            if not self.eval.connected[n]:
+                fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,n*self.vn)
+                self.indices_not_fcon.append(uncon)
+                all = ElementProperties(GL_QUADS, con.count+uncon.count, con.start_index, n)
             else:
-                nend,end,con,all_inds = joint_face_indices(self, all_inds,
-                        self.eval.voxel_matrix_connected,self.fixed_sides[n],n,n*self.vn)
-                if not self.eval.connected[n]:
-                    fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,n*self.vn)
-                    self.indices_not_fcon.append(uncon)
-                    all = ElementProperties(GL_QUADS, con.count+uncon.count, con.start_index, n)
-                else:
-                    self.indices_not_fcon.append(None)
-                    all = con
-                if not self.eval.bridged[n]:
-                    unbris = []
-                    for m in range(2):
-                        fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.fixed_sides[n][m]],n,n*self.vn)
-                        unbris.append(unbri)
-                else: unbris = None
-
+                self.indices_not_fcon.append(None)
+                all = con
+            if not self.eval.bridged[n]:
+                unbris = []
+                for m in range(2):
+                    fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.fixed_sides[n][m]],n,n*self.vn)
+                    unbris.append(unbri)
+            else: unbris = None
 
             #picking faces
             faces_not_tops, faces_tops, all_inds = joint_top_face_indices(self,all_inds,n,n*self.vn)
 
             #Lines
-            if self.fab_geometry:
-                lns,all_inds = joint_line_fab_indices(self,all_inds,n,n*self.vn,self.ven)
-            else:
-                lns,all_inds = joint_line_indices(self,all_inds,n,n*self.vn)
+            lns,all_inds = joint_line_indices(self,all_inds,n,n*self.vn)
 
-            for m in range(len(self.sliding_directions[n])):
-                open,all_inds = open_line_indices(self,all_inds,n,self.sliding_directions[n][m],n*self.vn)
-                self.indices_open_lines.append(open)
+            # Chessboard feedback lines
+            if self.eval.chess:
+                chess,all_inds = chess_line_indices(self,all_inds,self.eval.chess_vertices,n,n*self.vn)
+
+            # Breakable lines
+            if self.eval.breakable:
+                break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_voxel_inds[n],n,n*self.vn)
+
+            open,all_inds = open_line_indices(self,all_inds,n,n*self.vn)
+            self.indices_open_lines.append(open)
+
 
             #arrows
-            larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,self.noc*self.vn+2*self.ven)
+            larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,self.noc*self.vn)
             arrows = [larr,farr]
 
             if milling_path and len(self.mverts[0])>0:
@@ -1686,6 +1383,8 @@ class Geometries:
             self.indices_arrows.append(arrows)
             self.indices_ftop.append(faces_tops)
             self.indices_not_ftop.append(faces_not_tops)
+            if self.eval.chess: self.indices_chess_lines.append(chess)
+            if self.eval.breakable: self.indices_breakable_lines.append(break_lns)
             if milling_path and len(self.mverts[0])>0:
                 self.indices_milling_path.append(mill)
 
