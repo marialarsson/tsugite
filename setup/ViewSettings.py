@@ -40,8 +40,8 @@ class ViewSettings:
                 self.open_start_time = glfw.get_time()
                 self.close_start_time = None
             self.open_ratio = self.open_start_dist + 1.2 * (glfw.get_time()-self.open_start_time)
-            if self.open_ratio>=noc-1:
-                self.open_ratio=noc-1
+            if self.open_ratio>=1+0.5*(noc-2):
+                self.open_ratio=1+0.5*(noc-2)
             self.close_start_dist = self.open_ratio
         else: # close joint
             if self.close_start_time==None:

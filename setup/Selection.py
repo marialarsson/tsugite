@@ -26,7 +26,7 @@ def get_same_height_neighbors(hfield,inds):
 
 class Selection:
     def __init__(self,parent):
-        self.state = -1 #-1: nothing, 0: hovered, 1: adding, 2: pulling
+        self.state = -1 #-1: nothing, 0: hovered, 1: adding, 2: pulling, 10: timber hovered, 12: timber pulled
         self.parent = parent
         self.n = self.x = self.y = None
         self.refresh = False
@@ -37,21 +37,17 @@ class Selection:
         self.x = x
         self.y = y
         if self.shift:
-            if self.n!=2:
-                self.faces = get_same_height_neighbors(self.parent.height_field,[np.array([x,y])])
-            else:
-                self.faces = get_same_height_neighbors(self.parent.height_field2,[np.array([x,y])])
+            self.faces = get_same_height_neighbors(self.parent.height_fields[n],[np.array([x,y])])
         else: self.faces = [np.array([x,y])]
 
     def start_pull(self,mouse_pos):
         self.state=2
         self.start_pos = np.array([mouse_pos[0],-mouse_pos[1]])
-        if self.n!=2: self.start_height = self.parent.height_field[self.x][self.y]
-        else: self.start_height = self.parent.height_field2[self.x][self.y]
+        self.start_height = self.parent.height_fields[self.n][self.x][self.y]
         self.parent.create_indices() # for selection area
 
     def end_pull(self):
-        if self.val!=0: self.parent.edit_height_field(self.faces,self.current_height,self.n)
+        if self.val!=0: self.parent.edit_height_fields(self.faces,self.current_height,self.n)
         self.state=-1
         self.refresh = True
 
@@ -82,3 +78,23 @@ class Selection:
         elif self.start_height+val<0: val = -self.start_height
         self.current_height = self.start_height + val
         self.val = int(val)
+
+    def start_move(self,mouse_pos):
+        self.state=12
+        self.start_pos = np.array([mouse_pos[0],-mouse_pos[1]])
+        self.new_fixed_sides = self.parent.fixed_sides[self.n]
+        #self.parent.create_indices() # for selection area
+
+    def end_move(self):
+        self.parent.update_component_position(self.new_fixed_sides,self.n)
+        self.state=-1
+
+    def move(self,mouse_pos,screen_xrot,screen_yrot):
+        self.current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
+        ## Mouse vector
+        mouse_vec = self.current_pos-self.start_pos
+        mouse_vec[0] = mouse_vec[0]/800
+        mouse_vec[1] = mouse_vec[1]/800
+        ##
+        self.new_fixed_sides = self.parent.fixed_sides[self.n]
+        if len(self.new_fixed_sides)>1: self.new_fixed_sides.pop()

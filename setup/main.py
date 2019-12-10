@@ -93,8 +93,8 @@ def keyCallback(window,key,scancode,action,mods):
             mesh.select.shift = True
             mesh.select.refresh = True
         # Joint geometry
-        elif key==glfw.KEY_N: Geometries.clear_height_field(mesh)
-        elif key==glfw.KEY_R: Geometries.randomize_height_field(mesh)
+        elif key==glfw.KEY_N: Geometries.clear_height_fields(mesh)
+        elif key==glfw.KEY_R: Geometries.randomize_height_fields(mesh)
         elif key==glfw.KEY_Z: Geometries.undo(mesh)
         # Sliding direction
         elif (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and mesh.sax!=2:
@@ -137,10 +137,16 @@ def keyCallback(window,key,scancode,action,mods):
 def mouseCallback(window,button,action,mods):
     mesh, view_opt = glfw.get_window_user_pointer(window)
     if button==glfw.MOUSE_BUTTON_LEFT:
-        if action==1 and mesh.select.state==0: #pressed and hovered
-            mesh.select.start_pull(glfw.get_cursor_pos(window))
-        elif action==0 and mesh.select.state==2: #released
-            mesh.select.end_pull()
+        if action==1: # pressed
+            if mesh.select.state==0: #face hovered
+                mesh.select.start_pull(glfw.get_cursor_pos(window))
+            elif mesh.select.state==10: #body hovered
+                mesh.select.start_move(glfw.get_cursor_pos(window))
+        elif action==0: #released
+            if mesh.select.state==2: #face pulled
+                mesh.select.end_pull()
+            elif mesh.select.state==12: # body moved
+                mesh.select.end_move()
     elif button==glfw.MOUSE_BUTTON_RIGHT:
         if action==1: ViewSettings.start_rotation(view_opt, window)
         elif action==0: ViewSettings.end_rotation(view_opt)
@@ -292,10 +298,10 @@ def display_selected(window,mesh,view_opt):
     # Draw base face (hovered)
     glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
     glUniform3f(5, 0.2, 0.2, 0.2) #dark grey
-    G1 = mesh.indices_not_ftop
+    G1 = mesh.indices_fpick
     for face in mesh.select.faces:
         index = int(mesh.dim*face[0]+face[1])
-        top = ElementProperties(GL_QUADS, 4, mesh.indices_ftop[mesh.select.n].start_index+4*index, mesh.select.n)
+        top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_not_top[mesh.select.n].start_index+4*index, mesh.select.n)
         draw_geometries_with_excluded_area(window,[top],G1)
     # Draw pulled face
     if mesh.select.state==2:
@@ -425,45 +431,69 @@ def pick(window, mesh, view_opt, shader_col):
 
     # Draw colorful geometries
     for n in range(mesh.noc):
-        col = [0.0,0.0,0.0]
-        col[n] = 1.0
+        col = np.zeros(3, dtype=np.float64)
+        col[n%mesh.dim] = 1.0
+        if n>2: col[(n+1)%mesh.dim] = 1.0
         glUniform3f(5, col[0], col[1], col[2])
-        draw_geometries(window,[mesh.indices_not_ftop[n]],clear_depth_buffer=False)
+        draw_geometries(window,[mesh.indices_fpick_not_top[n]],clear_depth_buffer=False)
         # Draw top faces
+        col_step = 1.0/(2+2*mesh.dim*mesh.dim)
         for i in range(mesh.dim*mesh.dim):
             i_ = int(i/mesh.dim)
             j = i%mesh.dim
-            col = [(i_+1)/(mesh.dim+2), (j+1)/(mesh.dim+2)]
-            col.insert(n,1.0)
+            col -= col_step
             glUniform3f(5, col[0], col[1], col[2])
-            top = ElementProperties(GL_QUADS, 4, mesh.indices_ftop[n].start_index+4*i, n)
+            top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[n].start_index+4*i, n)
             draw_geometries(window,[top],clear_depth_buffer=False)
+        """
+        # Draw bottom faces
+        for i in range(mesh.dim*mesh.dim):
+            i_ = int(i/mesh.dim)
+            j = i%mesh.dim
+            col -= 1.0/(2+2*mesh.dim*mesh.dim)
+            glUniform3f(5, col[0], col[1], col[2])
+            bot = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_bot[n].start_index+4*i, n)
+            G0 = [bot]
+            G1 = [mesh.indices_fpick_not_bot[n]]
+            for n2 in range(mesh.noc):
+                if n2!=n: G1.append(mesh.indices_fall[n])
+            draw_geometries_with_excluded_area(window,G0,G1)
+            """
 
     ############### Read pixel color at mouse position ###############
-
     xpos,ypos = glfw.get_cursor_pos(window)
     mouse_pixel = glReadPixelsub(xpos, 1600-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
     mouse_pixel = np.array(mouse_pixel)
     pick_n = pick_x = pick_y = None
-    if not np.all(mouse_pixel==255) and np.any(mouse_pixel==255):
-        pick_n = np.where(mouse_pixel==255)[0][0]
-        xyi = [0,1,2]
-        xyi.pop(pick_n)
-        pick_x=int(mouse_pixel[xyi[0]]*(mesh.dim+2)/255-1)
-        pick_y=int(mouse_pixel[xyi[1]]*(mesh.dim+2)/255-1)
+    if not np.all(mouse_pixel==255): # not white / background
+        non_zeros = np.where(mouse_pixel!=0)
+        if len(non_zeros)>0:
+            if len(non_zeros[0]>0):
+                pick_n = non_zeros[0][0]
+                if len(non_zeros[0])>1:
+                    pick_n = pick_n+mesh.dim
+                    if mouse_pixel[0]==mouse_pixel[2]: pick_n = 5
+                val = 255-mouse_pixel[non_zeros[0][0]]
+                i = int(0.5+val*(2+2*mesh.dim*mesh.dim)/255)-1
+                if i>=0:
+                    pick_x = int(i/mesh.dim)
+                    pick_y = i%mesh.dim
 
     ### Update selection
     if pick_x !=None and pick_y!=None and pick_n!=None:
-        if pick_x!=-1 and pick_y!=-1 and pick_n!=-1:
-            ### Initialize selection
-            new_pos = False
-            if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
-                mesh.select.update_pick(pick_x,pick_y,pick_n)
-                mesh.select.refresh = False
+        ### Initialize selection
+        new_pos = False
+        if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
+            mesh.select.update_pick(pick_x,pick_y,pick_n)
+            mesh.select.refresh = False
             mesh.select.state = 0 # hovering
-        else: mesh.select.state = -1
+    elif pick_n!=None:
+        mesh.select.state = 10 # hovering component body
+        mesh.select.update_pick(pick_x,pick_y,pick_n)
     else: mesh.select.state = -1
-    glClearColor(1.0, 1.0, 1.0, 1.0)
+
+    #glClearColor(1.0, 1.0, 1.0, 1.0)
+
 
 def main():
 
@@ -491,11 +521,17 @@ def main():
             view_opt.set_joint_opening_distance(mesh.noc)
 
         # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
-        if not mesh.select.state==2: pick(window, mesh, view_opt, shader_col) # active pulling
-        else: mesh.select.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
+        if not mesh.select.state==2 and not mesh.select.state==12:
+            pick(window, mesh, view_opt, shader_col) # active pulling
+        elif mesh.select.state==2:
+            mesh.select.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
+        elif mesh.select.state==12:
+            mesh.select.move(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
+
+
 
         # Display joint geometries
-
+        """
         init_display()
         init_shader(shader_tex, view_opt)
         display_end_grains(window,mesh)
@@ -508,6 +544,7 @@ def main():
         if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
+        """
 
         glfw.swap_buffers(window)
 
