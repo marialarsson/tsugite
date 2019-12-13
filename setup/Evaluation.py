@@ -225,7 +225,7 @@ def get_same_neighbors_2d(mat2,inds,val):
         new_inds = get_same_neighbors_2d(mat2,new_inds,val)
     return new_inds
 
-def get_chessboard_vertics(mat,ax,noc):
+def get_chessboard_vertics(mat,ax,noc,n):
     chess = False
     dim = len(mat)
     verts = []
@@ -250,14 +250,11 @@ def get_chessboard_vertics(mat,ax,noc):
                         flat_neigbors.append(val)
                     neighbors.append(temp)
                 flat_neigbors = np.array(flat_neigbors)
-                #print(neighbors,flat_neigbors)
-                counts = []
-                for n in range(noc):
-                    cnt = np.sum(flat_neigbors==n)
-                    counts.append(cnt)
-                counts = np.array(counts)
-                if np.sum(counts==2)==2: # count 2 for 2 materials
-                    if neighbors[0][1]==neighbors[1][0]: # diagonal
+                ## check THIS material
+                cnt = np.sum(flat_neigbors==n)
+                if cnt==2:
+                    # cheack diagonal
+                    if neighbors[0][1]==neighbors[1][0] and neighbors[0][0]==neighbors[1][1]:
                         chess = True
                         verts.append(ind3d)
     return chess,verts
@@ -361,6 +358,28 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
 
     return breakable,indices
 
+def is_fab_direction_ok(mat,ax,n):
+    fab_dir = 1
+    dim = len(mat)
+    for dir in range(2):
+        is_ok = True
+        for i in range(dim):
+            for j in range(dim):
+                found_first_same = False
+                for k in range(dim):
+                    if dir==0: k = dim-k-1
+                    ind = [i,j]
+                    ind.insert(ax,k)
+                    val = mat[tuple(ind)]
+                    if val==n: found_first_same=True
+                    elif found_first_same: is_ok=False; break
+                if not is_ok: break
+            if not is_ok: break
+        if is_ok:
+            fab_dir=dir
+            break
+    return is_ok, fab_dir
+
 def layer_mat(mat3d,ax,dim,lay_num):
     mat2d = np.ndarray(shape=(dim,dim), dtype=int)
     for i in range(dim):
@@ -377,11 +396,12 @@ class Evaluation:
         self.connected = []
         self.bridged = []
         self.breakable = []
-        self.chess = False
+        self.checker = []
+        self.checker_vertices = []
+        self.fab_direction_ok = []
         self.voxel_matrix_connected = None
         self.voxel_matrix_unconnected = None
         self.voxel_matrices_unbridged = []
-        self.chessboard_vertices = []
         self.breakable_voxel_inds = []
         self.update(parent)
 
@@ -397,8 +417,22 @@ class Evaluation:
         sax = parent.sax # sliding axis
 
         # Chessboard
-        self.chess, self.chess_vertices = get_chessboard_vertics(parent.voxel_matrix,sax,parent.noc)
-        ### needs to be further divided for when you have 3 or more components.
+        self.checker = []
+        self.checker_vertices = []
+        for n in range(parent.noc):
+            check,verts = get_chessboard_vertics(parent.voxel_matrix,sax,parent.noc,n)
+            self.checker.append(check)
+            self.checker_vertices.append(verts)
+
+
+        # Fabricatability by direction constraint
+        self.fab_direction_ok = []
+        for n in range(parent.noc):
+            if n==0 or n==parent.noc-1: self.fab_direction_ok.append(True)
+            else:
+                fab_ok,fab_dir = is_fab_direction_ok(parent.voxel_matrix,sax,n)
+                parent.fab_directions[n] = fab_dir
+                self.fab_direction_ok.append(fab_ok)
 
         # Grain direction
         for n in range(parent.noc):

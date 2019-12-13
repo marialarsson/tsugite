@@ -298,10 +298,13 @@ def display_selected(window,mesh,view_opt):
     # Draw base face (hovered)
     glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
     glUniform3f(5, 0.2, 0.2, 0.2) #dark grey
-    G1 = mesh.indices_fpick
+    G1 = mesh.indices_fpick_not_top
     for face in mesh.select.faces:
+        if mesh.select.n==0 or mesh.select.n==mesh.noc-1: mos = 1
+        else: mos = 2
         index = int(mesh.dim*face[0]+face[1])
-        top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_not_top[mesh.select.n].start_index+4*index, mesh.select.n)
+        top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[mesh.select.n].start_index+mos*4*index+(mos-1)*4*mesh.select.dir, mesh.select.n)
+        #top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[mesh.select.n].start_index+4*index, mesh.select.n)
         draw_geometries_with_excluded_area(window,[top],G1)
     # Draw pulled face
     if mesh.select.state==2:
@@ -314,6 +317,16 @@ def display_selected(window,mesh,view_opt):
             pulled_vec = [0,0,0]
             pulled_vec[mesh.sax] = val*mesh.voxel_size
             draw_geometries(window,[mesh.outline_selected_faces],translation_vec=np.array(pulled_vec))
+        glPopAttrib()
+
+def display_moving_rotating(window,mesh,view_opt):
+    # Draw moved_rotated component before action is finalized
+    if mesh.select.state==12 and mesh.outline_selected_component!=None:
+        glPushAttrib(GL_ENABLE_BIT)
+        glLineWidth(3)
+        glEnable(GL_LINE_STIPPLE)
+        glLineStipple(2, 0xAAAA)
+        draw_geometries(window,[mesh.outline_selected_component])
         glPopAttrib()
 
 def display_joint_geometry(window,mesh,view_opt):
@@ -332,41 +345,22 @@ def display_joint_geometry(window,mesh,view_opt):
     glPopAttrib()
     ############################ Draw visible lines #############################
     glLineWidth(3)
-    G0 = mesh.indices_lns
-    G1 = mesh.indices_fall
-    draw_geometries_with_excluded_area(window,G0,G1)
+    for n in range(mesh.noc):
+        if mesh.eval.fab_direction_ok[n]: glUniform3f(5,0.0,0.0,0.0) # black
+        else: glUniform3f(5,1.0,0.0,0.0) # red
+        G0 = [mesh.indices_lns[n]]
+        G1 = mesh.indices_fall
+        draw_geometries_with_excluded_area(window,G0,G1)
     ################ When joint is fully open, draw dahsed lines ################
-    if not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio*mesh.component_size==mesh.component_size:
+    if not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio==1+0.5*(mesh.noc-2):
         glPushAttrib(GL_ENABLE_BIT)
         glLineWidth(2)
         glLineStipple(1, 0x00FF)
         glEnable(GL_LINE_STIPPLE)
-        G0 = []
-        for n in range(len(mesh.indices_open_lines)):
-            if view_opt.open_ratio*mesh.component_size==mesh.component_size:
-                G0.append(mesh.indices_open_lines[n])
+        G0 = mesh.indices_open_lines
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
         glPopAttrib()
-
-def display_joint_geometry_lines(window,mesh,view_opt):
-    glUniform3f(5,0.0,0.0,0.0) # black
-    glLineWidth(3)
-    G0 = [mesh.lines_a, mesh.lines_b]
-    draw_geometries(window,G0)
-
-def display_joint_faces(window,mesh,view_opt):
-    glUniform3f(5,0.8,0.8,0.8) #grey
-    glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
-    G0 = [mesh.faces_all_a, mesh.faces_all_b]
-    draw_geometries(window,G0)
-    glUniform3f(5,0.0,0.0,0.0) #black
-    glLineWidth(1)
-    glPolygonOffset(1.0, 1.0)
-    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
-    G0 = [mesh.faces_all_a, mesh.faces_all_b]
-    draw_geometries(window,G0,clear_depth_buffer=False)
-    glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
 def display_arrows(window,mesh,view_opt):
     glUniform3f(5, 0.0, 0.0, 0.0)
@@ -376,20 +370,21 @@ def display_arrows(window,mesh,view_opt):
             glLineWidth(3)
             G1 = mesh.indices_fall
             G0 = mesh.indices_arrows[n]
-            d0 = 3*mesh.component_length+0.55*mesh.component_size
-            d1 = 2*mesh.component_length+0.55*mesh.component_size
+            d0 = 2.55*mesh.component_size
+            d1 = 1.55*mesh.component_size
             if len(mesh.fixed_sides[n])==2: d0 = d1
             for ax,dir in mesh.fixed_sides[n]:
                 vec = np.array([0,0,0],dtype=np.float)
                 vec[ax] = (2*dir-1)*d0
                 draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
 
-def display_chess(window,mesh,view_opt):
+def display_checker(window,mesh,view_opt):
     # 1. Draw hidden geometry
     glUniform3f(5, 1.0, 0.2, 0.0) # red orange
     glLineWidth(8)
     for n in range(mesh.noc):
-        draw_geometries(window,[mesh.indices_chess_lines[n]])
+        if mesh.eval.checker[n]:
+            draw_geometries(window,[mesh.indices_chess_lines[n]])
     glUniform3f(5, 0.0, 0.0, 0.0) # back to black
 
 def display_breakable(window,mesh,view_opt):
@@ -408,13 +403,14 @@ def display_breakable(window,mesh,view_opt):
 def display_milling_paths(window,mesh,view_opt):
     if len(mesh.indices_milling_path)==0: view_opt.show_milling_path = False
     if view_opt.show_milling_path:
+        cols = [[1.0,0,0],[0,1.0,0],[0,0,1.0],[1.0,1.0,0],[0.0,1.0,1.0],[1.0,0,1.0]]
         glLineWidth(1)
-        glUniform3f(5,0.0,1.0,0.0)
-        draw_geometries(window,[mesh.indices_milling_path[0]])
-        glUniform3f(5,0.0,0.8,1.0)
-        draw_geometries(window,[mesh.indices_milling_path[1]])
+        for n in range(mesh.noc):
+            if mesh.eval.fab_direction_ok[n]:
+                glUniform3f(5,cols[n][0],cols[n][1],cols[n][2])
+                draw_geometries(window,[mesh.indices_milling_path[n]])
 
-def pick(window, mesh, view_opt, shader_col):
+def pick(window, mesh, view_opt, shader_col, show_col=False):
 
     ######################## COLOR SHADER ###########################
     glUseProgram(shader_col)
@@ -430,41 +426,29 @@ def pick(window, mesh, view_opt, shader_col):
     ########################## Draw colorful top faces ##########################
 
     # Draw colorful geometries
+    col_step = 1.0/(2+2*mesh.dim*mesh.dim)
     for n in range(mesh.noc):
         col = np.zeros(3, dtype=np.float64)
         col[n%mesh.dim] = 1.0
         if n>2: col[(n+1)%mesh.dim] = 1.0
         glUniform3f(5, col[0], col[1], col[2])
         draw_geometries(window,[mesh.indices_fpick_not_top[n]],clear_depth_buffer=False)
-        # Draw top faces
-        col_step = 1.0/(2+2*mesh.dim*mesh.dim)
-        for i in range(mesh.dim*mesh.dim):
-            i_ = int(i/mesh.dim)
-            j = i%mesh.dim
-            col -= col_step
-            glUniform3f(5, col[0], col[1], col[2])
-            top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[n].start_index+4*i, n)
-            draw_geometries(window,[top],clear_depth_buffer=False)
-        """
-        # Draw bottom faces
-        for i in range(mesh.dim*mesh.dim):
-            i_ = int(i/mesh.dim)
-            j = i%mesh.dim
-            col -= 1.0/(2+2*mesh.dim*mesh.dim)
-            glUniform3f(5, col[0], col[1], col[2])
-            bot = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_bot[n].start_index+4*i, n)
-            G0 = [bot]
-            G1 = [mesh.indices_fpick_not_bot[n]]
-            for n2 in range(mesh.noc):
-                if n2!=n: G1.append(mesh.indices_fall[n])
-            draw_geometries_with_excluded_area(window,G0,G1)
-            """
+        if n==0 or n==mesh.noc-1: mos = 1
+        else: mos = 2
+        # mos is "number of sides"
+        for m in range(mos):
+            # Draw top faces
+            for i in range(mesh.dim*mesh.dim):
+                col -= col_step
+                glUniform3f(5, col[0], col[1], col[2])
+                top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[n].start_index+mos*4*i+4*m, n)
+                draw_geometries(window,[top],clear_depth_buffer=False)
 
     ############### Read pixel color at mouse position ###############
     xpos,ypos = glfw.get_cursor_pos(window)
     mouse_pixel = glReadPixelsub(xpos, 1600-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
     mouse_pixel = np.array(mouse_pixel)
-    pick_n = pick_x = pick_y = None
+    pick_n = pick_d = pick_x = pick_y = None
     if not np.all(mouse_pixel==255): # not white / background
         non_zeros = np.where(mouse_pixel!=0)
         if len(non_zeros)>0:
@@ -476,24 +460,26 @@ def pick(window, mesh, view_opt, shader_col):
                 val = 255-mouse_pixel[non_zeros[0][0]]
                 i = int(0.5+val*(2+2*mesh.dim*mesh.dim)/255)-1
                 if i>=0:
-                    pick_x = int(i/mesh.dim)
+                    pick_x = (int(i/mesh.dim))%mesh.dim
                     pick_y = i%mesh.dim
+                pick_d = 0
+                if pick_n==mesh.noc-1: pick_d = 1
+                elif int(i/mesh.dim)>=mesh.dim: pick_d = 1
+                #print(pick_n,pick_d,pick_x,pick_y)
 
     ### Update selection
-    if pick_x !=None and pick_y!=None and pick_n!=None:
+    if pick_x !=None and pick_d!=None and pick_y!=None and pick_n!=None:
         ### Initialize selection
         new_pos = False
-        if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or mesh.select.refresh:
-            mesh.select.update_pick(pick_x,pick_y,pick_n)
+        if pick_x!=mesh.select.x or pick_y!=mesh.select.y or pick_n!=mesh.select.n or pick_d!=mesh.select.dir or mesh.select.refresh:
+            mesh.select.update_pick(pick_x,pick_y,pick_n,pick_d)
             mesh.select.refresh = False
             mesh.select.state = 0 # hovering
     elif pick_n!=None:
         mesh.select.state = 10 # hovering component body
-        mesh.select.update_pick(pick_x,pick_y,pick_n)
+        mesh.select.update_pick(pick_x,pick_y,pick_n,pick_d)
     else: mesh.select.state = -1
-
-    #glClearColor(1.0, 1.0, 1.0, 1.0)
-
+    if not show_col: glClearColor(1.0, 1.0, 1.0, 1.0)
 
 def main():
 
@@ -522,32 +508,28 @@ def main():
 
         # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
         if not mesh.select.state==2 and not mesh.select.state==12:
-            pick(window, mesh, view_opt, shader_col) # active pulling
+            pick(window, mesh, view_opt, shader_col, show_col=False) # active pulling
         elif mesh.select.state==2:
             mesh.select.edit(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
         elif mesh.select.state==12:
             mesh.select.move(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
 
-
-
         # Display joint geometries
-        """
         init_display()
         init_shader(shader_tex, view_opt)
         display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
         if not all(mesh.eval.connected): display_unconnected(window,mesh)
         if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
-        if mesh.select.state!=-1: display_selected(window,mesh,view_opt)
+        if mesh.select.state!=-1:
+            display_selected(window,mesh,view_opt)
+            display_moving_rotating(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
-        if mesh.eval.chess: display_chess(window,mesh,view_opt)
+        if any(mesh.eval.checker): display_checker(window,mesh,view_opt)
         if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
-        """
-
         glfw.swap_buffers(window)
-
     glfw.terminate()
 
 if __name__ == "__main__":

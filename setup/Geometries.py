@@ -238,27 +238,28 @@ def check_free_sides(self,ind,dir_ax,off_ax,n):
     off_sides = np.array(off_sides)
     return dir_sides,off_sides
 
-def get_layered_vertices(self,outline,n,i,ax,no_z,dep):
+def get_layered_vertices(self,outline,n,i,no_z,dep):
     verts = []
     mverts = []
 
     r = g = b = tx = ty = 0.0
 
+    fdir = self.fab_directions[n]
     # add startpoint
     start_vert = [outline[0].x,outline[0].y,outline[0].z]
-    safe_height = outline[0].pt[ax]-(2*n-1)*i*self.voxel_size-0.2*(2*n-1)*self.voxel_size
-    start_vert[ax] = safe_height
+    safe_height = outline[0].pt[self.sax]-(2*fdir-1)*i*self.voxel_size-0.2*(2*fdir-1)*self.voxel_size
+    start_vert[self.sax] = safe_height
     mverts.append(MillVertex(start_vert))
     verts.extend([start_vert[0],start_vert[1],start_vert[2],r,g,b,tx,ty])
 
     # add layers with Z-height
-    for num in range(no_z):
+    for num in range(1,no_z+1):
         for i,mv in enumerate(outline):
             pt = [mv.x,mv.y,mv.z]
-            pt[ax] += num*(2*n-1)*dep
+            pt[self.sax] += num*(2*fdir-1)*dep
             if mv.is_arc:
                 ctr = [mv.arc_ctr[0],mv.arc_ctr[1],mv.arc_ctr[2]]
-                ctr[ax] += num*(2*n-1)*dep
+                ctr[self.sax] += num*(2*fdir-1)*dep
                 mverts.append(MillVertex(pt, is_arc=True, arc_ctr=ctr))
             else:
                 mverts.append(MillVertex(pt))
@@ -266,8 +267,8 @@ def get_layered_vertices(self,outline,n,i,ax,no_z,dep):
                 pmv = outline[i-1]
             if i>0 and mv.is_arc and pmv.is_arc and np.array_equal(mv.arc_ctr,pmv.arc_ctr):
                 ppt = [pmv.x,pmv.y,pmv.z]
-                ppt[ax] += num*(2*n-1)*dep
-                arc_pts = arc_points(ppt,pt,ctr,ax,10)
+                ppt[self.sax] += num*(2*fdir-1)*dep
+                arc_pts = arc_points(ppt,pt,ctr,self.sax,10)
                 for arc_pt in arc_pts: verts.extend([arc_pt[0],arc_pt[1],arc_pt[2],r,g,b,tx,ty])
             else:
                 verts.extend([pt[0],pt[1],pt[2],r,g,b,tx,ty])
@@ -275,7 +276,7 @@ def get_layered_vertices(self,outline,n,i,ax,no_z,dep):
 
     # add enpoint
     end_vert = [outline[0].x,outline[0].y,outline[0].z]
-    end_vert[ax] = safe_height
+    end_vert[self.sax] = safe_height
     mverts.append(MillVertex(end_vert))
     verts.extend([end_vert[0],end_vert[1],end_vert[2],r,g,b,tx,ty])
 
@@ -301,35 +302,45 @@ def get_diff_neighbors(mat2,inds,val):
         new_inds = get_diff_neighbors(mat2,new_inds,val)
     return new_inds
 
-def get_neighbors_in_out(ind,reg_inds,lay_mat,n):
+def get_neighbors_in_out(ind,reg_inds,lay_mat,org_lay_mat,n):
     # 0 = in region
     # 1 = outside region, block
     # 2 = outside region, free
     in_out = []
+    values = []
     for add0 in range(-1,1,1):
         temp = []
+        temp2 = []
         for add1 in range(-1,1,1):
-            type = -1
 
             # Define neighbor index to test
             nind = [ind[0]+add0,ind[1]+add1]
 
+            # FIND TYPE
+            type = -1
+            val = None
             # Check if this index is in the list of region-included indices
             for rind in reg_inds:
                 if rind[0]==nind[0] and rind[1]==nind[1]:
                     type = 0 # in region
                     break
-
             if type!=0:
                 # If there are out of bound indices they are free
                 if np.any(np.array(nind)<0) or nind[0]>=lay_mat.shape[0] or nind[1]>=lay_mat.shape[1]:
                     type = 2 # free
+                    val =-1
                 elif lay_mat[tuple(nind)]<0:
                     type = 2 # free
                 else: type = 1 # blocked
+
+            if val==None:
+                val=org_lay_mat[tuple(nind)]
+
             temp.append(type)
+            temp2.append(val)
         in_out.append(temp)
-    return in_out
+        values.append(temp2)
+    return in_out, values
 
 def filleted_points(pt,one_voxel,off_dist,ax,n):
     ##
@@ -434,14 +445,14 @@ def rough_milling_path(self,rough_pixs,lay_num,n):
 
         # start
         ind = list(pix.ind_abs)
-        ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num) # 0 when n is 1, dim-1 when n is 0
+        ind.insert(ax,(self.dim-1)*(1-dir)+(2*dir-1)*lay_num) # 0 when n is 1, dim-1 when n is 0
         add = [0,0,0]
         add[ax] = 1-dir
         i_pt = get_index(ind,add,self.dim)
         pt1 = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
         #end
         ind = list(pix_end.ind_abs)
-        ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num) # 0 when n is 1, dim-1 when n is 0
+        ind.insert(ax,(self.dim-1)*(1-dir)+(2*dir-1)*lay_num) # 0 when n is 1, dim-1 when n is 0
         add = [0,0,0]
         add[ax] = 1-dir
         add[dir_ax] = 1
@@ -467,25 +478,26 @@ def rough_milling_path(self,rough_pixs,lay_num,n):
         mvertices.append(mverts)
     return mvertices
 
-def layer_mat_from_cube(self,ax,dir,lay_num,n):
+def layer_mat_from_cube(self,lay_num,n):
     mat = np.ndarray(shape=(self.dim,self.dim), dtype=int)
+    fdir = self.fab_directions[n]
     for i in range(self.dim):
         for j in range(self.dim):
             ind = [i,j]
-            zval = (self.dim-1)*(1-dir)+(2*n-1)*lay_num
-            ind.insert(ax,zval)
+            zval = (self.dim-1)*(1-fdir)+(2*fdir-1)*lay_num
+            ind.insert(self.sax,zval)
             mat[i][j]=int(self.voxel_matrix[tuple(ind)])
     return mat
 
-def pad_layer_mat_with_fixed_sides(self,mat,ax):
+def pad_layer_mat_with_fixed_sides(self,mat):
     pad_loc = [[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1]]
     for n2 in range(len(self.fixed_sides)):
         for oax,odir in self.fixed_sides[n2]:
-            if oax==ax: continue
+            if oax==self.sax: continue
             axes = [0,0,0]
             axes[oax] = 1
-            axes.pop(ax)
+            axes.pop(self.sax)
             oax = axes.index(1)
             pad_loc[oax][odir] = 1
             pad_val[oax][odir] = n2
@@ -496,16 +508,16 @@ def pad_layer_mat_with_fixed_sides(self,mat,ax):
     for fixed_sides_1 in self.fixed_sides:
         for fixed_sides_2 in self.fixed_sides:
             for ax1,dir1 in fixed_sides_1:
-                if ax1==ax: continue
+                if ax1==self.sax: continue
                 axes = [0,0,0]
                 axes[ax1] = 1
-                axes.pop(ax)
+                axes.pop(self.sax)
                 ax1 = axes.index(1)
                 for ax2,dir2 in fixed_sides_2:
-                    if ax2==ax: continue
+                    if ax2==self.sax: continue
                     axes = [0,0,0]
                     axes[ax2] = 1
-                    axes.pop(ax)
+                    axes.pop(self.sax)
                     ax2 = axes.index(1)
                     if ax1==ax2: continue
                     ind = [0,0]
@@ -569,6 +581,240 @@ def next_fixed_sides(fixed_sides):
             break
     return new_fixed_sides
 
+def get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n):
+    # also duplicate vertices on diagonal
+    reg_verts = []
+    for i in range(lay_mat.shape[0]+1):
+        for j in range(lay_mat.shape[1]+1):
+            ind = [i,j]
+            neigbors,neighbor_values = get_neighbors_in_out(ind,reg_inds,lay_mat,org_lay_mat,n)
+            neigbors = np.array(neigbors)
+            abs_ind = ind.copy()
+            ind[0] -= pad_loc[0][0]
+            ind[1] -= pad_loc[1][0]
+            if np.any(neigbors.flatten()==0) and not np.all(neigbors.flatten()==0): # some but not all region neighbors
+                dia1 = neigbors[0][1]==neigbors[1][0]
+                dia2 = neigbors[0][0]==neigbors[1][1]
+                if np.sum(neigbors.flatten()==0)==2 and  np.sum(neigbors.flatten()==1)==2 and dia1 and dia2: # diagonal detected
+                    other_indices = np.argwhere(neigbors==0)
+                    for oind in other_indices:
+                        oneigbors = copy.deepcopy(neigbors)
+                        oneigbors[tuple(oind)] = 1
+                        oneigbors = np.array(oneigbors)
+                        reg_verts.append(RegionVertex(ind,abs_ind,oneigbors,neighbor_values,dia=True))
+                else: # normal situation
+                    reg_verts.append(RegionVertex(ind,abs_ind,neigbors,neighbor_values))
+    return reg_verts
+
+def set_starting_vert(verts):
+    first_i = None
+    second_i = None
+    for i,rv in enumerate(verts):
+        if rv.block_count>0:
+            if rv.free_count>0: first_i=i
+            else: second_i = i
+    if first_i==None:
+        first_i=second_i
+    if first_i==None: first_i=0
+    verts.insert(0,verts[first_i])
+    verts.pop(first_i+1)
+    return verts
+
+def get_sublist_of_ordered_verts(verts):
+    ord_verts = []
+
+    # Start ordered vertices with the first item (simultaneously remove from main list)
+    ord_verts.append(verts[0])
+    verts.remove(verts[0])
+
+    browse_num = len(verts)
+    for i in range(browse_num):
+        found_next = False
+        #try all directions to look for next vertex
+        for vax in range(2):
+            for vdir in range(-1,2,2):
+                # check if there is an avaliable vertex
+                next_ind = ord_verts[-1].ind.copy()
+                next_ind[vax]+=vdir
+                next_rv = None
+                for rv in verts:
+                    if rv.ind==next_ind:
+                        if len(ord_verts)>1 and rv.ind==ord_verts[-2].ind: break # prevent going back
+                        # check so that it is not crossing a blocked region etc
+                        # 1) from point of view of previous point
+                        p_neig = ord_verts[-1].neighbors
+                        vaxval = int(0.5*(vdir+1))
+                        nind0 = [0,0]
+                        nind0[vax] = vaxval
+                        nind1 = [1,1]
+                        nind1[vax] = vaxval
+                        ne0 = p_neig[nind0[0]][nind0[1]]
+                        ne1 = p_neig[nind1[0]][nind1[1]]
+                        if ne0!=1 and ne1!=1: continue # no block
+                        if int(0.5*(ne0+1))==int(0.5*(ne1+1)): continue # trying to cross blocked material
+                        # 2) from point of view of point currently tested
+                        nind0 = [0,0]
+                        nind0[vax] = 1-vaxval
+                        nind1 = [1,1]
+                        nind1[vax] = 1-vaxval
+                        ne0 = rv.neighbors[nind0[0]][nind0[1]]
+                        ne1 = rv.neighbors[nind1[0]][nind1[1]]
+                        if ne0!=1 and ne1!=1: continue # no block
+                        if int(0.5*(ne0+1))==int(0.5*(ne1+1)): continue # trying to cross blocked material
+                        # If you made it here, you found the next vertex!
+                        found_next=True
+                        ord_verts.append(rv)
+                        verts.remove(rv)
+                        break
+                if found_next: break
+            if found_next: break
+        if found_next: continue
+
+    # check if outline is closed by ckecing if endpoint finds startpoint
+
+
+    closed = False
+    if len(ord_verts)>3: # needs to be at least 4 vertices to be able to close
+        start_ind = np.array(ord_verts[0].ind.copy())
+        end_ind = np.array(ord_verts[-1].ind.copy())
+        diff_ind = start_ind-end_ind ###reverse?
+        if len(np.argwhere(diff_ind==0))==1: #difference only in one axis
+            vax = np.argwhere(diff_ind!=0)[0][0]
+            if abs(diff_ind[vax])==1: #difference is only one step
+                vdir = diff_ind[vax]
+               # check so that it is not crossing a blocked region etc
+                p_neig = ord_verts[-1].neighbors
+                vaxval = int(0.5*(vdir+1))
+                nind0 = [0,0]
+                nind0[vax] = vaxval
+                nind1 = [1,1]
+                nind1[vax] = vaxval
+                ne0 = p_neig[nind0[0]][nind0[1]]
+                ne1 = p_neig[nind1[0]][nind1[1]]
+                if ne0==1 or ne1==1:
+                    if int(0.5*(ne0+1))!=int(0.5*(ne1+1)):
+                        # If you made it here, you found the next vertex!
+                        closed=True
+
+
+    return ord_verts, verts, closed
+
+def offset_verts(self,verts,lay_num,n):
+    outline = []
+
+    fdir = self.fab_directions[n]
+
+    for i,rv in enumerate(list(verts)):
+
+        # remove vertices with neighbor count 2
+        if rv.region_count==2 and rv.block_count==2: continue # redundant
+        if rv.block_count==0: continue # redundant
+        if rv.ind[0]<0 or rv.ind[0]>self.dim: continue #out of bounds
+        if rv.ind[1]<0 or rv.ind[1]>self.dim: continue #out of bounds
+
+        # add vertex information
+        ind = rv.ind.copy()
+        ind.insert(self.sax,(self.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
+        add = [0,0,0]
+        add[self.sax] = 1-fdir
+        i_pt = get_index(ind,add,self.dim)
+        pt = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
+
+        # move vertex according to boundry condition
+        one_voxels = []
+        off_dists = []
+        if rv.block_count==1:
+            off_dists.append(-self.fab.vrad)
+            one_voxels.append(np.argwhere(rv.neighbors==1)[0])
+        if rv.region_count==1 and rv.free_count!=3:
+            off_dists.append(self.fab.vrad)
+            one_voxels.append(np.argwhere(rv.neighbors==0)[0])
+        addx = 0
+        addy = 0
+        for one_voxel,off_dist in zip(one_voxels,off_dists):
+            addx += (one_voxel[0]*2-1)*off_dist
+            addy += (one_voxel[1]*2-1)*off_dist
+        if len(one_voxels)!=0:
+            addx = addx/len(one_voxels)
+            addy = addy/len(one_voxels)
+        rounded = False
+        if rv.region_count==3: # outer corner, check if it sould be rounded or not
+            # check if this outer corner correspond to an inner corner of another mateiral
+            for n2 in range(self.noc):
+                if n2==n: continue
+                cnt = np.sum(rv.flat_neighbor_values==n2)
+                if cnt==3: rounded = True
+                elif cnt==2:
+                    # Check if it is a diagonal
+                    dia1 = rv.neighbor_values[0][0]==rv.neighbor_values[1][1]
+                    dia2 = rv.neighbor_values[0][1]==rv.neighbor_values[1][0]
+                    if dia1 or dia2:
+                        rounded = True
+        if rounded:
+            pt1 = pt.copy()
+            add = [addx,-addy]
+            add.insert(self.sax,0)
+            pt1[0] += add[0]
+            pt1[1] += add[1]
+            pt1[2] += add[2]
+            #
+            pt2 = pt.copy()
+            add = [-addx,addy]
+            add.insert(self.sax,0)
+            pt2[0] += add[0]
+            pt2[1] += add[1]
+            pt2[2] += add[2]
+            #
+            pts = [pt1,pt2]
+
+            # arc center
+            ctr = pt.copy()
+            add = [-addx,-addy]
+            add.insert(self.sax,0)
+            ctr[0] += add[0]
+            ctr[1] += add[1]
+            ctr[2] += add[2]
+
+            # Reorder pt1 and pt2 so that the first one is closer to the last item in the outline
+            if len(outline)>0:
+                ppt = outline[-1].pt
+                dist1 = np.linalg.norm(np.array(pt1)-np.array(ppt))
+                dist2 = np.linalg.norm(np.array(pt2)-np.array(ppt))
+                if dist1>dist2: pts.reverse()
+            elif len(verts)>i:
+                next_ind = verts[i+1].ind.copy()
+                next_ind.insert(self.sax,(self.dim-1)*(1-fdir)+(2*n-1)*lay_num)
+                add = [0,0,0]
+                add[self.sax] = 1-fdir
+                i_pt = get_index(next_ind,add,self.dim)
+                npt = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
+                dist1 = np.linalg.norm(np.array(pt1)-np.array(npt))
+                dist2 = np.linalg.norm(np.array(pt2)-np.array(npt))
+                if dist1<dist2: pts.reverse() #??? Is this ok???
+            outline.append(MillVertex(pts[0],is_arc=True,arc_ctr=ctr))
+            outline.append(MillVertex(pts[1],is_arc=True,arc_ctr=ctr))
+        else: # other corner
+            add = [addx,addy]
+            add.insert(self.sax,0)
+            pt[0] += add[0]
+            pt[1] += add[1]
+            pt[2] += add[2]
+            outline.append(MillVertex(pt))
+    return outline
+
+def get_outline(self,verts,lay_num,n):
+    fdir = self.fab_directions[n]
+    outline = []
+    for rv in verts:
+        ind = rv.ind.copy()
+        ind.insert(self.sax,(self.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
+        add = [0,0,0]
+        add[self.sax] = 1-fdir
+        i_pt = get_index(ind,add,self.dim)
+        pt = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
+        outline.append(MillVertex(pt))
+    return outline
+
 # Create vertex lists functions
 
 def joint_vertices(self,n):
@@ -590,14 +836,15 @@ def joint_vertices(self,n):
     # Add component base vertices
     component_vertices = []
     for ax in range(3):
-        for n in range(2):
-            corners = get_corner_indices(ax,n,self.dim)
-            for step in range(1,4):
+        for dir in range(2):
+            corners = get_corner_indices(ax,dir,self.dim)
+            for step in range(3):
+                if step==0: step=0.5
                 for corner in corners:
                     new_vertex = []
                     for i in range(8):
                         new_vertex_param = vertices[8*corner+i]
-                        if i==ax: new_vertex_param = new_vertex_param + (2*n-1)*step*self.component_length
+                        if i==ax: new_vertex_param = new_vertex_param + (2*dir-1)*step*self.component_size
                         new_vertex.append(new_vertex_param)
                     vertices.extend(new_vertex)
     # Format
@@ -636,10 +883,9 @@ def milling_path_vertices(self,n):
     dep = self.voxel_size/no_z
 
     # Defines axes
-    ax = self.sax # mill bit axis
-    dir = self.fab_directions[n]
+    fdir = self.fab_directions[n]
     axes = [0,1,2]
-    axes.pop(ax)
+    axes.pop(self.sax)
     dir_ax = axes[0] # primary milling direction axis
     off_ax = axes[1] # milling offset axis
 
@@ -647,10 +893,11 @@ def milling_path_vertices(self,n):
     for lay_num in range(self.dim):
 
         # Create a 2D matrix of current layer
-        lay_mat = layer_mat_from_cube(self,ax,dir,lay_num,n)
+        lay_mat = layer_mat_from_cube(self,lay_num,n)
 
         # Pad 2d matrix with fixed sides
-        lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(self,lay_mat,ax)
+        lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(self,lay_mat)
+        org_lay_mat = copy.deepcopy(lay_mat)
 
         # Get/browse regions
         for reg_num in range(self.dim*self.dim):
@@ -665,34 +912,21 @@ def milling_path_vertices(self,n):
             rough_inds = []
             for ind in reg_inds:
                 rough_inds.append(RoughPixel(ind, lay_mat, pad_loc,self.dim,n))
-            # 2. Produce rough milling path
+
+            # 2. Produce rough milling paths
             rough_paths = rough_milling_path(self,rough_inds,lay_num,n)
             for rough_path in rough_paths:
                 if len(rough_path)>0:
-                    verts,mverts = get_layered_vertices(self,rough_path,n,lay_num,ax,no_z,dep)
+                    verts,mverts = get_layered_vertices(self,rough_path,n,lay_num,no_z,dep)
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
 
-            # Overwrite detedted regin in original matrix
+
+            # Overwrite detected regin in original matrix
             for reg_ind in reg_inds: lay_mat[tuple(reg_ind)]=n
 
             # Make a list of all edge vertices of the outline of the region
-            reg_verts = []
-            for i in range(lay_mat.shape[0]+1):
-                for j in range(lay_mat.shape[1]+1):
-                    ind = [i,j]
-                    neigbors = get_neighbors_in_out(ind,reg_inds,lay_mat,n)
-                    flat_neigbors = [x for sublist in neigbors for x in sublist]
-                    neigbors = np.array(neigbors)
-                    flat_neigbors = np.array(flat_neigbors)
-                    ind[0] -= pad_loc[0][0]
-                    ind[1] -= pad_loc[1][0]
-                    if np.any(flat_neigbors==0) and not np.all(flat_neigbors==0):
-                        rv = RegionVertex(ind,neigbors,flat_neigbors)
-                        reg_verts.append(rv)
-                        if np.sum(flat_neigbors==0)==2 and np.sum(flat_neigbors==1)==2 and neigbors[0][1]==neigbors[1][0]: # diagonal
-                            rv2 = RegionVertex(ind,neigbors,flat_neigbors)
-                            reg_verts.append(rv2) # add extra vertex
+            reg_verts = get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n)
 
             # Order the vertices to create an outline
             for isl_num in range(10):
@@ -700,163 +934,24 @@ def milling_path_vertices(self,n):
                 if len(reg_verts)==0: break
 
                 #Make sure first item in region vertices is on blocked/free corner, or blocked
-                closed = False
-                first_i = None
-                second_i = None
-                for i,rv in enumerate(reg_verts):
-                    if rv.block_count>0:
-                        if rv.free_count>0: first_i=i
-                        else: second_i = i
-                if first_i==None:
-                    first_i=second_i
-                    closed = True
-                if first_i==None: first_i=0
-                reg_verts.insert(0,reg_verts[first_i])
-                reg_verts.pop(first_i+1)
+                reg_verts = set_starting_vert(reg_verts)
 
-                # Start ordered vertices with the first item
-                reg_ord_verts.append(reg_verts[0])
-                reg_verts.remove(reg_verts[0])
-                for i in range(len(reg_verts)):
-                    found_next = False
-                    #try all directions to look for next vertex
-                    for vax in range(2):
-                        for vdir in range(-1,2,2):
-                            # check if there is an avaliable vertex
-                            next_ind = reg_ord_verts[-1].ind.copy()
-                            next_ind[vax]+=vdir
-                            next_rv = None
-                            for rv in reg_verts:
-                                if rv.ind==next_ind:
-                                    if len(reg_ord_verts)>2 and rv.ind==reg_ord_verts[-2].ind: break
-                                    p_neig = reg_ord_verts[-1].neighbors.copy()
-                                    # exception for diagonal layouts
-                                    if reg_ord_verts[-1].dia:
-                                        ppdiff = np.array(reg_ord_verts[-2].ind)-np.array(reg_ord_verts[-1].ind)
-                                        pax = np.argwhere(ppdiff!=0)[0][0]
-                                        pdir = ppdiff[pax]
-                                        if pdir==-1: pdir=0
-                                        pind0 = [pdir,pdir]
-                                        pind0[pax] = 0
-                                        p_neig[tuple(pind0)]=1
-                                        pind0[pax] = 1
-                                        p_neig[tuple(pind0)]=1
-                                    # check so that it is not crossing a blocked region etc
-                                    vaxval = int(0.5*(vdir+1))
-                                    nind0 = [0,0]
-                                    nind0[vax] = vaxval
-                                    nind1 = [1,1]
-                                    nind1[vax] = vaxval
-                                    ne0 = p_neig[nind0[0]][nind0[1]]
-                                    ne1 = p_neig[nind1[0]][nind1[1]]
-                                    if ne0==1 or ne1==1: # at least one should be blocked
-                                        if int(0.5*(ne0+1))!=int(0.5*(ne1+1)): # not crossing blocked material
-                                            found_next=True
-                                            if reg_ord_verts[-1].dia:
-                                                reg_ord_verts[-1].neighbors = p_neig
-                                                reg_ord_verts[-1].region_count = 1
-                                                reg_ord_verts[-1].block_count = 3
-                                                reg_ord_verts[-1].flat_neighbors = [x for sublist in p_neig for x in sublist]
-                                            reg_ord_verts.append(rv)
-                                            reg_verts.remove(rv)
-                                            break
-                            if found_next: break
-                        if found_next: break
-                    if found_next: continue
+                #Get a sequence of ordered vertices
+                reg_ord_verts,reg_verts,closed = get_sublist_of_ordered_verts(reg_verts)
+
+                # Make outline of ordered vertices (for dedugging olny!!!!!!!)
+                #if len(reg_ord_verts)>1: outline = get_outline(self,reg_ord_verts,lay_num,n)
 
                 # Offset vertices according to boundary condition (and remove if redundant)
-                outline = []
-                for i,rv in enumerate(list(reg_ord_verts)):
-
-                    # remove vertices with neighbor count 2
-                    if rv.region_count==2 and rv.free_count==2: continue
-                    if rv.region_count==2 and rv.block_count==2: continue
-                    if rv.block_count==0: continue
-                    if rv.ind[0]<0 or rv.ind[0]>self.dim: continue
-                    if rv.ind[1]<0 or rv.ind[1]>self.dim: continue
-
-                    # add vertex information
-                    ind = rv.ind.copy()
-                    ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num)
-                    add = [0,0,0]
-                    add[ax] = 1-dir
-                    i_pt = get_index(ind,add,self.dim)
-                    pt = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
-
-                    # move vertex according to boundry condition
-                    one_voxels = []
-                    off_dists = []
-                    if rv.block_count==1:
-                        off_dists.append(-self.fab.vrad)
-                        one_voxels.append(np.argwhere(rv.neighbors==1)[0])
-                    if rv.region_count==1 and rv.free_count!=3:
-                        off_dists.append(self.fab.vrad)
-                        one_voxels.append(np.argwhere(rv.neighbors==0)[0])
-                    addx = 0
-                    addy = 0
-                    for one_voxel,off_dist in zip(one_voxels,off_dists):
-                        addx += (one_voxel[0]*2-1)*off_dist
-                        addy += (one_voxel[1]*2-1)*off_dist
-                    if len(one_voxels)!=0:
-                        addx = addx/len(one_voxels)
-                        addy = addy/len(one_voxels)
-                    if rv.region_count==3: # or additional_outer_corner: #outer corner - add fillet
-                        pt1 = pt.copy()
-                        add = [addx,-addy]
-                        add.insert(ax,0)
-                        pt1[0] += add[0]
-                        pt1[1] += add[1]
-                        pt1[2] += add[2]
-                        #
-                        pt2 = pt.copy()
-                        add = [-addx,addy]
-                        add.insert(ax,0)
-                        pt2[0] += add[0]
-                        pt2[1] += add[1]
-                        pt2[2] += add[2]
-                        #
-                        pts = [pt1,pt2]
-
-                        # arc center
-                        ctr = pt.copy()
-                        add = [-addx,-addy]
-                        add.insert(ax,0)
-                        ctr[0] += add[0]
-                        ctr[1] += add[1]
-                        ctr[2] += add[2]
-
-                        # Reorder pt1 and pt2 so that the first one is closer to the last item in the outline
-                        if len(outline)>0:
-                            ppt = outline[-1].pt
-                            dist1 = np.linalg.norm(np.array(pt1)-np.array(ppt))
-                            dist2 = np.linalg.norm(np.array(pt2)-np.array(ppt))
-                            if dist1>dist2: pts.reverse()
-                        elif len(reg_ord_verts)>i:
-                            next_ind = reg_ord_verts[i+1].ind.copy()
-                            next_ind.insert(ax,(self.dim-1)*(1-dir)+(2*n-1)*lay_num)
-                            add = [0,0,0]
-                            add[ax] = 1-dir
-                            i_pt = get_index(next_ind,add,self.dim)
-                            npt = get_vertex(i_pt,self.jverts[n],self.vertex_no_info)
-                            dist1 = np.linalg.norm(np.array(pt1)-np.array(npt))
-                            dist2 = np.linalg.norm(np.array(pt2)-np.array(npt))
-                            if dist1<dist2: pts.reverse()
-                        outline.append(MillVertex(pts[0],is_arc=True,arc_ctr=ctr))
-                        outline.append(MillVertex(pts[1],is_arc=True,arc_ctr=ctr))
-                    else: # other corner
-                        add = [addx,addy]
-                        add.insert(ax,0)
-                        pt[0] += add[0]
-                        pt[1] += add[1]
-                        pt[2] += add[2]
-                        outline.append(MillVertex(pt))
+                outline = offset_verts(self,reg_ord_verts,lay_num,n)
 
                 # Get z height and extend vertices to global list
-                if len(outline)>0:
+                if len(reg_ord_verts)>1 and len(outline)>0:
                     if closed: outline.append(MillVertex(outline[0].pt))
-                    verts,mverts = get_layered_vertices(self,outline,n,lay_num,ax,no_z,dep)
+                    verts,mverts = get_layered_vertices(self,outline,n,lay_num,no_z,dep)
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
+
 
     # Format and return
     vertices = np.array(vertices, dtype = np.float32)
@@ -922,8 +1017,12 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset):
     # Return
     return indices_prop, indices_ends_prop, indices_all_prop, all_indices
 
-def joint_top_face_indices(self,all_indices,n,noc,offset,sdir):
+def joint_top_face_indices(self,all_indices,n,noc,offset):
     # Make indices of faces for drawing method GL_QUADS
+    # Set face direction
+    if n==0: sdirs = [0]
+    elif n==noc-1: sdirs = [1]
+    else: sdirs = [0,1]
     # 1. Faces of joint
     indices = []
     indices_tops = []
@@ -934,14 +1033,15 @@ def joint_top_face_indices(self,all_indices,n,noc,offset,sdir):
             for j in range(self.dim):
                 top_face_indices_cnt=0
                 for k in range(self.dim+1):
-                    if sdir==0: k = self.dim-k
+                    if sdirs[0]==0: k = self.dim-k
                     ind = [i,j]
                     ind.insert(ax,k)
                     # count number of neigbors (0, 1, or 2)
                     cnt,vals = face_neighbors(self.voxel_matrix,ind,ax,n,self.fixed_sides[n])
                     on_free_base = False
-                    if ax==sax and ax!=self.fixed_sides[n][0][0] and (n==0 or n==noc-1):
-                        base = sdir*self.dim
+                    # add base if edge component
+                    if ax==sax and ax!=self.fixed_sides[n][0][0] and len(sdirs)==1:
+                        base = sdirs[0]*self.dim
                         if ind[ax]==base: on_free_base=True
                     if cnt==1 or on_free_base:
                         for x in range(2):
@@ -949,13 +1049,15 @@ def joint_top_face_indices(self,all_indices,n,noc,offset,sdir):
                                 add = [x,abs(y-x)]
                                 add.insert(ax,0)
                                 index = get_index(ind,add,self.dim)
-                                if ax==sax and top_face_indices_cnt<4:
+                                if ax==sax and top_face_indices_cnt<4*len(sdirs):
                                     indices_tops.append(index)
                                     top_face_indices_cnt+=1
-                                elif not on_free_base: indices.append(index)
-                if top_face_indices_cnt==0 and ax==sax:
+                                #elif not on_free_base: indices.append(index)
+                                else: indices.append(index)
+                if top_face_indices_cnt<4*len(sdirs) and ax==sax:
                     neg_i = -offset-1
-                    indices_tops.extend([neg_i,neg_i,neg_i,neg_i])
+                    for k in range(4*len(sdirs)-top_face_indices_cnt):
+                        indices_tops.append(neg_i)
     # 2. Faces of component base
     d = self.dim+1
     start = d*d*d
@@ -987,9 +1089,10 @@ def joint_top_face_indices(self,all_indices,n,noc,offset,sdir):
 def joint_selected_top_line_indices(self,select,all_indices):
     # Make indices of lines for drawing method GL_LINES
     n = select.n
+    dir = select.dir
     offset = n*self.vn
     sax = self.sax
-    h = self.height_fields[n][tuple(select.faces[0])]
+    h = self.height_fields[n-dir][tuple(select.faces[0])]
     # 1. Outline of selected top faces of joint
     indices = []
     for face in select.faces:
@@ -1064,24 +1167,61 @@ def joint_line_indices(self,all_indices,n,offset):
     # Return
     return indices_prop, all_indices
 
+def component_outline_indices(self,all_indices,fixed_sides,n,offset):
+    d = self.dim+1
+    indices = []
+    start = d*d*d
+    #Outline of component base
+    #1) Base of first fixed side
+    ax = fixed_sides[0][0]
+    dir = fixed_sides[0][1]
+    step = 2
+    if len(fixed_sides)==2: step = 1
+    off = 24*ax+12*dir+4*step
+    a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
+    #2) Base of first fixed side OR top of component
+    if len(fixed_sides)==2:
+        ax = fixed_sides[1][0]
+        dir = fixed_sides[1][1]
+        off = 24*ax+12*dir+4*step
+        a1,b1,c1,d1 = start+off,start+off+1,start+off+2,start+off+3
+    else:
+        a1,b1,c1,d1 = get_corner_indices(ax,1-dir,self.dim)
+    # append list of indices
+    indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
+    indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
+    indices.extend([a1,b1, b1,d1, d1,c1, c1,a1])
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    indices = indices + offset
+    # Store
+    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices), n)
+    all_indices = np.concatenate([all_indices, indices])
+    # Return
+    return indices_prop, all_indices
+
 def open_line_indices(self,all_indices,n,offset):
     indices = []
-    dir = self.fab_directions[n]
+    dirs = [0,1]
+    if n==0: dirs=[0]
+    elif n==self.noc-1: dirs=[1]
     other_axes = np.array([0,1,2])
     other_axes = np.delete(other_axes,np.where(other_axes==self.sax))
     ind = np.array([0,0,0])
     d = self.dim-1
-    heights = get_top_corner_heights(self.voxel_matrix,n,self.sax,dir)
-    d = self.dim+1
-    for x in range(2):
-        for y in range(2):
-            add = np.array([0,0,0])
-            add[other_axes[0]] = x*self.dim
-            add[other_axes[1]] = y*self.dim
-            add[self.sax] = dir*self.dim
-            start = get_index(ind,add,self.dim)
-            end = d*d*d+24*self.sax+12*(1-dir)+2*x+y
-            indices.extend([start,end])
+    for dir in dirs:
+        heights = get_top_corner_heights(self.voxel_matrix,n,self.sax,dir)
+        d = self.dim+1
+        for x in range(2):
+            for y in range(2):
+                add = np.array([0,0,0])
+                add[other_axes[0]] = x*self.dim
+                add[other_axes[1]] = y*self.dim
+                add[self.sax] = dir*self.dim
+                start = get_index(ind,add,self.dim)
+                step=0
+                end = d*d*d+24*self.sax+12*(1-dir)+2*x+y+4*step
+                indices.extend([start,end])
     # Format
     indices = np.array(indices, dtype=np.uint32)
     indices = indices + offset
@@ -1157,7 +1297,6 @@ def milling_path_indices(self,all_indices,count,start,n):
     # Format
     indices = np.array(indices, dtype=np.uint32)
     # Store
-    #indices_prop = ElementProperties(GL_POINTS, len(indices), len(all_indices), n)
     indices_prop = ElementProperties(GL_LINE_STRIP, len(indices), len(all_indices), n)
     all_indices = np.concatenate([all_indices, indices])
     # Return
@@ -1186,6 +1325,7 @@ class Geometries:
         self.buff = Buffer(self)
         self.vertices = self.create_vertices()
         self.indices = self.create_indices()
+        self.update_unblocked_fixed_sides()
 
     def voxel_matrix_from_height_fields(self):
         vox_mat = mat_from_fields(self.height_fields,self.sax)
@@ -1193,10 +1333,20 @@ class Geometries:
         self.eval = Evaluation(self)
 
     def update_sliding_direction(self,sax):
-        self.sax = sax
-        self.voxel_matrix_from_height_fields()
-        self.create_vertices()
-        self.create_indices()
+        blocked = False
+        for i,sides in enumerate(self.fixed_sides):
+            for ax,dir in sides:
+                if ax==sax:
+                    if dir==0 and i==0: continue
+                    if dir==1 and i==self.noc-1: continue
+                    blocked = True
+        if not blocked:
+            self.sax = sax
+            self.voxel_matrix_from_height_fields()
+            self.update_unblocked_fixed_sides()
+            self.create_vertices()
+            self.create_indices()
+        else: print("Blocked sliding direction")
 
     def randomize_height_fields(self):
         self.height_fields = get_random_height_fields(self.dim,self.noc)
@@ -1211,41 +1361,56 @@ class Geometries:
         self.voxel_matrix_from_height_fields()
         self.create_indices()
 
-    def edit_height_fields(self,faces,h,n):
+    def edit_height_fields(self,faces,h,n,dir):
         for ind in faces:
-            self.height_fields[n][tuple(ind)] = h
+            self.height_fields[n-dir][tuple(ind)] = h
+            if dir==0: # If editiing top
+                # If new height is higher than following hf, update to same height
+                for i in range(n-dir+1,self.noc-1):
+                    h2 = self.height_fields[i][tuple(ind)]
+                    if h>h2: self.height_fields[i][tuple(ind)]=h
+            if dir==1: # If editiing bottom
+                # If new height is lower than previous hf, update to same height
+                for i in range(0,n-dir):
+                    h2 = self.height_fields[i][tuple(ind)]
+                    if h<h2: self.height_fields[i][tuple(ind)]=h
             self.voxel_matrix_from_height_fields()
             self.create_indices()
 
     def update_component_position(self,new_fixed_sides,n):
-        #self.fixed_sides[n] = new_fixed_sides
+        self.fixed_sides[n] = new_fixed_sides
+        self.voxel_matrix_from_height_fields()
+        self.update_unblocked_fixed_sides()
+        self.create_vertices()
         self.create_indices()
 
     def update_number_of_components(self,new_noc):
-        # Fab direction
-        new_fab_directions = []
-        for i in range(new_noc):
-            if i<self.noc and i!=new_noc-1:
-                new_fab_directions.append(self.fab_directions[i])
-            else: new_fab_directions.append(1)
-        self.fab_directions = new_fab_directions
-
-
-        # Fixed sides
-        if new_noc<self.noc:
+        # Increasing number of components
+        if new_noc>self.noc:
+            if len(self.unblocked_fixed_sides)>=(new_noc-self.noc):
+                for i in range(new_noc-self.noc):
+                    nfs = next_fixed_sides(self.fixed_sides)
+                    if self.fixed_sides[-1][0][0]==self.sax: # last component is aligned with the sliding axis
+                        self.fixed_sides.insert(-1,nfs)
+                        self.fab_directions.insert(-1,0)
+                    else:
+                        self.fixed_sides.append(nfs)
+                        self.fab_directions.append(1)
+                    #also consider if it is aligned and should be the first one in line... rare though...
+                self.height_fields = get_random_height_fields(self.dim,new_noc)
+                self.noc = new_noc
+        # Decreasing number of components
+        elif new_noc<self.noc:
             for i in range(self.noc-new_noc):
                 self.fixed_sides.pop()
-        else:
-            for i in range(new_noc-self.noc):
-                self.fixed_sides.insert(-1,next_fixed_sides(self.fixed_sides))
-        # Update noc
-        self.noc = new_noc
+                self.fab_directions.pop()
+                self.height_fields.pop()
+            self.noc = new_noc
 
-        # Height fields (temporary quick fix. Later, extend/contract current list)
-        self.height_fields = get_random_height_fields(self.dim,self.noc)
 
         # Rebuffer
         self.voxel_matrix_from_height_fields()
+        self.update_unblocked_fixed_sides()
         self.create_vertices()
         self.create_indices()
 
@@ -1288,7 +1453,7 @@ class Geometries:
         self.van = int(len(va)/8)
         if milling_path and len(self.mverts[0])>0:
             self.m_start = []
-            mst = 2*self.vn+self.van
+            mst = self.noc*self.vn+self.van
             for n in range(self.noc):
                 self.m_start.append(mst)
                 mst += int(len(self.mverts[n])/8)
@@ -1308,9 +1473,8 @@ class Geometries:
         self.indices_arrows = []
         self.indices_fpick_top = []
         self.indices_fpick_not_top = []
-        self.indices_fpick_bot = []
-        self.indices_fpick_not_bot = []
         self.outline_selected_faces = None
+        self.outline_selected_component = None
         self.indices_chess_lines = []
         self.indices_breakable_lines = []
         self.indices_milling_path = []
@@ -1334,20 +1498,20 @@ class Geometries:
             else: unbris = None
 
             #picking faces
-            faces_pick_not_tops, faces_pick_tops, all_inds = joint_top_face_indices(self,all_inds,n,self.noc,n*self.vn,0)
-            faces_pick_not_bots, faces_pick_bots, all_inds = joint_top_face_indices(self,all_inds,n,self.noc,n*self.vn,1)
+            faces_pick_not_tops, faces_pick_tops, all_inds = joint_top_face_indices(self,all_inds,n,self.noc,n*self.vn)
 
             #Lines
             lns,all_inds = joint_line_indices(self,all_inds,n,n*self.vn)
 
             # Chessboard feedback lines
-            if self.eval.chess:
-                chess,all_inds = chess_line_indices(self,all_inds,self.eval.chess_vertices,n,n*self.vn)
-
+            if self.eval.checker[n]:
+                chess,all_inds = chess_line_indices(self,all_inds,self.eval.checker_vertices[n],n,n*self.vn)
+            else: chess = []
             # Breakable lines
             if self.eval.breakable:
                 break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_voxel_inds[n],n,n*self.vn)
 
+            # Opening lines
             open,all_inds = open_line_indices(self,all_inds,n,n*self.vn)
             self.indices_open_lines.append(open)
 
@@ -1369,9 +1533,7 @@ class Geometries:
             self.indices_arrows.append(arrows)
             self.indices_fpick_top.append(faces_pick_tops)
             self.indices_fpick_not_top.append(faces_pick_not_tops)
-            self.indices_fpick_bot.append(faces_pick_bots)
-            self.indices_fpick_not_bot.append(faces_pick_not_bots)
-            if self.eval.chess: self.indices_chess_lines.append(chess)
+            self.indices_chess_lines.append(chess)
             if self.eval.breakable: self.indices_breakable_lines.append(break_lns)
             if milling_path and len(self.mverts[0])>0:
                 self.indices_milling_path.append(mill)
@@ -1380,6 +1542,9 @@ class Geometries:
         #outline of selected faces
         if self.select.state==2:
             self.outline_selected_faces, all_inds = joint_selected_top_line_indices(self,self.select,all_inds)
+
+        if self.select.n!=None and self.select.new_fixed_sides_for_display!=None:
+            self.outline_selected_component, all_inds = component_outline_indices(self,all_inds,self.select.new_fixed_sides_for_display,self.select.n,self.select.n*self.vn)
 
         self.indices = all_inds
         Buffer.buffer_indices(self.buff)
@@ -1391,6 +1556,21 @@ class Geometries:
         self.height_fields = np.load("data/saved_height_fields.npy")
         self.voxel_matrix_from_height_fields()
         self.create_indices()
+
+    def update_unblocked_fixed_sides(self):
+        unblocked_sides = []
+        for ax in range(3):
+            for dir in range(2):
+                side = [ax,dir]
+                blocked = False
+                for sides in self.fixed_sides:
+                    if side in sides:
+                        blocked=True
+                        break
+                if not blocked:
+                    unblocked_sides.append(side)
+        self.unblocked_fixed_sides = unblocked_sides
+
 
     """
     def undo(self):

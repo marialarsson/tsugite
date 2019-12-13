@@ -2,17 +2,21 @@ import numpy as np
 import math
 
 class RegionVertex:
-    def __init__(self,ind,neighbors,flat_neighbors):
+    def __init__(self,ind,abs_ind,neighbors,neighbor_values,dia=False):
         self.ind = ind
         self.i = ind[0]
         self.j = ind[1]
         self.neighbors = neighbors
-        self.flat_neighbors = flat_neighbors
+        self.flat_neighbors = self.neighbors.flatten()
         self.region_count = np.sum(self.flat_neighbors==0)
         self.block_count = np.sum(self.flat_neighbors==1)
         self.free_count = np.sum(self.flat_neighbors==2)
-        if self.block_count==2 and self.region_count==2 and self.neighbors[0][1]==self.neighbors[1][0]: self.dia = True
-        else: self.dia = False
+        ##
+        self.dia = dia
+        ##
+        self.neighbor_values = np.array(neighbor_values)
+        self.flat_neighbor_values = self.neighbor_values.flatten()
+
 
     def set_pos(self,pos):
         self.pos = pos
@@ -103,7 +107,7 @@ class MillVertex:
 class Fabrication:
     def __init__(self,parent):
         self.parent = parent
-        self.real_component_size = 29.5 #44.45 #mm
+        self.real_component_size = 36.5 #29.5 #44.45 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 2.85 #3.0 #milling bit radius in mm
@@ -123,10 +127,9 @@ class Fabrication:
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
         for n in range(self.parent.noc):
-            fax = self.parent.fixed_sides[n][0][0]
-            fdir = self.parent.fixed_sides[n][0][1]
-            # rotate 90 degrees if L jonts
-            dir = self.parent.fab_directions[n]
+            comp_ax = self.parent.fixed_sides[n][0][0]
+            comp_dir = self.parent.fixed_sides[n][0][1] # component direction
+            fdir = self.parent.fab_directions[n]
             #
             file_name = "joint_"+names[n]
             file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".gcode","w")
@@ -141,10 +144,10 @@ class Fabrication:
             speed = 200
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
-                mv.scale_and_swap(ax,dir,self.ratio,self.real_component_size,coords,d,n)
-                if fax!=ax:
-                    if fax==2: mv.rotate90(d)
-                    if fdir==1: mv.rotate180(d)
+                mv.scale_and_swap(ax,fdir,self.ratio,self.real_component_size,coords,d,n)
+                if comp_ax!=ax:
+                    if comp_ax==2: mv.rotate90(d)
+                    if comp_dir==1: mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False
