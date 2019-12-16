@@ -107,7 +107,7 @@ class MillVertex:
 class Fabrication:
     def __init__(self,parent):
         self.parent = parent
-        self.real_component_size = 36.5 #29.5 #44.45 #mm
+        self.real_component_size = 29.5 #36.5  #44.45 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 2.85 #3.0 #milling bit radius in mm
@@ -146,7 +146,7 @@ class Fabrication:
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(ax,fdir,self.ratio,self.real_component_size,coords,d,n)
                 if comp_ax!=ax:
-                    if comp_ax==2: mv.rotate90(d)
+                    if comp_ax==2 or comp_ax==1: mv.rotate90(d)
                     if comp_dir==1: mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle

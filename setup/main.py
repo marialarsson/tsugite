@@ -526,7 +526,7 @@ def main():
             display_moving_rotating(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
         if any(mesh.eval.checker): display_checker(window,mesh,view_opt)
-        if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
+        #if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
         glfw.swap_buffers(window)
