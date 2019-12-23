@@ -12,6 +12,7 @@ import ctypes
 import math
 import cv2
 import random
+import argparse
 
 def create_texture_shaders():
     vertex_shader = """
@@ -87,8 +88,20 @@ def create_color_shaders():
     return shader
 
 def keyCallback(window,key,scancode,action,mods):
-    mesh, view_opt = glfw.get_window_user_pointer(window)
+    global glo_start_time
+    global loc_start_time
+    global click_cnt
+    mesh, view_opt, args = glfw.get_window_user_pointer(window)
+    if glo_start_time==None:
+        glo_start_time = glfw.get_time()
+        loc_start_time = glfw.get_time()
+
     if action==glfw.PRESS:
+        if loc_start_time==None:
+            loc_start_time = glfw.get_time()
+            print("Starting next one...")
+
+        # Active key commands, both during user study and not
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
             mesh.select.shift = True
             mesh.select.refresh = True
@@ -96,13 +109,6 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_N: Geometries.clear_height_fields(mesh)
         elif key==glfw.KEY_R: Geometries.randomize_height_fields(mesh)
         elif key==glfw.KEY_Z: Geometries.undo(mesh)
-        # Sliding direction
-        elif (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and mesh.sax!=2:
-            Geometries.update_sliding_direction(mesh,2)
-        elif key==glfw.KEY_RIGHT and mesh.sax!=1:
-            Geometries.update_sliding_direction(mesh,1)
-        elif key==glfw.KEY_LEFT and mesh.sax!=0:
-            Geometries.update_sliding_direction(mesh,0)
         # Preview options
         elif key==glfw.KEY_A: view_opt.hidden[0] = not view_opt.hidden[0]
         elif key==glfw.KEY_B: view_opt.hidden[1] = not view_opt.hidden[1]
@@ -113,39 +119,73 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_X: view_opt.show_arrows = not view_opt.show_arrows
         elif key==glfw.KEY_H: view_opt.show_hidden_lines = not view_opt.show_hidden_lines
         elif key==glfw.KEY_SPACE: view_opt.open_joint = not view_opt.open_joint
-        elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(mesh)
-        elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(mesh)
-        elif key==glfw.KEY_M:
-            view_opt.show_milling_path = not view_opt.show_milling_path
-            if view_opt.show_milling_path:
-                Geometries.create_vertices(mesh,True)
-                Geometries.create_indices(mesh,True)
-        elif key==glfw.KEY_RIGHT_BRACKET and mesh.dim<5: Geometries.update_dimension(mesh,mesh.dim+1)
-        elif key==glfw.KEY_LEFT_BRACKET and mesh.dim>2: Geometries.update_dimension(mesh,mesh.dim-1)
-        elif key==glfw.KEY_2 and mesh.noc!=2: Geometries.update_number_of_components(mesh,2)
-        elif key==glfw.KEY_3 and mesh.noc!=3: Geometries.update_number_of_components(mesh,3)
-        elif key==glfw.KEY_4 and mesh.noc!=4: Geometries.update_number_of_components(mesh,4)
-        elif key==glfw.KEY_5 and mesh.noc!=5: Geometries.update_number_of_components(mesh,5)
-        elif key==glfw.KEY_6 and mesh.noc!=6: Geometries.update_number_of_components(mesh,6)
-        elif key==glfw.KEY_P: save_screenshot(window)
-        elif key==glfw.KEY_G: mesh.fab.export_gcode("joint")
+        # Key commands only for user study
+        if args.user_study:
+            if key==glfw.KEY_ENTER:
+                duration = glfw.get_time()-loc_start_time
+                print("Saving "+args.username+"'s joint...")
+                print("Design completed in", int(duration), "seconds and with", click_cnt, "clicks")
+                Geometries.user_study_design_finished(mesh,args,duration,click_cnt)
+                click_cnt = 0
+                loc_start_time = None
+        # Key commands locked during user study
+        elif not args.user_study:
+            # Sliding direction
+            if (key==glfw.KEY_UP or key==glfw.KEY_DOWN) and mesh.sax!=2:
+                Geometries.update_sliding_direction(mesh,2)
+            elif key==glfw.KEY_RIGHT and mesh.sax!=1:
+                Geometries.update_sliding_direction(mesh,1)
+            elif key==glfw.KEY_LEFT and mesh.sax!=0:
+                Geometries.update_sliding_direction(mesh,0)
+            # Save / Open
+            elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(mesh)
+            elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(mesh)
+            # Milling path
+            elif key==glfw.KEY_M:
+                view_opt.show_milling_path = not view_opt.show_milling_path
+                if view_opt.show_milling_path:
+                    Geometries.create_vertices(mesh,True)
+                    Geometries.create_indices(mesh,True)
+            elif key==glfw.KEY_G: mesh.fab.export_gcode("joint")
+            # Change resolution
+            elif key==glfw.KEY_RIGHT_BRACKET and mesh.dim<5: Geometries.update_dimension(mesh,mesh.dim+1)
+            elif key==glfw.KEY_LEFT_BRACKET and mesh.dim>2: Geometries.update_dimension(mesh,mesh.dim-1)
+            # Change number of components
+            elif key==glfw.KEY_2 and mesh.noc!=2: Geometries.update_number_of_components(mesh,2)
+            elif key==glfw.KEY_3 and mesh.noc!=3: Geometries.update_number_of_components(mesh,3)
+            elif key==glfw.KEY_4 and mesh.noc!=4: Geometries.update_number_of_components(mesh,4)
+            elif key==glfw.KEY_5 and mesh.noc!=5: Geometries.update_number_of_components(mesh,5)
+            elif key==glfw.KEY_6 and mesh.noc!=6: Geometries.update_number_of_components(mesh,6)
+            # Screenshot
+            elif key==glfw.KEY_P: save_screenshot(window)
     elif action==glfw.RELEASE:
+        # Face manipulation with shift button
         if key==glfw.KEY_LEFT_SHIFT or key==glfw.KEY_RIGHT_SHIFT:
             mesh.select.shift = False
             mesh.select.refresh = True
 
 def mouseCallback(window,button,action,mods):
-    mesh, view_opt = glfw.get_window_user_pointer(window)
+    mesh, view_opt, args = glfw.get_window_user_pointer(window)
+    global glo_start_time
+    global loc_start_time
+    global click_cnt
+    if glo_start_time==None:
+        print("Starting...")
+        glo_start_time = glfw.get_time()
+    if loc_start_time==None:
+        loc_start_time = glfw.get_time()
+        print("Starting next one...")
     if button==glfw.MOUSE_BUTTON_LEFT:
         if action==1: # pressed
             if mesh.select.state==0: #face hovered
                 mesh.select.start_pull(glfw.get_cursor_pos(window))
-            elif mesh.select.state==10: #body hovered
+                click_cnt += 1
+            elif mesh.select.state==10 and not args.user_study: #body hovered
                 mesh.select.start_move(glfw.get_cursor_pos(window))
         elif action==0: #released
             if mesh.select.state==2: #face pulled
                 mesh.select.end_pull()
-            elif mesh.select.state==12: # body moved
+            elif mesh.select.state==12 and not args.user_study: # body moved
                 mesh.select.end_move()
     elif button==glfw.MOUSE_BUTTON_RIGHT:
         if action==1: ViewSettings.start_rotation(view_opt, window)
@@ -160,7 +200,7 @@ def save_screenshot(window):
     print("Saved screenshot.png.")
 
 def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
-    mesh, view_opt = glfw.get_window_user_pointer(window)
+    mesh, view_opt, args = glfw.get_window_user_pointer(window)
     # Define translation matrices for opening
     move_vec = [0,0,0]
     move_vec[mesh.sax] = view_opt.open_ratio*mesh.component_size
@@ -178,7 +218,7 @@ def draw_geometries(window,geos,clear_depth_buffer=True, translation_vec=np.arra
         glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
 
 def draw_geometries_with_excluded_area(window, show_geos, screen_geos, translation_vec=np.array([0,0,0])):
-    mesh, view_opt = glfw.get_window_user_pointer(window)
+    mesh, view_opt, args = glfw.get_window_user_pointer(window)
     # Define translation matrices for opening
     move_vec = [0,0,0]
     move_vec[mesh.sax] = view_opt.open_ratio*mesh.component_size
@@ -269,12 +309,14 @@ def display_end_grains(window,mesh):
 
 def display_unconnected(window,mesh):
     # 1. Draw hidden geometry
-    glUniform3f(5, 1.0, 0.8, 0.7) # light red orange
+    col = [1.0, 0.8, 0.7]  # light red orange
+    glUniform3f(5, col[0], col[1], col[2])
     for n in range(mesh.noc):
         if not mesh.eval.connected[n]: draw_geometries(window,[mesh.indices_not_fcon[n]])
 
     # 1. Draw visible geometry
-    glUniform3f(5, 1.0, 0.2, 0.0) # red orange
+    col = [1.0, 0.2, 0.0] # red orange
+    glUniform3f(5, col[0], col[1], col[2])
     G0 = []
     for n in range(mesh.noc):
         if not mesh.eval.connected[n]: G0.append(mesh.indices_not_fcon[n])
@@ -483,6 +525,31 @@ def pick(window, mesh, view_opt, shader_col, show_col=False):
 
 def main():
 
+    # Arguments for user study
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--user_study', default="F", dest='user_study', type=str)
+    parser.add_argument('--username', default="test", type=str, dest='username')
+    parser.add_argument('--feedback', default="T", dest='feedback', type=str)
+    parser.add_argument('--type', default=0, type=int, dest='type')
+    parser.add_argument('--stats', default="T", dest='stats', type=str)
+    args = parser.parse_args()
+    if args.user_study=="T" or args.user_study=="True": args.user_study=True
+    else: args.user_study=False
+    if args.feedback=="T" or args.feedback=="True": args.feedback=True
+    else: args.feedback=False
+    if args.stats=="T" or args.stats=="True": args.stats=True
+    else: args.stats=False
+
+    global glo_start_time
+    global loc_start_time
+    global click_cnt
+    glo_start_time = None
+    loc_start_time = None
+    click_cnt = 0
+    time_passed = 0
+    max_time = 5*60 #seconds
+    last_printed = 0
+
     # Initialize window
     window = initialize()
 
@@ -490,14 +557,59 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    mesh = Geometries()
+    mesh = Geometries(args.type)
     view_opt = ViewSettings()
 
-    glfw.set_window_user_pointer(window, [mesh, view_opt])
+    glfw.set_window_user_pointer(window, [mesh, view_opt, args])
 
-    while glfw.get_key(window,glfw.KEY_ESCAPE) != glfw.PRESS and not glfw.window_should_close(window):
+    if args.stats:
+        # browse all possibilities, reinitiate mesh as such... count failure modes
+        uncon_cnt = unbri_cnt = unfab_cnt = check_cnt = mslid_cnt = frag_cnt = valid_cnt = total_cnt = 0
+        #hf = np.zeros((mesh.dim,mesh.dim))
+        #for i in range(mesh.dim):
+        #    for j in range(mesh.dim):
+        #        hf[i][j]=2
+        # new geometry
+        mesh = Geometries(args.type)
+        # set fixed sides
+        # set height_field
+        # evaluate
+        total_cnt +=+1
+        if any(mesh.eval.connected==False): uncon_cnt+=1
+        elif any(mesh.eval.bridged==False): unbri_cnt+=1
+        elif any(mesh.eval.fab_ok==False): unfab_cnt+=1
+        elif any(mesh.eval.checker): check_cnt+=1
+        elif len(mesh.eval.slides)>1: mslid_cnt+=1
+        elif any(mesh.eval.breakable): frag_cnt+=1
+        else: valid_cnt+=1
+        print("Totoal",total_cnt)
+        print("Unconnected",uncon_cnt)
+        print("Unbridged",unbri_cnt)
+        print("Unfabricatable",unfab_cnt)
+        print("Checkerboard",check_cnt)
+        print("Multiple slides",mslid_cnt)
+        print("Fragile parts",frag_cnt)
+        print("Valid",valid_cnt)
+
+
+
+
+
+
+
+    while not args.stats and glfw.get_key(window,glfw.KEY_ESCAPE)!=glfw.PRESS and not glfw.window_should_close(window) and not time_passed>max_time:
 
         glfw.poll_events()
+
+        if glo_start_time!=None and args.user_study:
+            time_passed = glfw.get_time()-glo_start_time
+
+        if time_passed>(last_printed*60+1) and int(time_passed)%60==0:
+            print(int(int(time_passed)/60),"min")
+            last_printed = int(int(time_passed)/60)
+
+        if time_passed>max_time:
+            print("Time has run up. Closing...")
 
         # Update view rotation
         view_opt.update_rotation(window)
@@ -519,15 +631,16 @@ def main():
         init_shader(shader_tex, view_opt)
         display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
-        if not all(mesh.eval.connected): display_unconnected(window,mesh)
-        if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
+        if args.feedback:
+            if not all(mesh.eval.connected): display_unconnected(window,mesh)
+            if not all(mesh.eval.bridged): display_unbridged(window,mesh,view_opt)
+            if any(mesh.eval.checker): display_checker(window,mesh,view_opt)
+            if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
         if mesh.select.state!=-1:
             display_selected(window,mesh,view_opt)
             display_moving_rotating(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
-        if any(mesh.eval.checker): display_checker(window,mesh,view_opt)
-        #if mesh.eval.breakable: display_breakable(window,mesh,view_opt)
-        if view_opt.show_arrows: display_arrows(window,mesh,view_opt)
+        if args.feedback and mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
         glfw.swap_buffers(window)
     glfw.terminate()

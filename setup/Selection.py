@@ -35,6 +35,7 @@ class Selection:
         self.shift = False
         self.faces = []
         self.new_fixed_sides_for_display = None
+        self.val=0
 
     def update_pick(self,x,y,n,dir):
         self.n = n

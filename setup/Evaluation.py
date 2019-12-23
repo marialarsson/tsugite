@@ -1,4 +1,56 @@
 import numpy as np
+from Fabrication import RegionVertex
+
+def get_ordered_outline(verts):
+    ord_verts = []
+
+    # Start ordered vertices with the first item (simultaneously remove from main list)
+    ord_verts.append(verts[0])
+    verts.remove(verts[0])
+
+    browse_num = len(verts)
+    for i in range(browse_num):
+        found_next = False
+        #try all directions to look for next vertex
+        for vax in range(2):
+            for vdir in range(-1,2,2):
+                # check if there is an avaliable vertex
+                next_ind = ord_verts[-1].ind.copy()
+                next_ind[vax]+=vdir
+                next_rv = None
+                for rv in verts:
+                    if rv.ind==next_ind:
+                        if len(ord_verts)>1 and rv.ind==ord_verts[-2].ind: break # prevent going back
+                        # check so that it is not crossing a blocked region etc
+                        # 1) from point of view of previous point
+                        p_neig = ord_verts[-1].neighbors
+                        vaxval = int(0.5*(vdir+1))
+                        nind0 = [0,0]
+                        nind0[vax] = vaxval
+                        nind1 = [1,1]
+                        nind1[vax] = vaxval
+                        ne0 = p_neig[nind0[0]][nind0[1]]
+                        ne1 = p_neig[nind1[0]][nind1[1]]
+                        if ne0!=1 and ne1!=1: continue # no block
+                        if int(0.5*(ne0+1))==int(0.5*(ne1+1)): continue # trying to cross blocked material
+                        # 2) from point of view of point currently tested
+                        nind0 = [0,0]
+                        nind0[vax] = 1-vaxval
+                        nind1 = [1,1]
+                        nind1[vax] = 1-vaxval
+                        ne0 = rv.neighbors[nind0[0]][nind0[1]]
+                        ne1 = rv.neighbors[nind1[0]][nind1[1]]
+                        if ne0!=1 and ne1!=1: continue # no block
+                        if int(0.5*(ne0+1))==int(0.5*(ne1+1)): continue # trying to cross blocked material
+                        # If you made it here, you found the next vertex!
+                        found_next=True
+                        ord_verts.append(rv)
+                        verts.remove(rv)
+                        break
+                if found_next: break
+            if found_next: break
+        if found_next: continue
+    return ord_verts
 
 def get_friction(mat,slides):
     friction = 0
@@ -273,19 +325,82 @@ def is_connected_to_fixed_side_2d(inds,fixed_sides,ax,dim):
         if connected: break
     return connected
 
+def get_neighbors_2d(ind,reg_inds,lay_mat,n):
+    # 0 = in region
+    # 1 = outside region, block
+    # 2 = outside region, free
+    in_out = []
+    values = []
+    for add0 in range(-1,1,1):
+        temp = []
+        temp2 = []
+        for add1 in range(-1,1,1):
+
+            # Define neighbor index to test
+            nind = [ind[0]+add0,ind[1]+add1]
+
+            # FIND TYPE
+            type = -1
+            val = None
+            # Check if this index is in the list of region-included indices
+            for rind in reg_inds:
+                if rind[0]==nind[0] and rind[1]==nind[1]:
+                    type = 0 # in region
+                    break
+            if type!=0:
+                # If there are out of bound indices they are free
+                if np.any(np.array(nind)<0) or nind[0]>=lay_mat.shape[0] or nind[1]>=lay_mat.shape[1]:
+                    type = 1 # free
+                    val =-1
+                elif lay_mat[tuple(nind)]<0:
+                    type = 1 # free
+                else: type = 1 # blocked
+
+            if val==None:
+                val=lay_mat[tuple(nind)]
+
+            temp.append(type)
+            temp2.append(val)
+        in_out.append(temp)
+        values.append(temp2)
+    return in_out, values
+
+def get_region_outline(reg_inds,lay_mat,n):
+    # also duplicate vertices on diagonal
+    reg_verts = []
+    for i in range(lay_mat.shape[0]+1):
+        for j in range(lay_mat.shape[1]+1):
+            ind = [i,j]
+            neigbors,neighbor_values = get_neighbors_2d(ind,reg_inds,lay_mat,n)
+            neigbors = np.array(neigbors)
+            if np.any(neigbors.flatten()==0) and not np.all(neigbors.flatten()==0): # some but not all region neighbors
+                dia1 = neigbors[0][1]==neigbors[1][0]
+                dia2 = neigbors[0][0]==neigbors[1][1]
+                if np.sum(neigbors.flatten()==0)==2 and  np.sum(neigbors.flatten()==1)==2 and dia1 and dia2: # diagonal detected
+                    other_indices = np.argwhere(neigbors==0)
+                    for oind in other_indices:
+                        oneigbors = copy.deepcopy(neigbors)
+                        oneigbors[tuple(oind)] = 1
+                        oneigbors = np.array(oneigbors)
+                        reg_verts.append(RegionVertex(ind,ind,oneigbors,neighbor_values,dia=True))
+                else: # normal situation
+                    reg_verts.append(RegionVertex(ind,ind,neigbors,neighbor_values))
+    return reg_verts
+
 def get_breakable_voxels(mat,fixed_sides,sax,n):
     breakable = False
     indices = []
     dim = len(mat)
     gax = fixed_sides[0][0] # grain axis
-
     if gax!=sax: # if grain direction does not equal to the sliding direction
 
         paxes = [0,1,2]
         paxes.pop(gax) # perpendicular to grain axis
 
         for pax in paxes:
-            all_reg_inds = []
+
+            potentially_fragile_reg_inds = []
+
             for lay_num in range(dim):
                 temp = []
 
@@ -296,65 +411,75 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
                     # Get indices of a region
                     inds = np.argwhere((lay_mat!=-1) & (lay_mat==n))
                     if len(inds)==0: break
+
                     reg_inds = get_same_neighbors_2d(lay_mat,[inds[0]],n)
 
                     # Check if any item in this region is connected to a fixed side
                     fixed = is_connected_to_fixed_side_2d(reg_inds,fixed_sides,pax,dim)
 
-                    if not fixed:
-                        breakable = True
-                        temp.append(reg_inds)
+                    if not fixed: temp.append(reg_inds)
 
                     # Overwrite detected regin in original matrix
                     for reg_ind in reg_inds: lay_mat[tuple(reg_ind)]=-1
-                all_reg_inds.append(temp)
 
-            # Check more details, if it is really loose, and where to draw the section
+                potentially_fragile_reg_inds.append(temp)
+
+
             for lay_num in range(dim):
-                temp = []
-                for reg_inds in all_reg_inds[lay_num]:
-                    # Is there SAME material above or below any voxel in this region
-                    up = False
-                    dn = False
+
+                lay_mat = layer_mat(mat,pax,dim,lay_num)
+
+                for reg_inds in potentially_fragile_reg_inds[lay_num]:
+
+                    # Is any voxel of this region connected to fixed materials in any axial direction?
+                    fixed_neighbors = [False,False]
+
                     for reg_ind in reg_inds:
 
                         # get 3d index
                         ind3d = reg_ind.copy()
                         ind3d = list(ind3d)
                         ind3d.insert(pax,lay_num)
+                        for dir in range(-1,2,2): #-1/1
 
-                        # check up
-                        ind3d_up = ind3d.copy()
-                        ind3d_up[pax]+=1
-                        if ind3d_up[pax]<dim:
-                            val = mat[tuple(ind3d_up)]
-                            if val==n: up=True
+                            # check neigbor in direction
+                            ind3d_dir = ind3d.copy()
+                            ind3d_dir[pax] += dir
+                            if ind3d_dir[pax]>=0 and ind3d_dir[pax]<dim:
+                                # Is there any material at all?
+                                val = mat[tuple(ind3d_dir)]
+                                if val==n: # There is material
+                                    # Is this material in the list of potentially fragile or not?
+                                    attached_to_fragile=False
+                                    ind2d_dir = ind3d_dir.copy()
+                                    ind2d_dir.pop(pax)
+                                    for dir_reg_inds in potentially_fragile_reg_inds[lay_num+dir]:
+                                        for dir_ind in dir_reg_inds:
+                                            if dir_ind[0]==ind2d_dir[0] and dir_ind[1]==ind2d_dir[1]:
+                                                attached_to_fragile = True
+                                                break
+                                    # need to check more steps later...
+                                    if not attached_to_fragile:
+                                        fixed_neighbors[int((dir+1)/2)] = True
 
-                        # check down
-                        ind3d_down = ind3d.copy()
-                        ind3d_down[pax]-=1
-                        if ind3d_down[pax]>=0:
-                            val = mat[tuple(ind3d_down)]
-                            if val==n: dn=True
+                    if fixed_neighbors[0]==False or fixed_neighbors[1]==False:
+                        breakable = True
 
-                        #if up and dn: break
-                    if up or dn:
-                        for reg_ind in reg_inds:
-                            out_up = []
-                            out_dn = []
-                            for x in range(2):
-                                for y in range(2):
-                                    oind = list(reg_ind.copy())
-                                    oind[0]+=x
-                                    oind[1]+=y
+                        # Get region outline
+                        outline = get_region_outline(reg_inds,lay_mat,n)
+
+                        # Order region outline
+                        outline = get_ordered_outline(outline)
+                        outline.append(outline[0])
+
+                        for dir in range(0,2):
+                            #if not fixed_neighbors[dir]: continue
+                            for i in range(len(outline)-1):
+                                for j in range(2):
+                                    oind = outline[i+j].ind.copy()
                                     oind.insert(pax,lay_num)
-                                    if dn:
-                                        out_dn.append(oind)
-                                    if up:
-                                        oind[pax]+=1
-                                        out_up.append(oind)
-                            if dn: indices.extend([out_dn[0],out_dn[1],out_dn[1],out_dn[3],out_dn[3],out_dn[2],out_dn[2],out_dn[0]])
-                            if up: indices.extend([out_up[0],out_up[1],out_up[1],out_up[3],out_up[3],out_up[2],out_up[2],out_up[0]])
+                                    oind[pax]+=dir
+                                    indices.append(oind)
 
     return breakable,indices
 

@@ -13,6 +13,7 @@ from Evaluation import Evaluation
 from Buffer import Buffer
 from Buffer import ElementProperties
 import copy
+import os
 
 # Supporting functions
 
@@ -672,7 +673,6 @@ def get_sublist_of_ordered_verts(verts):
 
     # check if outline is closed by ckecing if endpoint finds startpoint
 
-
     closed = False
     if len(ord_verts)>3: # needs to be at least 4 vertices to be able to close
         start_ind = np.array(ord_verts[0].ind.copy())
@@ -751,6 +751,12 @@ def offset_verts(self,verts,lay_num,n):
                     if dia1 or dia2:
                         rounded = True
         if rounded:
+            # tolerances # add later.....
+            extra_off_dist=-self.fab.vtol
+            one_voxel = np.argwhere(rv.neighbors==1)[0]
+            extra_addx = (one_voxel[0]*2-1)*extra_off_dist
+            extra_addy = (one_voxel[1]*2-1)*extra_off_dist
+
             pt1 = pt.copy()
             add = [addx,-addy]
             add.insert(self.sax,0)
@@ -1303,11 +1309,15 @@ def milling_path_indices(self,all_indices,count,start,n):
     return indices_prop, all_indices
 
 class Geometries:
-    def __init__(self):
+    def __init__(self,type):
         self.grain_rotation = random.uniform(0,math.pi)
         self.noc = 2 #number of components
-        self.fixed_sides = [[[2,0]], [[0,0],[0,1]]]
-        self.sax = 2 # sliding axis
+        if type==0:
+            self.fixed_sides = [[[2,0]], [[2,1]]]
+            self.sax = 2 # sliding axis
+        elif type==1:
+            self.fixed_sides = [[[2,0]], [[0,0]]]
+            self.sax = 2 # sliding axis
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)
@@ -1417,6 +1427,7 @@ class Geometries:
     def update_dimension(self,dim):
         self.dim = dim
         self.voxel_size = self.component_size/self.dim
+        self.fab.real_voxel_size = self.fab.real_component_size/self.dim
         self.height_fields = get_random_height_fields(self.dim,self.noc)
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
@@ -1551,6 +1562,34 @@ class Geometries:
 
     def save(self):
         np.save("data/saved_height_fields.npy",self.height_fields)
+
+    def user_study_design_finished(self,args,duration,click_cnt):
+        loc = "C:/Users/makal/git/disco_joint/user_study/"
+        if args.feedback: loc += "with_feedback/"
+        else: loc += "without_feedback/"
+        loc += "stage"+str(args.type)+"/"+args.username
+        if not os.path.exists(loc): os.mkdir(loc)
+        path = loc+"/height_fields_%s.npy"
+        i = 0
+        while os.path.exists(path % i): i=i+1
+        # save geometry
+        np.save(path % i,self.height_fields)
+        # save data
+        path = loc+"/data_%s.txt"
+        np.savetxt(path % i, [duration,click_cnt])   # x,y,z equal sized 1D arrays
+        # save joint performance evaluation
+        m1 = 0 # connectivity
+        m3 = 0 # checker board
+        m5 = 0 # multiple sliding directions
+        m6 = 0 # fragile parts
+        for n in range(self.noc):
+            if not self.eval.connected[n]: m1 = 1
+            if self.eval.checker[n]: m3 = 1
+            if len(self.eval.slides[n])>1: m5 = 1
+            if self.eval.breakable[n]: m6 = 1
+        path = loc+"/eval_%s.txt"
+        np.savetxt(path % i, [m1,m3,m5,m6])   # x,y,z equal sized 1D arrays
+
 
     def load(self):
         self.height_fields = np.load("data/saved_height_fields.npy")

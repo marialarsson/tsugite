@@ -110,19 +110,22 @@ class Fabrication:
         self.real_component_size = 29.5 #36.5  #44.45 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 2.85 #3.0 #milling bit radius in mm
+        self.rad = 3.00 #milling bit radius in mm
+        self.tol = 0.15 #tolerance in mm
+        self.rad -= self.tol
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio
         self.vrad = self.rad/self.ratio
+        self.vtol = self.tol/self.ratio
         self.ext = 1.0
         self.vext = self.ext/self.ratio
         self.dep = 1.0 #milling depth in mm
 
     def export_gcode(self,file_name):
         # make sure that the z axis of the gcode is facing up
-        ax = self.parent.sax
+        fax = self.parent.sax
         coords = [0,1]
-        coords.insert(ax,2)
+        coords.insert(fax,2)
         #
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
@@ -144,10 +147,11 @@ class Fabrication:
             speed = 200
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
-                mv.scale_and_swap(ax,fdir,self.ratio,self.real_component_size,coords,d,n)
-                if comp_ax!=ax:
+                mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
+                if comp_ax!=fax:
                     if comp_ax==2 or comp_ax==1: mv.rotate90(d)
-                    if comp_dir==1: mv.rotate180(d)
+                    #if comp_dir==1:
+                    #    mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False
@@ -165,9 +169,9 @@ class Fabrication:
 
                 #write to file
                 if arc and clockwise:
-                    file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
+                    file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
                 elif arc and not clockwise:
-                    file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
+                    file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
                 elif i==0 or pmv.x!=mv.x or pmv.y!=mv.y: file.write("G01 X "+mv.xstr+" Y "+mv.ystr+" F "+str(speed)+"\n")
                 ##
                 if i==0 or pmv.z!=mv.z: file.write("G01 Z "+mv.zstr+" F "+str(speed)+"\n")
