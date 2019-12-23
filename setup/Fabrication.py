@@ -107,7 +107,7 @@ class MillVertex:
 class Fabrication:
     def __init__(self,parent):
         self.parent = parent
-        self.real_component_size = 29.5 #36.5  #44.45 #mm
+        self.real_component_size = 44.45 #29.5 #36.5 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 3.00 #milling bit radius in mm

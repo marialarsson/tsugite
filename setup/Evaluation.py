@@ -82,6 +82,7 @@ def is_connected(mat,n):
 
 def get_sliding_directions(mat,noc):
     sliding_directions = []
+    number_of_sliding_directions = []
     for n in range(noc): # Browse the components
         mat_sliding = []
         for ax in range(3): # Browse the three possible sliding axes
@@ -108,7 +109,8 @@ def get_sliding_directions(mat,noc):
                 if slides_in_this_direction==True:
                     mat_sliding.append([ax,dir])
         sliding_directions.append(mat_sliding)
-    return sliding_directions
+        number_of_sliding_directions.append(len(mat_sliding))
+    return sliding_directions,number_of_sliding_directions
 
 def add_fixed_sides(mat,fixed_sides):
     dim = len(mat)
@@ -518,6 +520,7 @@ class Evaluation:
     def __init__(self,parent):
         self.parent = parent
         self.slides = []
+        self.number_of_slides = []
         self.connected = []
         self.bridged = []
         self.breakable = []
@@ -534,7 +537,7 @@ class Evaluation:
         self.voxel_matrix_with_sides = add_fixed_sides(parent.voxel_matrix, parent.fixed_sides)
 
         # Sliding directions
-        self.slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
+        self.slides,self.number_of_slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
 
         # Friction
         #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)

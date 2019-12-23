@@ -13,6 +13,7 @@ import math
 import cv2
 import random
 import argparse
+from itertools import product
 
 def create_texture_shaders():
     vertex_shader = """
@@ -531,7 +532,7 @@ def main():
     parser.add_argument('--username', default="test", type=str, dest='username')
     parser.add_argument('--feedback', default="T", dest='feedback', type=str)
     parser.add_argument('--type', default=0, type=int, dest='type')
-    parser.add_argument('--stats', default="T", dest='stats', type=str)
+    parser.add_argument('--stats', default="F", dest='stats', type=str)
     args = parser.parse_args()
     if args.user_study=="T" or args.user_study=="True": args.user_study=True
     else: args.user_study=False
@@ -557,7 +558,14 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    mesh = Geometries(args.type)
+    if args.type==0:
+        fixed_sides = [[[2,0]],[[2,1]]]
+        sax = 2
+    else:
+        fixed_sides = [[[2,0]],[[0,0]]]
+        sax = 2
+
+    mesh = Geometries(fixed_sides,sax)
     view_opt = ViewSettings()
 
     glfw.set_window_user_pointer(window, [mesh, view_opt, args])
@@ -565,37 +573,38 @@ def main():
     if args.stats:
         # browse all possibilities, reinitiate mesh as such... count failure modes
         uncon_cnt = unbri_cnt = unfab_cnt = check_cnt = mslid_cnt = frag_cnt = valid_cnt = total_cnt = 0
-        #hf = np.zeros((mesh.dim,mesh.dim))
-        #for i in range(mesh.dim):
-        #    for j in range(mesh.dim):
-        #        hf[i][j]=2
-        # new geometry
-        mesh = Geometries(args.type)
-        # set fixed sides
-        # set height_field
-        # evaluate
-        total_cnt +=+1
-        if any(mesh.eval.connected==False): uncon_cnt+=1
-        elif any(mesh.eval.bridged==False): unbri_cnt+=1
-        elif any(mesh.eval.fab_ok==False): unfab_cnt+=1
-        elif any(mesh.eval.checker): check_cnt+=1
-        elif len(mesh.eval.slides)>1: mslid_cnt+=1
-        elif any(mesh.eval.breakable): frag_cnt+=1
-        else: valid_cnt+=1
-        print("Totoal",total_cnt)
-        print("Unconnected",uncon_cnt)
-        print("Unbridged",unbri_cnt)
-        print("Unfabricatable",unfab_cnt)
-        print("Checkerboard",check_cnt)
-        print("Multiple slides",mslid_cnt)
-        print("Fragile parts",frag_cnt)
-        print("Valid",valid_cnt)
-
-
-
-
-
-
+        # Get all combinations of 0-dim and length dim*dim
+        hlist = []
+        #for h in range(mesh.dim+1): hlist.append(h)
+        for h in range(2): hlist.append(h)
+        roll = product(hlist, repeat=mesh.dim*mesh.dim)
+        fixed_sides = [[[2,0]],[[2,1]]]
+        sax = 2
+        for i,flat_hf in enumerate(list(roll)):
+            # translate flat field to 2d matrix
+            hf = np.zeros((mesh.dim,mesh.dim))
+            for i_ in range(mesh.dim):
+                for j_ in range(mesh.dim):
+                    hf[i_][j_] = list(flat_hf)[i_*mesh.dim+j_]
+            # reinitiate mesh with new height field
+            mesh = Geometries(fixed_sides,sax,hfs=[hf],draw=False)
+            # evaluate
+            if not all(mesh.eval.connected): uncon_cnt+=1
+            elif not all(mesh.eval.bridged): unbri_cnt+=1
+            elif not all(mesh.eval.fab_direction_ok): unfab_cnt+=1
+            elif any(mesh.eval.checker): check_cnt+=1
+            elif sorted(mesh.eval.number_of_slides)[-1]>1: mslid_cnt+=1
+            elif any(mesh.eval.breakable): frag_cnt+=1
+            else: valid_cnt+=1
+            total_cnt +=1
+        print("Totoal:\t\t",total_cnt)
+        print("Unconnected:\t",uncon_cnt)
+        print("Unbridged:\t",unbri_cnt)
+        print("Unfabricatable:\t",unfab_cnt)
+        print("Checkerboard:\t",check_cnt)
+        print("Mult slides:\t",mslid_cnt)
+        print("Fragile parts:\t",frag_cnt)
+        print("Valid:\t\t",valid_cnt)
 
     while not args.stats and glfw.get_key(window,glfw.KEY_ESCAPE)!=glfw.PRESS and not glfw.window_should_close(window) and not time_passed>max_time:
 

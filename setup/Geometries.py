@@ -758,14 +758,14 @@ def offset_verts(self,verts,lay_num,n):
             extra_addy = (one_voxel[1]*2-1)*extra_off_dist
 
             pt1 = pt.copy()
-            add = [addx,-addy]
+            add = [addx,-addy-extra_addy]
             add.insert(self.sax,0)
             pt1[0] += add[0]
             pt1[1] += add[1]
             pt1[2] += add[2]
             #
             pt2 = pt.copy()
-            add = [-addx,addy]
+            add = [-addx-extra_addx,addy]
             add.insert(self.sax,0)
             pt2[0] += add[0]
             pt2[1] += add[1]
@@ -775,7 +775,7 @@ def offset_verts(self,verts,lay_num,n):
 
             # arc center
             ctr = pt.copy()
-            add = [-addx,-addy]
+            add = [-addx-extra_addx,-addy-extra_addy]
             add.insert(self.sax,0)
             ctr[0] += add[0]
             ctr[1] += add[1]
@@ -1309,15 +1309,11 @@ def milling_path_indices(self,all_indices,count,start,n):
     return indices_prop, all_indices
 
 class Geometries:
-    def __init__(self,type):
+    def __init__(self,fs,sax,hfs=None,draw=True):
+        self.sax = sax
+        self.fixed_sides = fs
         self.grain_rotation = random.uniform(0,math.pi)
         self.noc = 2 #number of components
-        if type==0:
-            self.fixed_sides = [[[2,0]], [[2,1]]]
-            self.sax = 2 # sliding axis
-        elif type==1:
-            self.fixed_sides = [[[2,0]], [[0,0]]]
-            self.sax = 2 # sliding axis
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)
@@ -1327,15 +1323,16 @@ class Geometries:
         self.voxel_size = self.component_size/self.dim
         self.component_length = 0.5*self.component_size
         self.vertex_no_info = 8
-        self.height_fields = get_random_height_fields(self.dim,self.noc)
-        self.pre_height_fields = self.height_fields
-        self.select = Selection(self)
-        self.fab = Fabrication(self)
+        if hfs==None: self.height_fields = get_random_height_fields(self.dim,self.noc)
+        else: self.height_fields = hfs
+        if draw: self.pre_height_fields = self.height_fields
+        if draw: self.select = Selection(self)
+        if draw: self.fab = Fabrication(self)
         self.voxel_matrix_from_height_fields()
-        self.buff = Buffer(self)
-        self.vertices = self.create_vertices()
-        self.indices = self.create_indices()
-        self.update_unblocked_fixed_sides()
+        if draw: self.buff = Buffer(self)
+        if draw: self.vertices = self.create_vertices()
+        if draw: self.indices = self.create_indices()
+        if draw: self.update_unblocked_fixed_sides()
 
     def voxel_matrix_from_height_fields(self):
         vox_mat = mat_from_fields(self.height_fields,self.sax)
