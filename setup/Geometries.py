@@ -1309,11 +1309,11 @@ def milling_path_indices(self,all_indices,count,start,n):
     return indices_prop, all_indices
 
 class Geometries:
-    def __init__(self,fs,sax,hfs=None,draw=True):
+    def __init__(self,fs,sax,noc=2,hfs=None,draw=True):
         self.sax = sax
         self.fixed_sides = fs
         self.grain_rotation = random.uniform(0,math.pi)
-        self.noc = 2 #number of components
+        self.noc = noc #number of components
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)
@@ -1561,10 +1561,20 @@ class Geometries:
         np.save("data/saved_height_fields.npy",self.height_fields)
 
     def user_study_design_finished(self,args,duration,click_cnt):
-        loc = "C:/Users/makal/git/disco_joint/user_study/"
-        if args.feedback: loc += "with_feedback/"
-        else: loc += "without_feedback/"
-        loc += "stage"+str(args.type)+"/"+args.username
+        dir = os.getcwd()
+        # remove "/setup"
+        dir = dir.split("\\")
+        dir.pop()
+        loc = ""
+        for item in dir: loc+=item+"/"
+        loc += "/user_study"
+        if not os.path.exists(loc): os.mkdir(loc)
+        if args.feedback: loc += "/with_feedback"
+        else: loc += "/without_feedback"
+        if not os.path.exists(loc): os.mkdir(loc)
+        loc += "/stage"+str(args.type)
+        if not os.path.exists(loc): os.mkdir(loc)
+        loc += "/"+args.username
         if not os.path.exists(loc): os.mkdir(loc)
         path = loc+"/height_fields_%s.npy"
         i = 0
@@ -1586,7 +1596,6 @@ class Geometries:
             if self.eval.breakable[n]: m6 = 1
         path = loc+"/eval_%s.txt"
         np.savetxt(path % i, [m1,m3,m5,m6])   # x,y,z equal sized 1D arrays
-
 
     def load(self):
         self.height_fields = np.load("data/saved_height_fields.npy")

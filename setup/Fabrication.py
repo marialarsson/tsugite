@@ -110,7 +110,7 @@ class Fabrication:
         self.real_component_size = 44.45 #29.5 #36.5 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 3.00 #milling bit radius in mm
+        self.rad = 5.00 #milling bit radius in mm
         self.tol = 0.15 #tolerance in mm
         self.rad -= self.tol
         self.dia = 2*self.rad
@@ -150,8 +150,8 @@ class Fabrication:
                 mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
                 if comp_ax!=fax:
                     if comp_ax==2 or comp_ax==1: mv.rotate90(d)
-                    #if comp_dir==1:
-                    #    mv.rotate180(d)
+                    if comp_dir==1:
+                        mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False

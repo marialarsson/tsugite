@@ -447,7 +447,7 @@ def display_milling_paths(window,mesh,view_opt):
     if len(mesh.indices_milling_path)==0: view_opt.show_milling_path = False
     if view_opt.show_milling_path:
         cols = [[1.0,0,0],[0,1.0,0],[0,0,1.0],[1.0,1.0,0],[0.0,1.0,1.0],[1.0,0,1.0]]
-        glLineWidth(1)
+        glLineWidth(3)
         for n in range(mesh.noc):
             if mesh.eval.fab_direction_ok[n]:
                 glUniform3f(5,cols[n][0],cols[n][1],cols[n][2])
@@ -561,8 +561,11 @@ def main():
     if args.type==0:
         fixed_sides = [[[2,0]],[[2,1]]]
         sax = 2
-    else:
+    elif args.type==1:
         fixed_sides = [[[2,0]],[[0,0]]]
+        sax = 2
+    else:
+        fixed_sides = [[[2,0]],[[0,0],[0,1]]]
         sax = 2
 
     mesh = Geometries(fixed_sides,sax)
@@ -637,8 +640,8 @@ def main():
 
         # Display joint geometries
         init_display()
-        init_shader(shader_tex, view_opt)
-        display_end_grains(window,mesh)
+        #init_shader(shader_tex, view_opt)
+        #display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
         if args.feedback:
             if not all(mesh.eval.connected): display_unconnected(window,mesh)
@@ -649,7 +652,7 @@ def main():
             display_selected(window,mesh,view_opt)
             display_moving_rotating(window,mesh,view_opt)
         display_joint_geometry(window,mesh,view_opt)
-        if args.feedback and mesh.eval.breakable: display_breakable(window,mesh,view_opt)
+        #if args.feedback and mesh.eval.breakable: display_breakable(window,mesh,view_opt)
         if view_opt.show_milling_path: display_milling_paths(window,mesh,view_opt)
         glfw.swap_buffers(window)
     glfw.terminate()
