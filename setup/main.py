@@ -640,8 +640,8 @@ def main():
 
         # Display joint geometries
         init_display()
-        #init_shader(shader_tex, view_opt)
-        #display_end_grains(window,mesh)
+        init_shader(shader_tex, view_opt)
+        display_end_grains(window,mesh)
         init_shader(shader_col, view_opt)
         if args.feedback:
             if not all(mesh.eval.connected): display_unconnected(window,mesh)

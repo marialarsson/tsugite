@@ -148,9 +148,11 @@ class Fabrication:
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
+                #mv.rotate180(d)
                 if comp_ax!=fax:
                     if comp_ax==2 or comp_ax==1: mv.rotate90(d)
                     if comp_dir==1:
+                        #if fdir==1:
                         mv.rotate180(d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
