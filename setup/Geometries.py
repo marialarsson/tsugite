@@ -1559,6 +1559,7 @@ class Geometries:
 
     def save(self):
         np.save("data/saved_height_fields.npy",self.height_fields)
+        np.save("data/saved_fixed_sides.npy",self.fixed_sides)
 
     def user_study_design_finished(self,args,duration,click_cnt):
         dir = os.getcwd()
@@ -1599,7 +1600,10 @@ class Geometries:
 
     def load(self):
         self.height_fields = np.load("data/saved_height_fields.npy")
+        self.fixed_sides = np.load("data/saved_fixed_sides.npy")
+        self.noc = len(self.fixed_sides)
         self.voxel_matrix_from_height_fields()
+        self.create_vertices()
         self.create_indices()
 
     def update_unblocked_fixed_sides(self):
