@@ -1602,6 +1602,10 @@ class Geometries:
         self.height_fields = np.load("data/saved_height_fields.npy")
         self.fixed_sides = np.load("data/saved_fixed_sides.npy")
         self.noc = len(self.fixed_sides)
+        self.fab_directions = []
+        for i in range(self.noc):
+            if i==0: self.fab_directions.append(0)
+            else: self.fab_directions.append(1)
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()

@@ -22,6 +22,10 @@ class ViewSettings:
 
         # Mouse rotation variables
         self.xrot, self.yrot = 0.8, 0.4
+        #self.xrot, self.yrot = math.pi, 0.0 # axial sliding A mill path
+        #elf.xrot, self.yrot = math.pi/2, 0.0 # perp sliding A mill path
+        #self.xrot, self.yrot = -math.pi/2, 0.0 # perp sliding B mill path
+        #self.xrot, self.yrot = -0.6, math.pi/2-0.2 # I joint
         #self.xrot, self.yrot = math.pi, 0.0
         self.xrot0, self.yrot0 = self.xrot, self.yrot
         self.xstart = self.ystart = 0.0
