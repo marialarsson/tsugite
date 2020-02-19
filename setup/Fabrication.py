@@ -111,7 +111,7 @@ class Fabrication:
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 3.00 #milling bit radius in mm
-        self.tol = 0.10 #0.15 #tolerance in mm
+        self.tol = 0.15 #0.10 #tolerance in mm
         self.rad -= self.tol
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio

@@ -80,6 +80,16 @@ def is_connected(mat,n):
         if connected_same==all_same: connected = True
     return connected
 
+def is_bridged(mat,n):
+    bridged = False
+    all_same = np.count_nonzero(mat==n) # Count number of ones in matrix
+    if all_same>0:
+        ind = tuple(np.argwhere(mat==n)[0]) # Pick a random one
+        inds = get_all_same_connected(mat,[ind]) # Get all its neighbors (recursively)
+        connected_same = len(inds)
+        if connected_same==all_same: bridged = True
+    return bridged
+
 def get_sliding_directions(mat,noc):
     sliding_directions = []
     number_of_sliding_directions = []
@@ -110,6 +120,35 @@ def get_sliding_directions(mat,noc):
                     mat_sliding.append([ax,dir])
         sliding_directions.append(mat_sliding)
         number_of_sliding_directions.append(len(mat_sliding))
+    return sliding_directions,number_of_sliding_directions
+
+def get_sliding_directions_of_one_timber(mat,level):
+    sliding_directions = []
+    n = level
+    for ax in range(3): # Browse the three possible sliding axes
+        oax = [0,1,2]
+        oax.remove(ax)
+        for dir in range(2): # Browse the two possible directions of the axis
+            slides_in_this_direction = True
+            for i in range(mat.shape[oax[0]]):
+                for j in range(mat.shape[oax[1]]):
+                    first_same = False
+                    for k in range(mat.shape[ax]):
+                        if dir==0: k = mat.shape[ax]-k-1
+                        ind = [i,j]
+                        ind.insert(ax,k)
+                        val = mat[tuple(ind)]
+                        if val==n:
+                            first_same = True
+                            continue
+                        elif first_same and val!=-1:
+                            slides_in_this_direction=False
+                            break
+                    if slides_in_this_direction==False: break
+                if slides_in_this_direction==False: break
+            if slides_in_this_direction==True:
+                sliding_directions.append([ax,dir])
+    number_of_sliding_directions = len(sliding_directions)
     return sliding_directions,number_of_sliding_directions
 
 def add_fixed_sides(mat,fixed_sides):
@@ -516,11 +555,32 @@ def layer_mat(mat3d,ax,dim,lay_num):
             mat2d[i][j]=int(mat3d[tuple(ind)])
     return mat2d
 
+def open_matrix(mat,sax,noc):
+    # Pad matrix by correct number of rows top and bottom
+    dim = len(mat)
+    pad_loc = [[0,0],[0,0],[0,0]]
+    pad_loc[sax] = [0,noc-1]
+    pad_val = [[-1,-1],[-1,-1],[-1,-1]]
+    pad_loc = tuple(map(tuple, pad_loc))
+    pad_val = tuple(map(tuple, pad_val))
+    mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
+
+    # Move integers one step at the time
+    for i in range(noc-1,0,-1):
+        inds = np.argwhere(mat==i)
+        for ind in inds:
+            mat[tuple(ind)]=-1
+        for ind in inds:
+            ind[sax]+=i
+            mat[tuple(ind)]=i
+    return mat
+
+
 class Evaluation:
-    def __init__(self,parent):
-        self.parent = parent
+    def __init__(self,voxel_matrix,fixed_sides,fab_directions,sax,noc):
         self.slides = []
         self.number_of_slides = []
+        self.interlock = False
         self.connected = []
         self.bridged = []
         self.breakable = []
@@ -531,89 +591,181 @@ class Evaluation:
         self.voxel_matrix_unconnected = None
         self.voxel_matrices_unbridged = []
         self.breakable_voxel_inds = []
-        self.update(parent)
+        self.sliding_depths = []
+        self.update(voxel_matrix,fixed_sides,fab_directions,sax,noc)
 
-    def update(self,parent):
-        self.voxel_matrix_with_sides = add_fixed_sides(parent.voxel_matrix, parent.fixed_sides)
-
-        # Sliding directions
-        self.slides,self.number_of_slides = get_sliding_directions(self.voxel_matrix_with_sides,parent.noc)
-
-        # Friction
-        #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
-
-        sax = parent.sax # sliding axis
-
-        # Chessboard
-        self.checker = []
-        self.checker_vertices = []
-        for n in range(parent.noc):
-            check,verts = get_chessboard_vertics(parent.voxel_matrix,sax,parent.noc,n)
-            self.checker.append(check)
-            self.checker_vertices.append(verts)
-
-
-        # Fabricatability by direction constraint
-        self.fab_direction_ok = []
-        for n in range(parent.noc):
-            if n==0 or n==parent.noc-1: self.fab_direction_ok.append(True)
-            else:
-                fab_ok,fab_dir = is_fab_direction_ok(parent.voxel_matrix,sax,n)
-                parent.fab_directions[n] = fab_dir
-                self.fab_direction_ok.append(fab_ok)
-
-        # Grain direction
-        for n in range(parent.noc):
-            brk,brk_inds = get_breakable_voxels(parent.voxel_matrix,parent.fixed_sides[n],sax,n)
-            self.breakable.append(brk)
-            self.breakable_voxel_inds.append(brk_inds)
+    def update(self,voxel_matrix,fixed_sides,fab_directions,sax,noc):
+        self.voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, fixed_sides)
+        dim = len(voxel_matrix)
 
         # Voxel connection and bridgeing
         self.connected = []
         self.bridged = []
         self.voxel_matrices_unbridged = []
-        for n in range(parent.noc):
+        for n in range(noc):
             self.connected.append(is_connected(self.voxel_matrix_with_sides,n))
             self.bridged.append(True)
             self.voxel_matrices_unbridged.append(None)
-        self.voxel_matrix_connected = parent.voxel_matrix.copy()
+        self.voxel_matrix_connected = voxel_matrix.copy()
         self.voxel_matrix_unconnected = None
-        if not all(self.connected):
-            self.seperate_unconnected(parent)
-            # Bridging
-            voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, parent.fixed_sides)
-            for n in range(parent.noc):
-                self.bridged[n] = is_connected(voxel_matrix_connected_with_sides,n)
-                if not self.bridged[n]:
-                    voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(parent,n)
-                    self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
 
-    def seperate_unconnected(self,parent):
-        connected_mat = np.zeros((parent.dim,parent.dim,parent.dim))-1
-        unconnected_mat = np.zeros((parent.dim,parent.dim,parent.dim))-1
-        for i in range(parent.dim):
-            for j in range(parent.dim):
-                for k in range(parent.dim):
+        self.seperate_unconnected(voxel_matrix,fixed_sides,dim)
+
+        # Bridging
+        voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, fixed_sides)
+        for n in range(noc):
+            self.bridged[n] = is_connected(voxel_matrix_connected_with_sides,n)
+            if not self.bridged[n]:
+                voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(voxel_matrix,fixed_sides,dim,n)
+                self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
+
+        # Fabricatability by direction constraint
+        self.fab_direction_ok = []
+        for n in range(noc):
+            if n==0 or n==noc-1: self.fab_direction_ok.append(True)
+            else:
+                fab_ok,fab_dir = is_fab_direction_ok(voxel_matrix,sax,n)
+                fab_directions[n] = fab_dir
+                self.fab_direction_ok.append(fab_ok)
+
+        # Chessboard
+        self.checker = []
+        self.checker_vertices = []
+        for n in range(noc):
+            check,verts = get_chessboard_vertics(voxel_matrix,sax,noc,n)
+            self.checker.append(check)
+            self.checker_vertices.append(verts)
+
+        # Sliding directions
+        self.slides,self.number_of_slides = get_sliding_directions(self.voxel_matrix_with_sides,noc)
+        self.interlock = True
+        if self.number_of_slides[0]>1 or self.number_of_slides[-1]>1: self.interlock=False
+        if self.interlock and noc>2:
+            for n in range(1,noc-1):
+                if self.number_of_slides[n]>0:
+                    self.interlock=False
+                    break
+
+        # Friction
+        #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
+
+        # Grain direction
+        for n in range(noc):
+            brk,brk_inds = get_breakable_voxels(voxel_matrix,fixed_sides[n],sax,n)
+            self.breakable.append(brk)
+            self.breakable_voxel_inds.append(brk_inds)
+
+        # Sliding depth
+        sliding_depths = [3,3,3]
+        open_mat = np.copy(self.voxel_matrix_with_sides)
+        for depth in range(4):
+            slds,nos = get_sliding_directions(open_mat,noc)
+            for n in range(noc):
+                if sliding_depths[n]!=3: continue
+                if n==0 or n==noc-1:
+                    if nos[n]>1: sliding_depths[n]=depth
+                else:
+                    if nos[n]>0: sliding_depths[n]=depth
+            open_mat = open_matrix(open_mat,sax,noc)
+        self.slide_depths = sliding_depths
+        self.slide_depth_product = np.prod(np.array(sliding_depths))
+        print(self.slide_depths,self.slide_depth_product)
+
+    def seperate_unconnected(self,voxel_matrix,fixed_sides,dim):
+        connected_mat = np.zeros((dim,dim,dim))-1
+        unconnected_mat = np.zeros((dim,dim,dim))-1
+        for i in range(dim):
+            for j in range(dim):
+                for k in range(dim):
                     connected = False
                     ind = [i,j,k]
-                    val = parent.voxel_matrix[tuple(ind)]
-                    connected = is_connected_to_fixed_side(np.array([ind]),parent.voxel_matrix,parent.fixed_sides[int(val)])
+                    val = voxel_matrix[tuple(ind)]
+                    connected = is_connected_to_fixed_side(np.array([ind]),voxel_matrix,fixed_sides[int(val)])
                     if connected: connected_mat[tuple(ind)] = val
                     else: unconnected_mat[tuple(ind)] = val
         self.voxel_matrix_connected = connected_mat
         self.voxel_matrix_unconnected = unconnected_mat
 
-    def seperate_unbridged(self,parent,n):
-        unbridged_1 = np.zeros((parent.dim,parent.dim,parent.dim))-1
-        unbridged_2 = np.zeros((parent.dim,parent.dim,parent.dim))-1
-        for i in range(parent.dim):
-            for j in range(parent.dim):
-                for k in range(parent.dim):
+
+    def seperate_unbridged(self,voxel_matrix,fixed_sides,dim,n):
+        unbridged_1 = np.zeros((dim,dim,dim))-1
+        unbridged_2 = np.zeros((dim,dim,dim))-1
+        for i in range(dim):
+            for j in range(dim):
+                for k in range(dim):
                     ind = [i,j,k]
-                    val = parent.voxel_matrix[tuple(ind)]
+                    val = voxel_matrix[tuple(ind)]
                     if val!=n: continue
-                    conn_1 = is_connected_to_fixed_side(np.array([ind]),parent.voxel_matrix,[parent.fixed_sides[n][0]])
-                    conn_2 = is_connected_to_fixed_side(np.array([ind]),parent.voxel_matrix,[parent.fixed_sides[n][1]])
+                    conn_1 = is_connected_to_fixed_side(np.array([ind]),voxel_matrix,[fixed_sides[n][0]])
+                    conn_2 = is_connected_to_fixed_side(np.array([ind]),voxel_matrix,[fixed_sides[n][1]])
                     if conn_1: unbridged_1[tuple(ind)] = val
                     if conn_2: unbridged_2[tuple(ind)] = val
         return unbridged_1, unbridged_2
+
+class EvaluationOne:
+    def __init__(self,voxel_matrix,fixed_sides,sax,noc,level,last):
+
+        # Initiate metrics
+        self.connected_and_bridged = True
+        self.bridged = True
+        self.interlock = True
+        self.nofragile = True
+        self.nocheck = True
+        self.other_connected_and_bridged = True
+        self.valid = False
+
+        # Add fixed sides to voxel matrix, get dimension
+        self.voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, fixed_sides)
+        dim = len(voxel_matrix)
+
+        #Connectivity and bridging
+        self.connected_and_bridged = is_connected(self.voxel_matrix_with_sides,level)
+
+        if self.connected_and_bridged:
+            if not last:
+                # Other connectivity and Bridging ---- THIS FUCNTION IS WRONG
+                other_level = 0
+                if level==0: other_level = 1
+                np.where(self.voxel_matrix_with_sides!=level)
+                np.where(self.voxel_matrix_with_sides==level, level, other_level)
+                self.other_connected_and_bridged = is_connected(self.voxel_matrix_with_sides,other_level)
+
+            if self.other_connected_and_bridged:
+                if last:
+                    # Checkerboard
+                    check,verts = get_chessboard_vertics(voxel_matrix,sax,noc,level)
+                    if check: self.nocheck=False
+
+                if self.nocheck:
+                    # Slidability
+                    self.slides,self.number_of_slides = get_sliding_directions_of_one_timber(self.voxel_matrix_with_sides,level)
+                    if level==0 or level==noc-1:
+                        if self.number_of_slides!=1: self.interlock=False
+                    else:
+                        if self.number_of_slides!=0: self.interlock=False
+
+                    if self.interlock:
+                        # Durability
+                        brk,brk_inds = get_breakable_voxels(voxel_matrix,fixed_sides[level],sax,level)
+                        if brk: self.nofragile = False
+
+                        if self.nofragile: self.valid=True
+
+class EvaluationSlides:
+    def __init__(self,voxel_matrix,fixed_sides,sax,noc):
+        voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, fixed_sides)
+        # Sliding depth
+        sliding_depths = [3,3,3]
+        open_mat = np.copy(voxel_matrix_with_sides)
+        for depth in range(4):
+            slds,nos = get_sliding_directions(open_mat,noc)
+            for n in range(noc):
+                if sliding_depths[n]!=3: continue
+                if n==0 or n==noc-1:
+                    if nos[n]>1: sliding_depths[n]=depth
+                else:
+                    if nos[n]>0: sliding_depths[n]=depth
+            open_mat = open_matrix(open_mat,sax,noc)
+        self.slide_depths = sliding_depths
+        #self.slide_depths_sorted = sliding_depths
+        #self.slide_depth_product = np.prod(np.array(sliding_depths))

@@ -1311,9 +1311,10 @@ def milling_path_indices(self,all_indices,count,start,n):
 class Geometries:
     def __init__(self,fs,sax,noc=2,hfs=None,draw=True):
         self.sax = sax
+        self.draw = draw
         self.fixed_sides = fs
         self.grain_rotation = random.uniform(0,math.pi)
-        self.noc = noc #number of components
+        self.noc = len(fs) #number of components
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)
@@ -1337,7 +1338,7 @@ class Geometries:
     def voxel_matrix_from_height_fields(self):
         vox_mat = mat_from_fields(self.height_fields,self.sax)
         self.voxel_matrix = vox_mat
-        self.eval = Evaluation(self)
+        self.eval = Evaluation(self.voxel_matrix,self.fixed_sides,self.fab_directions,self.sax,self.noc)
 
     def update_sliding_direction(self,sax):
         blocked = False
@@ -1429,6 +1430,13 @@ class Geometries:
         self.voxel_matrix_from_height_fields()
         self.create_vertices()
         self.create_indices()
+
+    def set_height_fields(self,hfs):
+        self.height_fields = hfs
+        self.voxel_matrix_from_height_fields()
+        if self.draw:
+            self.create_vertices()
+            self.create_indices()
 
     def create_vertices(self, milling_path=False):
 
@@ -1600,8 +1608,21 @@ class Geometries:
 
     def load(self):
         self.height_fields = np.load("data/saved_height_fields.npy")
-        self.fixed_sides = np.load("data/saved_fixed_sides.npy")
+        #self.height_fields = np.load("data/height_fields_0.npy")
+        #self.fixed_sides = np.load("data/saved_fixed_sides.npy")
         self.noc = len(self.fixed_sides)
+        self.fab_directions = []
+        for i in range(self.noc):
+            if i==0: self.fab_directions.append(0)
+            else: self.fab_directions.append(1)
+        self.voxel_matrix_from_height_fields()
+        self.create_vertices()
+        self.create_indices()
+
+    def load_voxmat(self):
+        maxi = len(os.listdir("data/3/20_10_00/2a_rank"))-1
+        i = random.randint(0,maxi)
+        self.height_fields = np.load("data/3/20_10_00/2a_rank/height_fields_"+str(i)+".npy")
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)

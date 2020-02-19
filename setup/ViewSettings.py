@@ -26,6 +26,9 @@ class ViewSettings:
         #elf.xrot, self.yrot = math.pi/2, 0.0 # perp sliding A mill path
         #self.xrot, self.yrot = -math.pi/2, 0.0 # perp sliding B mill path
         #self.xrot, self.yrot = -0.6, math.pi/2-0.2 # I joint
+        #self.xrot, self.yrot = -0.6, math.pi/2-0.8 # 3 joint
+        #self.xrot, self.yrot = -2.617993877991494, 1.0471975511965976
+        #self.xrot, self.yrot = -2.617993877991494, 0.7853981633974483
         #self.xrot, self.yrot = math.pi, 0.0
         self.xrot0, self.yrot0 = self.xrot, self.yrot
         self.xstart = self.ystart = 0.0
@@ -72,6 +75,12 @@ class ViewSettings:
         self.dragged = True
         self.xrot0 = self.xrot
         self.yrot0 = self.yrot
+
+    def standardize_rotation(self):
+        step = math.pi/12
+        self.xrot = step*int(0.5+self.xrot/step)
+        self.yrot = step*int(0.5+self.yrot/step)
+        print(self.xrot,self.yrot)
 
     def end_rotation(self):
         self.dragged = False
