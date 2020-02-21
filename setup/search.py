@@ -13,7 +13,7 @@ import argparse
 from itertools import product
 from datetime import datetime
 import os
-
+import shutil
 
 def mat_from_field(hf,ax,n0,n1):
     dim = len(hf)
@@ -32,8 +32,8 @@ def mat_from_field(hf,ax,n0,n1):
     mat = np.array(mat)
     return mat
 
-def first_hf(fixed_sides,sax,noc,dim):
-    print("Running computational search for valid joint geometries...")
+def first_hf(fixed_sides,sax,noc,dim,location,stop):
+    print("\nRunning computational search for valid joint geometries...")
     start_time = datetime.now()
     # Prepare to get all combinations for one height field
     hlist = []
@@ -43,10 +43,16 @@ def first_hf(fixed_sides,sax,noc,dim):
     for n in range(noc):
 
         # Browse fabrication direction(s)
-        fst,fen = 0,2
-        if n==0: fen=1
-        if n==noc-1: fst=1
-        for m in range(fst,fen):
+        for dir in range(2):
+            if n==0 and dir==1: continue
+            if n==noc-1 and dir==0: continue
+
+            #Define location
+            locloc = location + "\\tim_"+str(n)+"_fab_"+str(dir)
+            if not os.path.exists(locloc): os.mkdir(locloc)
+            else:
+                shutil.rmtree(locloc)
+                os.mkdir(locloc)
 
             start_time_loc = datetime.now()
             # Initiate failure mode counters
@@ -57,7 +63,7 @@ def first_hf(fixed_sides,sax,noc,dim):
             for i,flat_hf in enumerate(list(roll)):
 
                 ### while testing ###
-                #if total_cnt>999: break
+                if total_cnt>stop: break
                 ###
 
                 # Total count
@@ -86,7 +92,7 @@ def first_hf(fixed_sides,sax,noc,dim):
                 # Translate 2d matrix to 3d matrix
                 n0, n1 = n, 0
                 if n0==0: n1 = 1
-                if m==1: n0,n1 = n1,n0
+                if dir==1: n0,n1 = n1,n0
                 voxel_matrix =  mat_from_field(hf,sax,n0,n1)
 
                 # Evaluate
@@ -97,10 +103,9 @@ def first_hf(fixed_sides,sax,noc,dim):
                 elif not eval.interlock: mslid_cnt+=1
                 elif not eval.nofragile: frag_cnt+=1
                 else:
+                    np.save(locloc+"\\height_field_"+str(valid_cnt)+".npy",hf)
                     valid_cnt+=1
-                    if m==0: np.save("data/3/20_10_00/"+str(n+1)+"a/height_field_"+str(valid_cnt)+".npy",hf)
-                    else: np.save("data/3/20_10_00/"+str(n+1)+"b/height_field_"+str(valid_cnt)+".npy",hf)
-            print("\n-----Timber number",n+1,", Fabrication direction",m,"-----")
+            print("\n-----Timber number",n+1,", Fabrication direction",dir,"-----")
             print("Total:\t\t",   total_cnt)
             print("Too few/many:\t",num_cnt)
             print("Unconn/unbri:\t",  uncon_cnt)
@@ -111,68 +116,109 @@ def first_hf(fixed_sides,sax,noc,dim):
             print("\nSearch finished in",datetime.now()-start_time_loc)
     print("\nAll searches finished in",datetime.now()-start_time)
 
-def second_hfs(fixed_sides,sax,noc,dim):
-    print("Creating following height fields from first...")
+def second_hfs(fixed_sides,sax,noc,dim,location):
+    print("\nCreating following height fields from first...")
+
+    #Define location
+    locloc = location + "\\allvalid"
+    if not os.path.exists(locloc): os.mkdir(locloc)
+    else:
+        shutil.rmtree(locloc)
+        os.mkdir(locloc)
+
     start_time = datetime.now()
     hlist = []
     cnt = 0
     for h in range(dim+1): hlist.append(h)
 
+    # Get combination with fewest height height_fields
+    nov = [] #number of valid
+    for n in range(noc):
+        hfs_num = 0
+        if n!=noc-1:
+            files = os.listdir(location+"\\tim_"+str(n)+"_fab_0")
+            hfs_num += len(files)
+        if n!=0:
+            files = os.listdir(location+"\\tim_"+str(n)+"_fab_1")
+            hfs_num += len(files)
+        if hfs_num==0: print("NO SOLUTION")
+        nov.append(hfs_num)
+    noc_sorted = []
+    for n in range(noc): noc_sorted.append(n)
+    noc_sorted = [x for _,x in sorted(zip(nov,noc_sorted))]
+    print("Order of evaluation",noc_sorted)
+
     # Browse files of height fields
-    files = os.listdir("data/3/20_10_00/2a")
-    for fi,filename in enumerate(files):
-        if fi%10==0: print(cnt,fi,datetime.now()-start_time)
+    for dir in range(2): # fabrication direction
+        if dir==0 and noc_sorted[0]==noc-1: continue
+        if dir==1 and noc_sorted[0]==0: continue
 
-        # Second hf
-        hf2 = np.load("data/3/20_10_00/2a/"+filename)
+        files = os.listdir(location+"\\tim_"+str(noc_sorted[0])+"_fab_"+str(dir))
+        for fi,filename in enumerate(files):
 
-        # First hf base
-        hf1base = np.zeros((dim,dim))
-        for i in range(dim):
-            for j in range(dim):
-                if hf2[i,j]==0: hf1base[i,j]=99
-                else: hf1base[i,j]=0
+            # Second hf
+            hf2base = np.load(location+"\\tim_"+str(noc_sorted[0])+"_fab_"+str(dir)+"\\"+filename)
 
-        # Combinations for first hf by roll
-        rollcnt = (hf2==0).sum()
-        #print("roll count",rollcnt)
-        if rollcnt!=0:
-            roll = product(hlist, repeat=rollcnt)
-            for values in roll:
-                hf1 = np.copy(hf1base)
-                inds = np.argwhere(hf1==99)
-                for ind,val in zip(inds,values):
-                    hf1[tuple(ind)]=val
-                # Make sure there are at least 3 voxels for each component
-                sum = np.sum(np.array(hf1))
-                min_vox = 3
-                if sum<=min_vox or sum>=(dim*dim*dim-(noc-1)*min_vox): continue
-                # Evaluate the timber with 2nd fewest solutions (2)
-                voxel_matrix =  mat_from_fields([hf1,hf2],sax)
-                eval = EvaluationOne(voxel_matrix,fixed_sides,sax,noc,2,True)
-                if eval.valid:
-                    # Evaluate the last timber with most solutions (0)
-                    #eval = EvaluationOne(voxel_matrix,fixed_sides,sax,noc,0,True)
-                    #if eval.valid:
-                    np.save("data/3/20_10_00/2a_full/height_fields_"+str(cnt)+".npy",[hf1,hf2])
-                    cnt+=1
-                    if cnt%10==0: print(cnt,fi,datetime.now()-start_time)
-    print("Created",cnt-1,"new geometries from",len(files),"initiations in",datetime.now()-start_time)
+            # First hf base
+            hf1base = np.zeros((dim,dim))
+            for i in range(dim):
+                for j in range(dim):
+                    if hf2base[i,j]==dir*dim: hf1base[i,j]=99
+                    else: hf1base[i,j]=dir*hf2base[i,j]
+            # Combinations for first hf by roll
+            rollcnt = (hf1base==99).sum()
+            if rollcnt!=0:
+                roll = product(hlist, repeat=rollcnt)
+                for values in roll:
+                    hf1 = np.copy(hf1base)
+                    inds = np.argwhere(hf1==99)
+                    for ind,val in zip(inds,values):
+                        hf1[tuple(ind)]=val
+                    # Make sure there are at least 3 voxels for each component
+                    sum = np.sum(np.array(hf1))
+                    min_vox = 3
+                    if sum<=min_vox or sum>=(dim*dim*dim-(noc-1)*min_vox): continue
+                    # Create second height field
+                    if dir==0: hf2 = hf2base
+                    else:
+                        hf2 = np.zeros((dim,dim))
+                        for i in range(dim):
+                            for j in range(dim):
+                                if hf2base[i,j]==dim: hf2[i,j]=hf1[i,j]
+                                else: hf2[i,j]=dim
 
-def reduce(fixed_sides,sax,noc,dim):
-    print("Order valid results according to sliding depth product...")
+                    # Evaluate the other timbers, starting with the one with the fewest solutions
+                    voxel_matrix =  mat_from_fields([hf1,hf2],sax)
+                    for n in range(1,noc):
+                        eval = EvaluationOne(voxel_matrix,fixed_sides,sax,noc,n,True)
+                        if not eval.valid: break
+                    if eval.valid:
+                        np.save(locloc+"\\height_fields_"+str(cnt)+".npy",[hf1,hf2])
+                        cnt+=1
+                        print(cnt,fi,datetime.now()-start_time)
+    print("Created",cnt,"new geometries from",sorted(nov)[0],"initiations in",datetime.now()-start_time)
+
+def reduce(fixed_sides,sax,noc,dim,location):
+    print("\nReducing valid results according to sliding depth...")
     start_time = datetime.now()
 
     slide_depts = []
     HF = []
 
+    #Define location
+    locloc = location + "\\allvalid_reduced"
+    if not os.path.exists(locloc): os.mkdir(locloc)
+    else:
+        shutil.rmtree(locloc)
+        os.mkdir(locloc)
+
     # Browse files of height fields
-    files = os.listdir("data/3/20_10_00/2a_full")
+    files = os.listdir(location+"\\allvalid")
     for fi,filename in enumerate(files):
         if fi%100==0: print(fi,"...")
 
         # Load heightfileds
-        hfs = np.load("data/3/20_10_00/2a_full/"+filename)
+        hfs = np.load(location+"\\allvalid\\"+filename)
         HF.append(hfs)
 
         # Get voxel matrix
@@ -192,8 +238,7 @@ def reduce(fixed_sides,sax,noc,dim):
         slide_depts = np.delete(slide_depts, inds, 0)
         HF = np.delete(HF, inds, 0)
 
-    for i in range(len(HF)): np.save("data/3/20_10_00/2a_rank/height_fields_"+str(i)+".npy",HF[i])
-
+    for i in range(len(HF)): np.save(locloc+"\\height_fields_"+str(i)+".npy",HF[i])
     print("Reduced",len(files),"geometries to", len(HF),"in",datetime.now()-start_time)
 
 if __name__ == "__main__":
@@ -203,14 +248,35 @@ if __name__ == "__main__":
     parser.add_argument("--first", action='store_true')
     parser.add_argument("--second", action='store_true')
     parser.add_argument("--reduce", action='store_true')
+    parser.add_argument("--stop", default=1000, type=int)
     args = parser.parse_args()
 
     # Shared variables
-    fixed_sides = [[[2,0]],[[1,0]],[[0,0]]]
+    fixed_sides = [[[2,0]],[[1,0]],[[0,0]],[[2,1]]]
     sax = 2
-    noc = 3
+    noc = len(fixed_sides)
     dim = 3
 
-    if args.first: first_hf(fixed_sides,sax,noc,dim)
-    if args.second: second_hfs(fixed_sides,sax,noc,dim)
-    if args.reduce: reduce(fixed_sides,sax,noc,dim)
+    # Folder
+    s = "\\"
+    location = os.path.abspath(os.getcwd())
+    location = location.split(s)
+    location.pop()
+    location = s.join(location)
+    location += "\\search_results"
+    if not os.path.exists(location): os.mkdir(location)
+    location += "\\noc_"+str(noc)
+    if not os.path.exists(location): os.mkdir(location)
+    location += "\\dim_"+str(dim)
+    if not os.path.exists(location): os.mkdir(location)
+    location += "\\fs_"
+    for i in range(len(fixed_sides)):
+        for fs in fixed_sides[i]:
+            location+=str(fs[0])+str(fs[1])
+        if i!=len(fixed_sides)-1: location+=("_")
+    if not os.path.exists(location): os.mkdir(location)
+    print("\nLocation:",location)
+
+    if args.first: first_hf(fixed_sides,sax,noc,dim,location,args.stop)
+    if args.second: second_hfs(fixed_sides,sax,noc,dim,location)
+    if args.reduce: reduce(fixed_sides,sax,noc,dim,location)

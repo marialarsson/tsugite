@@ -1619,10 +1619,23 @@ class Geometries:
         self.create_vertices()
         self.create_indices()
 
-    def load_voxmat(self):
-        maxi = len(os.listdir("data/3/20_10_00/2a_rank"))-1
+    def load_search_results(self):
+        # Folder
+        s = "\\"
+        location = os.path.abspath(os.getcwd())
+        location = location.split(s)
+        location.pop()
+        location = s.join(location)
+        location += "\\search_results\\noc_"+str(self.noc)+"\\dim_"+str(self.dim)+"\\fs_"
+        for i in range(len(self.fixed_sides)):
+            for fs in self.fixed_sides[i]:
+                location+=str(fs[0])+str(fs[1])
+            if i!=len(self.fixed_sides)-1: location+=("_")
+        location+="\\allvalid_reduced"
+        print("Trying to load geometry from",location)
+        maxi = len(os.listdir(location))-1
         i = random.randint(0,maxi)
-        self.height_fields = np.load("data/3/20_10_00/2a_rank/height_fields_"+str(i)+".npy")
+        self.height_fields = np.load(location+"\\height_fields_"+str(i)+".npy")
         self.fab_directions = []
         for i in range(self.noc):
             if i==0: self.fab_directions.append(0)

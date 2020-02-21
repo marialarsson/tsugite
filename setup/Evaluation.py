@@ -151,14 +151,14 @@ def get_sliding_directions_of_one_timber(mat,level):
     number_of_sliding_directions = len(sliding_directions)
     return sliding_directions,number_of_sliding_directions
 
-def add_fixed_sides(mat,fixed_sides):
+def add_fixed_sides(mat,fixed_sides, add=0):
     dim = len(mat)
     pad_loc = [[0,0],[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1],[-1,-1]]
     for n in range(len(fixed_sides)):
         for ax,dir in fixed_sides[n]:
             pad_loc[ax][dir] = 1
-            pad_val[ax][dir] = n
+            pad_val[ax][dir] = n+add
     pad_loc = tuple(map(tuple, pad_loc))
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
@@ -575,6 +575,84 @@ def open_matrix(mat,sax,noc):
             mat[tuple(ind)]=i
     return mat
 
+def flood_all_nonneg(mat,floodval):
+    inds = np.argwhere(mat==floodval)
+    start_len = len(inds)
+    for ind in inds:
+        for ax in range(3):
+            for dir in range(-1,2,2):
+                #define neighbor index
+                ind2 = np.copy(ind)
+                ind2[ax]+=dir
+                #within bounds?
+                if ind2[ax]<0: continue
+                if ind2[ax]>=mat.shape[ax]: continue
+                #relevant value?
+                val = mat[tuple(ind2)]
+                if val<0 or val==floodval: continue
+                #overwrite
+                mat[tuple(ind2)]=floodval
+    end_len = len(np.argwhere(mat==floodval))
+    if end_len>start_len:
+        mat = flood_all_nonneg(mat,floodval)
+    return mat
+
+def is_potentially_connected(mat,dim,noc,level):
+    potconn=True
+    mat[mat==level] = -1
+    mat[mat==level+10] = -1
+
+    # 1. Check for connectivity
+    floodval = 99
+    mat_conn = np.copy(mat)
+    flood_start_vals = []
+    for n in range(noc):
+        if n!=level: mat_conn[mat_conn==n+10] = floodval
+
+    # Recursively add all postive neigbors
+    mat_conn = flood_all_nonneg(mat_conn,floodval)
+
+    # Get the count of all uncovered voxels
+    uncovered_inds = np.argwhere((mat_conn!=floodval)&(mat_conn>=0))
+    if len(uncovered_inds)>0: potconn=False
+
+
+    if potconn:
+        # 3. Check so that there are at least some (3) voxels that could connect to each fixed side
+        for n in range(noc):
+            if n==level: continue
+            mat_conn = np.copy(mat)
+            mat_conn[mat_conn==n+10] = floodval
+            for n2 in range(noc):
+                if n2==level or n2==n: continue
+                mat_conn[mat_conn==n2+10] = -1
+            start_len = len(np.argwhere(mat_conn==floodval))
+            # Recursively add all postive neigbors
+            mat_conn = flood_all_nonneg(mat_conn,floodval)
+            end_len = len(np.argwhere(mat_conn==floodval))
+            if end_len-start_len<3:
+                potconn=False
+                #print("too few potentially connected for",n,".difference:",end_len-start_len)
+                #print(mat)
+                break
+        # 3. Check for potential bridging
+        for n in range(noc):
+            if n==level: continue
+            inds = np.argwhere(mat==n+10)
+            if len(inds)>dim*dim*dim: #i.e. if there are more than 1 fixed side
+                mat_conn = np.copy(mat)
+                mat_conn[tuple(inds[0])] = floodval #make 1 item 99
+                for n2 in range(noc):
+                    if n2==level or n2==n: continue
+                    mat_conn[mat_conn==n2+10] = -1
+                # Recursively add all postive neigbors
+                mat_conn = flood_all_nonneg(mat_conn,floodval)
+                for ind in inds:
+                    if mat_conn[tuple(ind)]!=floodval:
+                        potconn = False
+                        #print("Not potentially bridgning")
+                        break
+    return potconn
 
 class Evaluation:
     def __init__(self,voxel_matrix,fixed_sides,fab_directions,sax,noc):
@@ -707,11 +785,10 @@ class EvaluationOne:
 
         # Initiate metrics
         self.connected_and_bridged = True
-        self.bridged = True
+        self.other_connected_and_bridged = True
+        self.nocheck = True
         self.interlock = True
         self.nofragile = True
-        self.nocheck = True
-        self.other_connected_and_bridged = True
         self.valid = False
 
         # Add fixed sides to voxel matrix, get dimension
@@ -720,36 +797,36 @@ class EvaluationOne:
 
         #Connectivity and bridging
         self.connected_and_bridged = is_connected(self.voxel_matrix_with_sides,level)
+        if not self.connected_and_bridged: return
 
-        if self.connected_and_bridged:
-            if not last:
-                # Other connectivity and Bridging ---- THIS FUCNTION IS WRONG
-                other_level = 0
-                if level==0: other_level = 1
-                np.where(self.voxel_matrix_with_sides!=level)
-                np.where(self.voxel_matrix_with_sides==level, level, other_level)
-                self.other_connected_and_bridged = is_connected(self.voxel_matrix_with_sides,other_level)
+        # Other connectivity and bridging
+        if not last:
+            other_level = 0
+            if level==0: other_level = 1
+            special_voxmat_with_sides = add_fixed_sides(voxel_matrix, fixed_sides, 10)
+            self.other_connected_and_bridged = is_potentially_connected(special_voxmat_with_sides,dim,noc,level)
+            if not self.other_connected_and_bridged: return
 
-            if self.other_connected_and_bridged:
-                if last:
-                    # Checkerboard
-                    check,verts = get_chessboard_vertics(voxel_matrix,sax,noc,level)
-                    if check: self.nocheck=False
+        # Checkerboard
+        if last:
+            check,verts = get_chessboard_vertics(voxel_matrix,sax,noc,level)
+            if check: self.nocheck=False
+            if not self.nocheck: return
 
-                if self.nocheck:
-                    # Slidability
-                    self.slides,self.number_of_slides = get_sliding_directions_of_one_timber(self.voxel_matrix_with_sides,level)
-                    if level==0 or level==noc-1:
-                        if self.number_of_slides!=1: self.interlock=False
-                    else:
-                        if self.number_of_slides!=0: self.interlock=False
+        # Slidability
+        self.slides,self.number_of_slides = get_sliding_directions_of_one_timber(self.voxel_matrix_with_sides,level)
+        if level==0 or level==noc-1:
+            if self.number_of_slides!=1: self.interlock=False
+        else:
+            if self.number_of_slides!=0: self.interlock=False
+        if not self.interlock: return
 
-                    if self.interlock:
-                        # Durability
-                        brk,brk_inds = get_breakable_voxels(voxel_matrix,fixed_sides[level],sax,level)
-                        if brk: self.nofragile = False
+        # Durability
+        brk,brk_inds = get_breakable_voxels(voxel_matrix,fixed_sides[level],sax,level)
+        if brk: self.nofragile = False
+        if not self.nofragile: return
 
-                        if self.nofragile: self.valid=True
+        self.valid=True
 
 class EvaluationSlides:
     def __init__(self,voxel_matrix,fixed_sides,sax,noc):

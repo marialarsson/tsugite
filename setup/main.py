@@ -142,7 +142,7 @@ def keyCallback(window,key,scancode,action,mods):
             # Save / Open
             elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(mesh)
             elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(mesh)
-            elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_voxmat(mesh)
+            elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_search_results(mesh)
             # Milling path
             elif key==glfw.KEY_M:
                 view_opt.show_milling_path = not view_opt.show_milling_path
@@ -552,7 +552,7 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    fixed_sides = [[[2,0]],[[1,0]],[[0,0]]]
+    fixed_sides = [[[2,0]],[[1,0]],[[0,0]],[[2,1]]]
     sax = 2
 
     mesh = Geometries(fixed_sides,sax)
