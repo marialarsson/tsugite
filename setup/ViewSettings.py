@@ -9,8 +9,9 @@ class ViewSettings:
         # Visibility variables
         self.hidden = [False,False,False,False,False,False]
         self.show_hidden_lines = True
-        self.show_arrows = True
+        self.show_feedback = True
         self.show_milling_path = False
+        self.show_suggestions = True
 
         # Joint opening variables
         self.open_joint = False
@@ -22,14 +23,6 @@ class ViewSettings:
 
         # Mouse rotation variables
         self.xrot, self.yrot = 0.8, 0.4
-        #self.xrot, self.yrot = math.pi, 0.0 # axial sliding A mill path
-        #elf.xrot, self.yrot = math.pi/2, 0.0 # perp sliding A mill path
-        #self.xrot, self.yrot = -math.pi/2, 0.0 # perp sliding B mill path
-        #self.xrot, self.yrot = -0.6, math.pi/2-0.2 # I joint
-        #self.xrot, self.yrot = -0.6, math.pi/2-0.8 # 3 joint
-        #self.xrot, self.yrot = -2.617993877991494, 1.0471975511965976
-        #self.xrot, self.yrot = -2.617993877991494, 0.7853981633974483
-        #self.xrot, self.yrot = math.pi, 0.0
         self.xrot0, self.yrot0 = self.xrot, self.yrot
         self.xstart = self.ystart = 0.0
         self.dragged = False
