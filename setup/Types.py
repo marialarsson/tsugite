@@ -111,7 +111,7 @@ def produce_suggestions(type,hfs):
                     val = sugg_hfs[i][j][k]
                     if val>=0 and val<type.dim:
                         sugg_voxmat = mat_from_fields(sugg_hfs,type.sax)
-                        sugg_eval = Evaluation(sugg_voxmat,type)
+                        sugg_eval = Evaluation(sugg_voxmat,type,mainmesh=False)
                         if sugg_eval.valid:
                             valid_suggestions.append(sugg_hfs)
                             if len(valid_suggestions)==4: break
@@ -254,7 +254,6 @@ class Types:
         self.sugs = [] # clear list of suggestions
         sugg_hfs = []
         if not self.mesh.eval.valid:
-            print("Looking for valud suggestions...")
+            #print("Looking for valid suggestions...")
             sugg_hfs = produce_suggestions(self,self.mesh.height_fields)
-            print(sugg_hfs)
             for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))

@@ -458,29 +458,7 @@ def component_outline_indices(self,all_indices,fixed_sides,n,offset):
     # Return
     return indices_prop, all_indices
 
-def voxel_outline_indices(all_indices,diffmat,global_offset):
-    n = 0
-    dim = len(diffmat)
-    indices = []
-    inds = np.argwhere(diffmat!=0)
-    for ind in inds:
-        for ax in range(3):
-            add = [0,0,0]
-            add[ax] = 1
-            start_i = get_index(ind,[0,0,0],dim)
-            end_i = get_index(ind,add,dim)
-            indices.extend([start_i,end_i])
-    # Format
-    indices = np.array(indices, dtype=np.uint32)
-    #indices = indices + offset
-    # Store
-    indices_prop = ElementProperties(GL_LINES, len(indices), len(all_indices)+global_offset, n)
-    all_indices = np.concatenate([all_indices, indices])
-    # Return
-    return indices_prop, all_indices
-
-
-"""
+##########
 
 def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
     neighbors = []
@@ -1238,7 +1216,6 @@ def milling_path_vertices(self,n):
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
 
-
     # Format and return
     vertices = np.array(vertices, dtype = np.float32)
     return vertices, milling_vertices
@@ -1256,7 +1233,6 @@ def milling_path_indices(self,all_indices,count,start,n):
     all_indices = np.concatenate([all_indices, indices])
     # Return
     return indices_prop, all_indices
-"""
 
 class Geometries:
     def __init__(self,parent,mainmesh=True,hfs=None):
@@ -1291,15 +1267,14 @@ class Geometries:
                 lns,all_inds = joint_line_indices(self,all_inds,n,n*self.parent.vn,global_offset=glo_off)
                 self.indices_fall.append(all)
                 self.indices_lns.append(lns)
-            # which is it one voxel that is different?
-            diffmat = self.parent.mesh.voxel_matrix-self.voxel_matrix
-            self.indices_voxlns,all_inds = voxel_outline_indices(all_inds,diffmat,glo_off)
         #current geometry
         else:
             self.indices_fend=[]
             self.indices_not_fend=[]
             self.indices_fcon = []
             self.indices_not_fcon = []
+            self.indices_fbrk = []
+            self.indices_not_fbrk = []
             self.indices_open_lines = []
             self.indices_not_fbridge = []
             self.indices_arrows = []
@@ -1322,6 +1297,10 @@ class Geometries:
                     self.indices_not_fcon.append(None)
                     all = con
 
+                #breakable and not breakable faces
+                fne,fe,brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.breakable_voxmat,[],n,n*self.parent.vn)
+                fne,fe,not_brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.non_breakable_voxmat,self.parent.fixed_sides[n],n,n*self.parent.vn)
+
                 if not self.eval.bridged[n]:
                     unbris = []
                     for m in range(2):
@@ -1341,7 +1320,7 @@ class Geometries:
                 else: chess = []
                 # Breakable lines
                 if self.eval.breakable:
-                    break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_voxel_inds[n],n,n*self.parent.vn)
+                    break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_outline_inds[n],n,n*self.parent.vn)
 
                 # Opening lines
                 open,all_inds = open_line_indices(self,all_inds,n,n*self.parent.vn)
@@ -1365,7 +1344,10 @@ class Geometries:
                 self.indices_fpick_top.append(faces_pick_tops)
                 self.indices_fpick_not_top.append(faces_pick_not_tops)
                 self.indices_chess_lines.append(chess)
-                if self.eval.breakable: self.indices_breakable_lines.append(break_lns)
+                if self.eval.breakable:
+                    self.indices_breakable_lines.append(break_lns)
+                    self.indices_fbrk.append(brk_faces)
+                    self.indices_not_fbrk.append(not_brk_faces)
                 #if milling_path and len(self.mverts[0])>0:
                 #    self.indices_milling_path.append(mill)
 

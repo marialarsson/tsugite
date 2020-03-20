@@ -320,19 +320,17 @@ def display_end_grains(window,mesh):
     G1 = mesh.indices_not_fend
     draw_geometries_with_excluded_area(window,G0,G1)
 
-def display_unconnected(window,mesh,noc):
+def display_unconnected(window,mesh):
     # 1. Draw hidden geometry
     col = [1.0, 0.8, 0.7]  # light red orange
     glUniform3f(5, col[0], col[1], col[2])
-    for n in range(noc):
+    for n in range(mesh.parent.noc):
         if not mesh.eval.connected[n]: draw_geometries(window,[mesh.indices_not_fcon[n]])
 
     # 1. Draw visible geometry
     col = [1.0, 0.2, 0.0] # red orange
     glUniform3f(5, col[0], col[1], col[2])
-    G0 = []
-    for n in range(noc):
-        if not mesh.eval.connected[n]: G0.append(mesh.indices_not_fcon[n])
+    G0 = mesh.indices_not_fcon
     G1 = mesh.indices_fcon
     draw_geometries_with_excluded_area(window,G0,G1)
 
@@ -446,10 +444,22 @@ def display_checker(window,mesh,view_opt):
             draw_geometries(window,[mesh.indices_chess_lines[n]])
     glUniform3f(5, 0.0, 0.0, 0.0) # back to black
 
-def display_breakable(window,mesh,view_opt):
+def display_breakable_faces(window,mesh,view_opt):
+    # 1. Draw hidden geometry
+    col = [1.0, 1.0, 0.8] # super light yellow
+    glUniform3f(5, col[0], col[1], col[2])
+    for n in range(mesh.parent.noc):
+        draw_geometries_with_excluded_area(window,[mesh.indices_fbrk[n]],[mesh.indices_not_fbrk[n]])
+
+    # Draw visible geometry
+    col = [1.0, 1.0, 0.4] # light yellow
+    glUniform3f(5, col[0], col[1], col[2])
+    draw_geometries_with_excluded_area(window,mesh.indices_fbrk,mesh.indices_not_fbrk)
+
+def display_breakable_lines(window,mesh,view_opt):
     # 1. Draw hidden geometry
     glPushAttrib(GL_ENABLE_BIT)
-    glUniform3f(5, 1.0, 0.9, 0.0) # yellow
+    glUniform3f(5, 1.0, 0.4, 0.0) # red
     glLineWidth(5)
     glEnable(GL_LINE_STIPPLE)
     glLineStipple(4, 0xAAAA)
@@ -468,6 +478,32 @@ def display_milling_paths(window,type,view_opt):
             if mesh.eval.fab_direction_ok[n]:
                 glUniform3f(5,cols[n][0],cols[n][1],cols[n][2])
                 draw_geometries(window,[mesh.indices_milling_path[n]])
+
+def display_diff_voxel_from_suggestion(window,type,view_opt):
+    index = type.mesh.select.suggstate
+    glPushAttrib(GL_ENABLE_BIT)
+    # draw faces of additional part
+    glUniform3f(5, 1.0, 1.0, 1.0) # white
+    for n in range(type.noc):
+        G0 = [type.sugs[index].indices_fall[n]]
+        G1 = type.mesh.indices_fall
+        draw_geometries_with_excluded_area(window,G0,G1)
+    # draw faces of subtracted part
+    glUniform3f(5, 1.0, 0.5, 0.5) # pink/red
+    for n in range(type.noc):
+        G0 = [type.mesh.indices_fall[n]]
+        G1 = type.sugs[index].indices_fall
+        draw_geometries_with_excluded_area(window,G0,G1)
+    # draw outlines
+    glUniform3f(5, 0.0, 0.0, 0.0) # black
+    glLineWidth(3)
+    glEnable(GL_LINE_STIPPLE)
+    glLineStipple(2, 0xAAAA)
+    for n in range(type.noc):
+        G0 = [type.sugs[index].indices_lns[n]]
+        G1 = type.sugs[index].indices_fall
+        draw_geometries_with_excluded_area(window,G0,G1)
+    glPopAttrib()
 
 def pick(window, mesh, view_opt, shader_col, show_col=False):
 
@@ -616,7 +652,8 @@ def main():
         display_end_grains(window,type.mesh)
         init_shader(shader_col, view_opt)
         if view_opt.show_feedback:
-            if not all(type.mesh.eval.connected): display_unconnected(window,type.mesh,type.noc)
+            if any(type.mesh.eval.breakable): display_breakable_faces(window,type.mesh,view_opt)
+            if not all(type.mesh.eval.connected): display_unconnected(window,type.mesh)
             if not all(type.mesh.eval.bridged): display_unbridged(window,type.mesh,view_opt)
             if any(type.mesh.eval.checker): display_checker(window,type.mesh,view_opt)
             display_arrows(window,type.mesh,view_opt)
@@ -624,7 +661,9 @@ def main():
             display_selected(window,type.mesh,view_opt)
             display_moving_rotating(window,type.mesh,view_opt)
         display_joint_geometry(window,type.mesh,view_opt)
-        if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable(window,type.mesh,view_opt)
+        if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable_lines(window,type.mesh,view_opt)
+        if type.mesh.select.suggstate>=0 and type.mesh.select.suggstate<len(type.sugs):
+            display_diff_voxel_from_suggestion(window,type,view_opt)
         #if view_opt.show_milling_path: display_milling_paths(window,type.mesh,view_opt)
 
         # Display joint geometries (suggestions)

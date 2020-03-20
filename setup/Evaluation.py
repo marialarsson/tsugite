@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 from Fabrication import RegionVertex
 
 def get_ordered_outline(verts):
@@ -406,7 +407,7 @@ def get_neighbors_2d(ind,reg_inds,lay_mat,n):
         values.append(temp2)
     return in_out, values
 
-def get_region_outline(reg_inds,lay_mat,n):
+def get_region_outline(reg_inds,lay_mat,fixed_neighbors,n):
     # also duplicate vertices on diagonal
     reg_verts = []
     for i in range(lay_mat.shape[0]+1):
@@ -430,7 +431,8 @@ def get_region_outline(reg_inds,lay_mat,n):
 
 def get_breakable_voxels(mat,fixed_sides,sax,n):
     breakable = False
-    indices = []
+    outline_indices = []
+    voxel_indices = []
     dim = len(mat)
     gax = fixed_sides[0][0] # grain axis
     if gax!=sax: # if grain direction does not equal to the sliding direction
@@ -499,15 +501,21 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
                                             if dir_ind[0]==ind2d_dir[0] and dir_ind[1]==ind2d_dir[1]:
                                                 attached_to_fragile = True
                                                 break
-                                    # need to check more steps later...
+                                    # need to check more steps later...####################################!!!!!!!!!!!!!!!
                                     if not attached_to_fragile:
                                         fixed_neighbors[int((dir+1)/2)] = True
 
                     if fixed_neighbors[0]==False or fixed_neighbors[1]==False:
                         breakable = True
 
+                        # Append to list of breakable voxel indices
+                        for ind in reg_inds:
+                            ind3d = list(ind.copy())
+                            ind3d.insert(pax,lay_num)
+                            voxel_indices.append(ind3d)
+
                         # Get region outline
-                        outline = get_region_outline(reg_inds,lay_mat,n)
+                        outline = get_region_outline(reg_inds,lay_mat,,fixed_neighbors,n)
 
                         # Order region outline
                         outline = get_ordered_outline(outline)
@@ -520,9 +528,9 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
                                     oind = outline[i+j].ind.copy()
                                     oind.insert(pax,lay_num)
                                     oind[pax]+=dir
-                                    indices.append(oind)
+                                    outline_indices.append(oind)
 
-    return breakable,indices
+    return breakable,outline_indices,voxel_indices
 
 def is_fab_direction_ok(mat,ax,n):
     fab_dir = 1
@@ -655,7 +663,8 @@ def is_potentially_connected(mat,dim,noc,level):
     return potconn
 
 class Evaluation:
-    def __init__(self,voxel_matrix,type):
+    def __init__(self,voxel_matrix,type,mainmesh=True):
+        self.mainmesh = mainmesh
         self.valid = True
         self.slides = []
         self.number_of_slides = []
@@ -669,6 +678,7 @@ class Evaluation:
         self.voxel_matrix_connected = None
         self.voxel_matrix_unconnected = None
         self.voxel_matrices_unbridged = []
+        self.breakable_outline_inds = []
         self.breakable_voxel_inds = []
         self.sliding_depths = []
         self.update(voxel_matrix,type)
@@ -733,9 +743,11 @@ class Evaluation:
 
         # Grain direction
         for n in range(type.noc):
-            brk,brk_inds = get_breakable_voxels(voxel_matrix,type.fixed_sides[n],type.sax,n)
+            brk,brk_oinds,brk_vinds = get_breakable_voxels(voxel_matrix,type.fixed_sides[n],type.sax,n)
             self.breakable.append(brk)
-            self.breakable_voxel_inds.append(brk_inds)
+            self.breakable_outline_inds.append(brk_oinds)
+            self.breakable_voxel_inds.append(brk_vinds)
+        self.non_breakable_voxmat, self.breakable_voxmat = self.seperate_voxel_matrix(voxel_matrix,self.breakable_voxel_inds)
 
         if not self.interlock or not all(self.connected) or not all(self.bridged):
             self.valid=False
@@ -774,6 +786,17 @@ class Evaluation:
         self.voxel_matrix_connected = connected_mat
         self.voxel_matrix_unconnected = unconnected_mat
 
+    def seperate_voxel_matrix(self,voxmat,inds):
+        dim = len(voxmat)
+        voxmat_a = copy.deepcopy(voxmat)
+        voxmat_b = np.zeros((dim,dim,dim))-1
+        for n in range(len(inds)):
+            for ind in inds[n]:
+                ind = tuple(ind)
+                val = voxmat[ind]
+                voxmat_a[ind] = -1
+                voxmat_b[ind] = val
+        return voxmat_a,voxmat_b
 
     def seperate_unbridged(self,voxel_matrix,fixed_sides,dim,n):
         unbridged_1 = np.zeros((dim,dim,dim))-1

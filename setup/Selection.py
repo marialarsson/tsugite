@@ -118,7 +118,7 @@ class Selection:
             rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
             comp_vec = np.dot(comp_vec,rot_x*rot_y)
             comp_vec = np.delete(comp_vec,2) # delete Z-value
-            ## Calculate angle between mouse vector and sliding direction vector
+            ## Calculate angle between mouse vector and component vector
             cosang = np.dot(mouse_vec, comp_vec) # Negative / positive depending on direction
             sinang = linalg.norm(np.cross(mouse_vec, comp_vec))
             ang = math.degrees(np.arctan2(sinang, cosang))
@@ -142,7 +142,8 @@ class Selection:
                         oax = other_axes[i]
                 # check rotation direction
                 clockwise = True
-                if cosang<0: clockwise = False
+                if cosang>0 and self.parent.parent.fixed_sides[self.n][0][1]==0: clockwise = False
+                elif cosang<0 and self.parent.parent.fixed_sides[self.n][0][1]==1: clockwise = False
                 #
                 self.new_fixed_sides_for_display = []
                 blocked = False
