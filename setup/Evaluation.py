@@ -515,7 +515,7 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
                             voxel_indices.append(ind3d)
 
                         # Get region outline
-                        outline = get_region_outline(reg_inds,lay_mat,,fixed_neighbors,n)
+                        outline = get_region_outline(reg_inds,lay_mat,fixed_neighbors,n)
 
                         # Order region outline
                         outline = get_ordered_outline(outline)
@@ -669,6 +669,7 @@ class Evaluation:
         self.slides = []
         self.number_of_slides = []
         self.interlock = False
+        self.interlocks = []
         self.connected = []
         self.bridged = []
         self.breakable = []
@@ -681,7 +682,7 @@ class Evaluation:
         self.breakable_outline_inds = []
         self.breakable_voxel_inds = []
         self.sliding_depths = []
-        self.update(voxel_matrix,type)
+        self.fab_directions = self.update(voxel_matrix,type)
 
     def update(self,voxel_matrix,type):
         self.voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, type.fixed_sides)
@@ -731,12 +732,19 @@ class Evaluation:
         # Sliding directions
         self.slides,self.number_of_slides = get_sliding_directions(self.voxel_matrix_with_sides,type.noc)
         self.interlock = True
-        if self.number_of_slides[0]>1 or self.number_of_slides[-1]>1: self.interlock=False
-        if self.interlock and type.noc>2:
-            for n in range(1,type.noc-1):
-                if self.number_of_slides[n]>0:
+        for n in range(type.noc):
+            if (n==0 or n==type.noc-1):
+                if self.number_of_slides[n]<=1:
+                    self.interlocks.append(True)
+                else:
+                    self.interlocks.append(False)
                     self.interlock=False
-                    break
+            else:
+                if self.number_of_slides[n]==0:
+                    self.interlocks.append(True)
+                else:
+                    self.interlocks.append(False)
+                    self.interlock=False
 
         # Friction
         #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
@@ -771,6 +779,8 @@ class Evaluation:
         self.slide_depth_product = np.prod(np.array(sliding_depths))
         print(self.slide_depths,self.slide_depth_product)
         """
+        return fab_directions
+
     def seperate_unconnected(self,voxel_matrix,fixed_sides,dim):
         connected_mat = np.zeros((dim,dim,dim))-1
         unconnected_mat = np.zeros((dim,dim,dim))-1

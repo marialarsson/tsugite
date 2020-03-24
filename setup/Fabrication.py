@@ -17,7 +17,6 @@ class RegionVertex:
         self.neighbor_values = np.array(neighbor_values)
         self.flat_neighbor_values = self.neighbor_values.flatten()
 
-
     def set_pos(self,pos):
         self.pos = pos
 
@@ -132,7 +131,7 @@ class Fabrication:
         for n in range(self.parent.noc):
             comp_ax = self.parent.fixed_sides[n][0][0]
             comp_dir = self.parent.fixed_sides[n][0][1] # component direction
-            fdir = self.parent.fab_directions[n]
+            fdir = self.parent.mesh.fab_directions[n]
             #
             file_name = "joint_"+names[n]
             file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".gcode","w")
@@ -171,9 +170,11 @@ class Fabrication:
 
                 #write to file
                 if arc and clockwise:
-                    file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
+                    #file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
+                    file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
                 elif arc and not clockwise:
-                    file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
+                    #file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
+                    file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
                 elif i==0 or pmv.x!=mv.x or pmv.y!=mv.y: file.write("G01 X "+mv.xstr+" Y "+mv.ystr+" F "+str(speed)+"\n")
                 ##
                 if i==0 or pmv.z!=mv.z: file.write("G01 Z "+mv.zstr+" F "+str(speed)+"\n")

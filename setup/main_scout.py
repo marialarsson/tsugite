@@ -145,12 +145,18 @@ def keyCallback(window,key,scancode,action,mods):
             elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(type.mesh)
             #elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_search_results(type)
             # Milling path
-            #elif key==glfw.KEY_M:
-            #    view_opt.show_milling_path = not view_opt.show_milling_path
-            #    if view_opt.show_milling_path:
-            #        Geometries.create_vertices(type,True)
-            #        Geometries.create_indices(type,True)
-            #elif key==glfw.KEY_G: type.mesh.fab.export_gcode("joint")
+            elif key==glfw.KEY_M:
+                view_opt.show_milling_path = not view_opt.show_milling_path
+                print(view_opt.show_milling_path)
+                if view_opt.show_milling_path:
+                    Types.create_and_buffer_vertices(type,milling_path=True)
+                    Types.combine_and_buffer_indices(type,milling_path=True)
+            elif key==glfw.KEY_G:
+                if not view_opt.show_milling_path:
+                    view_opt.show_milling_path = True
+                    Types.create_and_buffer_vertices(type,milling_path=True)
+                    Types.combine_and_buffer_indices(type,milling_path=True)
+                type.fab.export_gcode("joint")
             # Change resolution
             elif key==glfw.KEY_RIGHT_BRACKET and type.dim<5: Types.update_dimension(type,1) ##doesnt work
             elif key==glfw.KEY_LEFT_BRACKET and type.dim>2: Types.update_dimension(type,-1)  ##doesnt work
@@ -399,11 +405,13 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
     glPopAttrib()
 
     ############################ Draw visible lines #############################
-    glLineWidth(lw)
     for n in range(mesh.parent.noc):
-        #if mesh.eval.fab_direction_ok[n]:
-        glUniform3f(5,0.0,0.0,0.0) # black
-        #else: glUniform3f(5,1.0,0.0,0.0) # red
+        if not mesh.mainmesh or (mesh.eval.interlocks[n] and view_opt.show_feedback):
+            glUniform3f(5,0.0,0.0,0.0) # black
+            glLineWidth(lw)
+        else:
+            glUniform3f(5,1.0,0.0,0.0) # red
+            glLineWidth(lw+1)
         G0 = [mesh.indices_lns[n]]
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
@@ -411,6 +419,7 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
     if mesh.mainmesh:
         ################ When joint is fully open, draw dahsed lines ################
         if hidden and not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio==1+0.5*(mesh.parent.noc-2):
+            glUniform3f(5,0.0,0.0,0.0) # black
             glPushAttrib(GL_ENABLE_BIT)
             glLineWidth(2)
             glLineStipple(1, 0x00FF)
@@ -421,9 +430,12 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
             glPopAttrib()
 
 def display_arrows(window,mesh,view_opt):
+    #glClear(GL_DEPTH_BUFFER_BIT)
     glUniform3f(5, 0.0, 0.0, 0.0)
     ############################## Direction arrows ################################
     for n in range(mesh.parent.noc):
+        if (mesh.eval.interlocks[n]): glUniform3f(5,0.0,0.0,0.0) # black
+        else: glUniform3f(5,1.0,0.0,0.0) # red
         glLineWidth(3)
         G1 = mesh.indices_fall
         G0 = mesh.indices_arrows[n]
@@ -431,9 +443,9 @@ def display_arrows(window,mesh,view_opt):
         d1 = 1.55*mesh.parent.component_size
         if len(mesh.parent.fixed_sides[n])==2: d0 = d1
         for ax,dir in mesh.parent.fixed_sides[n]:
-            vec = np.array([0,0,0],dtype=np.float)
-            vec[ax] = (2*dir-1)*d0
-            draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
+            vec = d0*(2*dir-1)*mesh.parent.pos_vecs[ax]/np.linalg.norm(mesh.parent.pos_vecs[ax])
+            #draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
+            draw_geometries(window,G0,translation_vec=vec)
 
 def display_checker(window,mesh,view_opt):
     # 1. Draw hidden geometry
@@ -469,7 +481,7 @@ def display_breakable_lines(window,mesh,view_opt):
         draw_geometries_with_excluded_area(window,G0,G1)
     glPopAttrib()
 
-def display_milling_paths(window,type,view_opt):
+def display_milling_paths(window,mesh,view_opt):
     if len(mesh.indices_milling_path)==0: view_opt.show_milling_path = False
     if view_opt.show_milling_path:
         cols = [[1.0,0,0],[0,1.0,0],[0,0,1.0],[1.0,1.0,0],[0.0,1.0,1.0],[1.0,0,1.0]]
@@ -589,6 +601,9 @@ def main():
     parser.add_argument('--user_study', action='store_true')
     parser.add_argument('--username', default="test", type=str, dest='username')
     parser.add_argument('--nofeedback', action='store_true')
+    parser.add_argument('--ang', default=90.0, type=float)
+    parser.add_argument('--dim', default=3, type=int)
+    parser.add_argument('--sax', default=1, type=int)
     args = parser.parse_args()
 
     global glo_start_time
@@ -608,8 +623,10 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
+    fs=[[[2,0]],[[0,0]]]
+
     # Initiate
-    type = Types(fs=[[[2,0]],[[0,0]]],sax=2,dim=3)
+    type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang)
     view_opt = ViewSettings()
 
     glfw.set_window_user_pointer(window, [type, view_opt, args])
@@ -661,10 +678,10 @@ def main():
             display_selected(window,type.mesh,view_opt)
             display_moving_rotating(window,type.mesh,view_opt)
         display_joint_geometry(window,type.mesh,view_opt)
-        if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable_lines(window,type.mesh,view_opt)
+        #if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable_lines(window,type.mesh,view_opt)
         if type.mesh.select.suggstate>=0 and type.mesh.select.suggstate<len(type.sugs):
             display_diff_voxel_from_suggestion(window,type,view_opt)
-        #if view_opt.show_milling_path: display_milling_paths(window,type.mesh,view_opt)
+        if view_opt.show_milling_path: display_milling_paths(window,type.mesh,view_opt)
 
         # Display joint geometries (suggestions)
         if view_opt.show_suggestions:
@@ -674,7 +691,7 @@ def main():
                 if i==type.mesh.select.suggstate:
                     glScissor(1600,1600-(i+1)*400,400,400)
                     glEnable(GL_SCISSOR_TEST)
-                    glClearDepth(1.0);
+                    glClearDepth(1.0)
                     glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
                     glClear(GL_COLOR_BUFFER_BIT)
                     glDisable(GL_SCISSOR_TEST)
