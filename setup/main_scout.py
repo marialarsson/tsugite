@@ -416,6 +416,7 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
 
+        """
     if mesh.mainmesh:
         ################ When joint is fully open, draw dahsed lines ################
         if hidden and not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio==1+0.5*(mesh.parent.noc-2):
@@ -428,6 +429,7 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
             G1 = mesh.indices_fall
             draw_geometries_with_excluded_area(window,G0,G1)
             glPopAttrib()
+            """
 
 def display_arrows(window,mesh,view_opt):
     #glClear(GL_DEPTH_BUFFER_BIT)
@@ -604,7 +606,12 @@ def main():
     parser.add_argument('--ang', default=90.0, type=float)
     parser.add_argument('--dim', default=3, type=int)
     parser.add_argument('--sax', default=1, type=int)
+    parser.add_argument('--w', default=30, type=int)
+    parser.add_argument('--d', default=-1, type=int)
     args = parser.parse_args()
+
+    if args.d<0: args.d=args.w
+    print("Timber dimensions",args.w,"x",args.d,"mm")
 
     global glo_start_time
     global loc_start_time
@@ -626,7 +633,7 @@ def main():
     fs=[[[2,0]],[[0,0]]]
 
     # Initiate
-    type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang)
+    type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang, wd=[args.w,args.d])
     view_opt = ViewSettings()
 
     glfw.set_window_user_pointer(window, [type, view_opt, args])

@@ -1,6 +1,26 @@
 import numpy as np
 import math
 
+def angle_between(vector_1, vector_2):
+    unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+    unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+    dot_product = np.dot(unit_vector_1, unit_vector_2)
+    angle = np.arccos(dot_product)
+    return angle
+
+def rotate_vector_around_axis(vec=[3,5,0], axis=[4,4,1], theta=1.2): #example values
+    axis = np.asarray(axis)
+    axis = axis / math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta / 2.0)
+    b, c, d = -axis * math.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    mat = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    rotated_vec = np.dot(mat, vec)
+    return rotated_vec
+
 class RegionVertex:
     def __init__(self,ind,abs_ind,neighbors,neighbor_values,dia=False):
         self.ind = ind
@@ -79,38 +99,29 @@ class MillVertex:
             self.arc_ctr[1] = -(2*dir-1)*self.arc_ctr[1]
             self.arc_ctr = np.array(self.arc_ctr)
 
-    def rotate90(self,d):
-        self.x,self.y,self.z = self.y,-self.x,self.z
+    def rotate(self,ang,d):
         self.pt = np.array([self.x,self.y,self.z])
+        self.pt = rotate_vector_around_axis(self.pt, [0,0,1], ang)
+        self.x = self.pt[0]
+        self.y = self.pt[1]
+        self.z = self.pt[2]
         self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
         self.xstr = str(round(self.x,d))
         self.ystr = str(round(self.y,d))
         self.zstr = str(round(self.z,d))
         ##
         if self.is_arc:
-            self.arc_ctr = [self.arc_ctr[1],-self.arc_ctr[0],self.arc_ctr[2]]
-            self.arc_ctr = np.array(self.arc_ctr)
-
-    def rotate180(self,d):
-        self.x,self.y,self.z = -self.x,-self.y,self.z
-        self.pt = np.array([self.x,self.y,self.z])
-        self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
-        self.xstr = str(round(self.x,d))
-        self.ystr = str(round(self.y,d))
-        self.zstr = str(round(self.z,d))
-        ##
-        if self.is_arc:
-            self.arc_ctr = [-self.arc_ctr[0],-self.arc_ctr[1],self.arc_ctr[2]]
+            self.arc_ctr = rotate_vector_around_axis(self.arc_ctr, [0,0,1], ang)
             self.arc_ctr = np.array(self.arc_ctr)
 
 class Fabrication:
     def __init__(self,parent):
         self.parent = parent
-        self.real_component_size = 29.5 #44.45 #36.5 #mm
+        self.real_component_size = self.parent.real_comp_width-0.5 #29.5 #44.45 #36.5 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
         self.rad = 3.00 #milling bit radius in mm
-        self.tol = 0.15 #0.10 #tolerance in mm
+        self.tol = 0.10 #0.15 #tolerance in mm
         self.rad -= self.tol
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio
@@ -131,6 +142,9 @@ class Fabrication:
         for n in range(self.parent.noc):
             comp_ax = self.parent.fixed_sides[n][0][0]
             comp_dir = self.parent.fixed_sides[n][0][1] # component direction
+            comp_vec = self.parent.pos_vecs[comp_ax]
+            if comp_dir==1: comp_vec=-comp_vec
+            comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
             fdir = self.parent.mesh.fab_directions[n]
             #
             file_name = "joint_"+names[n]
@@ -143,16 +157,15 @@ class Fabrication:
             file.write("F1000.0S6000 (Feeding 2000mm/min, Spindle 6000rpm)\n")
             file.write("G17 (set XY plane for circle path)\n")
             file.write("M03 (spindle start)\n")
-            speed = 200
+            speed = 300
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
-                #mv.rotate180(d)
                 if comp_ax!=fax:
-                    if comp_ax==2 or comp_ax==1: mv.rotate90(d)
-                    if comp_dir==1:
-                        #if fdir==1:
-                        mv.rotate180(d)
+                    rot_ang = angle_between([1,0,0],comp_vec)
+                    #if np.dot([1,0,0],comp_vec)<0: rot_ang=-rot_ang # Negative / positive depending on direction
+                    #print(rot_ang,math.degrees(rot_ang))
+                    mv.rotate(-rot_ang,d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False
@@ -165,8 +178,8 @@ class Fabrication:
                     xvec = np.cross(vec1,zvec)
                     vec2 = pmv.pt-mv.arc_ctr
                     vec2 = vec2/np.linalg.norm(vec2)
-                    dist = np.linalg.norm(xvec-vec2)
-                    if dist>0: clockwise = True
+                    diff_ang = angle_between(xvec,vec2)
+                    if diff_ang>0.5*math.pi: clockwise = True
 
                 #write to file
                 if arc and clockwise:

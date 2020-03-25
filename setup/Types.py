@@ -102,7 +102,7 @@ def produce_suggestions(type,hfs):
                     sugg_hfs = copy.deepcopy(hfs)
                     sugg_hfs[i][j][k]+=add
                     val = sugg_hfs[i][j][k]
-                    if val>=0 and val<type.dim:
+                    if val>=0 and val<=type.dim:
                         sugg_voxmat = mat_from_fields(sugg_hfs,type.sax)
                         sugg_eval = Evaluation(sugg_voxmat,type,mainmesh=False)
                         if sugg_eval.valid:
@@ -237,9 +237,6 @@ def get_diff_neighbors(mat2,inds,val):
 def rough_milling_path(type,rough_pixs,lay_num,n):
     mvertices = []
 
-    no_lanes = 2+math.ceil((type.fab.real_voxel_size-2*type.fab.dia)/type.fab.dia)
-    lane_width = (type.voxel_size-type.fab.vdia)/(no_lanes-1)
-
     # Defines axes
     ax = type.sax # mill bit axis
     dir = type.mesh.fab_directions[n]
@@ -248,13 +245,17 @@ def rough_milling_path(type,rough_pixs,lay_num,n):
     dir_ax = axes[0] # primary milling direction axis
     off_ax = axes[1] # milling offset axis
 
+    # Define fabrication parameters
+    no_lanes = 2+math.ceil((type.fab.real_voxel_size-2*type.fab.dia)/type.fab.dia)
+    lane_width = (type.voxel_size-type.fab.vdia)/(no_lanes-1)
+    ratio = np.linalg.norm(type.pos_vecs[axes[1]])/type.voxel_size
+    v_vrad = type.fab.vrad*ratio
+    lane_width = lane_width*ratio
+
+
     # create offset direction vectors
-    off_vec = [0,0,0]
-    off_vec[off_ax]=1
-    off_vec = np.array(off_vec)
-    dir_vec = [0,0,0]
-    dir_vec[dir_ax]=1
-    dir_vec = np.array(dir_vec)
+    dir_vec = type.pos_vecs[axes[0]]/np.linalg.norm(type.pos_vecs[axes[0]])
+    off_vec = type.pos_vecs[axes[1]]/np.linalg.norm(type.pos_vecs[axes[1]])
 
     # get top ones to cut out
     for pix in rough_pixs:
@@ -313,8 +314,8 @@ def rough_milling_path(type,rough_pixs,lay_num,n):
         dir_add1 = pix.neighbors[dir_ax][0]*2.5*type.fab.vrad*dir_vec
         dir_add2 = -pix_end.neighbors[dir_ax][1]*2.5*type.fab.vrad*dir_vec
 
-        pt1 = pt1+type.fab.vrad*off_vec+dir_add1
-        pt2 = pt2+type.fab.vrad*off_vec+dir_add2
+        pt1 = pt1+v_vrad*off_vec+dir_add1
+        pt2 = pt2+v_vrad*off_vec+dir_add2
         for i in range(no_lanes):
             # skip lane if on bloked side in off direction
             if pix.neighbors[1][0]==1 and i==0: continue
@@ -762,21 +763,18 @@ def milling_path_vertices(type,n):
             if len(inds)==0: break #OK
             reg_inds = get_diff_neighbors(lay_mat,[inds[0]],n) #OK
 
-            # Not essential at first. REACTIVATE LATER <-------------------------------------
             # Anaylize which voxels needs to be roguhly cut initially
             # 1. Add all open voxels in the region
-            #rough_inds = []
-            #for ind in reg_inds:
-            #    rough_inds.append(RoughPixel(ind, lay_mat, pad_loc,type.dim,n))
-
-            # Not essential at first. REACTIVATE LATER <-------------------------------------
+            rough_inds = []
+            for ind in reg_inds:
+                rough_inds.append(RoughPixel(ind, lay_mat, pad_loc,type.dim,n)) #should be same...
             # 2. Produce rough milling paths
-            #rough_paths = rough_milling_path(type,rough_inds,lay_num,n)
-            #for rough_path in rough_paths:
-            #    if len(rough_path)>0:
-            #        verts,mverts = get_layered_vertices(type,rough_path,n,lay_num,no_z,dep)
-            #        vertices.extend(verts)
-            #        milling_vertices.extend(mverts)
+            rough_paths = rough_milling_path(type,rough_inds,lay_num,n)
+            for rough_path in rough_paths:
+                if len(rough_path)>0:
+                    verts,mverts = get_layered_vertices(type,rough_path,n,lay_num,no_z,dep)
+                    vertices.extend(verts)
+                    milling_vertices.extend(mverts)
 
 
             # Overwrite detected regin in original matrix
@@ -814,13 +812,21 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0):
+    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, wd=[30.0,30.0]):
         self.sax = sax
         self.fixed_sides = fs
         self.noc = len(fs) #number of components
         self.dim = dim
         self.component_size = 0.275
-        self.voxel_size = self.component_size/self.dim
+        self.voxel_size = self.component_size/self.dim #<------to be removed
+        voxel_size = self.component_size/self.dim
+        ### below. new for non-square sections. might need to be revised. <--------------------------------
+        self.real_comp_width = wd[0]
+        self.real_comp_depth = wd[1]
+        ratio = wd[1]/wd[0]
+        self.voxel_sizes = [voxel_size,ratio*voxel_size,voxel_size]
+        #self.voxel_sizes.insert(self.sax,self.voxel_sizes[1])
+        ### above. new for non-square sections. might need to be revised. <--------------------------------
         self.component_length = 0.5*self.component_size
         self.fab = Fabrication(self)
         self.vertex_no_info = 8
@@ -876,9 +882,9 @@ class Types:
         vertices = []
         r = g = b = 0.0
         # Create vectors - one for each of the 3 axis
-        vx = np.array([1.0,0,0])*self.voxel_size
-        vy = np.array([0,1.0,0])*self.voxel_size
-        vz = np.array([0,0,1.0])*self.voxel_size
+        vx = np.array([1.0,0,0])*self.voxel_sizes[0]
+        vy = np.array([0,1.0,0])*self.voxel_sizes[1]
+        vz = np.array([0,0,1.0])*self.voxel_sizes[2]
         self.pos_vecs = [vx,vy,vz]
         # If it is possible to rotate the geometry, rotate position vectors
         if self.rot:
@@ -918,16 +924,22 @@ class Types:
                         for y in range(2):
                             other_vecs = copy.deepcopy(self.pos_vecs)
                             other_vecs.pop(ax)
+                            vs = self.voxel_sizes.copy()
+                            vs.pop(ax)
+                            other_vecs[0] = other_vecs[0]/np.linalg.norm(other_vecs[0])
+                            other_vecs[1] = other_vecs[1]/np.linalg.norm(other_vecs[1])
                             if ax!=self.sax and self.rot:
                                 comp_vec = self.pos_vecs[ax]
                                 other_vecs[1] = np.cross(comp_vec,other_vecs[0])
                                 other_vecs[0] = np.cross(other_vecs[1],comp_vec)
+                                other_vecs[0] = other_vecs[0]/np.linalg.norm(other_vecs[0])
+                                other_vecs[1] = other_vecs[1]/np.linalg.norm(other_vecs[1])
                                 if ax==1: y=1-y ####weird but works
-                                xvec = (x-0.5)*self.component_size*other_vecs[0]/np.linalg.norm(other_vecs[0])
-                                yvec = (y-0.5)*self.component_size*other_vecs[1]/np.linalg.norm(other_vecs[1])
+                                xvec = (x-0.5)*self.dim*other_vecs[0]*vs[0]
+                                yvec = (y-0.5)*self.dim*other_vecs[1]*vs[1]
                             else:
-                                xvec = (x-0.5)*self.dim*other_vecs[0]
-                                yvec = (y-0.5)*self.dim*other_vecs[1]
+                                xvec = (x-0.5)*self.dim*other_vecs[0]*vs[0]
+                                yvec = (y-0.5)*self.dim*other_vecs[1]*vs[1]
                             pos = axvec+xvec+yvec
                             # texture coordinates
                             tex_coords = [x,y]
