@@ -111,7 +111,9 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_N: Geometries.clear_height_fields(type.mesh)
         elif key==glfw.KEY_R: Geometries.randomize_height_fields(type.mesh)
         # Preview options
-        elif key==glfw.KEY_J: view_opt.show_suggestions = not view_opt.show_suggestions
+        elif key==glfw.KEY_J:
+            view_opt.show_suggestions = not view_opt.show_suggestions
+            type.suggestions_on = not type.suggestions_on
         elif key==glfw.KEY_T: ViewSettings.standardize_rotation(view_opt)
         elif key==glfw.KEY_A: view_opt.hidden[0] = not view_opt.hidden[0]
         elif key==glfw.KEY_B: view_opt.hidden[1] = not view_opt.hidden[1]
@@ -630,7 +632,7 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    fs=[[[2,0]],[[0,0]]]
+    fs=[[[2,0]],[[2,1]]]
 
     # Initiate
     type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang, wd=[args.w,args.d])

@@ -817,14 +817,14 @@ class Types:
         self.fixed_sides = fs
         self.noc = len(fs) #number of components
         self.dim = dim
+        self.suggestions_on = True
         self.component_size = 0.275
         self.voxel_size = self.component_size/self.dim #<------to be removed
-        voxel_size = self.component_size/self.dim
         ### below. new for non-square sections. might need to be revised. <--------------------------------
         self.real_comp_width = wd[0]
         self.real_comp_depth = wd[1]
-        ratio = wd[1]/wd[0]
-        self.voxel_sizes = [voxel_size,ratio*voxel_size,voxel_size]
+        self.ratio = wd[1]/wd[0]
+        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
         #self.voxel_sizes.insert(self.sax,self.voxel_sizes[1])
         ### above. new for non-square sections. might need to be revised. <--------------------------------
         self.component_length = 0.5*self.component_size
@@ -1002,6 +1002,7 @@ class Types:
     def update_dimension(self,add):
         self.dim+=add
         self.voxel_size = self.component_size/self.dim
+        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
         #self.fab.real_voxel_size = self.fab.real_component_size/self.dim
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.randomize_height_fields()
@@ -1038,8 +1039,9 @@ class Types:
 
     def update_suggestions(self):
         self.sugs = [] # clear list of suggestions
-        sugg_hfs = []
-        if not self.mesh.eval.valid:
-            #print("Looking for valid suggestions...")
-            sugg_hfs = produce_suggestions(self,self.mesh.height_fields)
-            for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))
+        if self.suggestions_on:
+            sugg_hfs = []
+            if not self.mesh.eval.valid:
+                #print("Looking for valid suggestions...")
+                sugg_hfs = produce_suggestions(self,self.mesh.height_fields)
+                for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))
