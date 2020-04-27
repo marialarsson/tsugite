@@ -6,12 +6,16 @@ import math
 
 class ViewSettings:
     def __init__(self):
+        # Gallery mode
+        self.gallery = False
+
         # Visibility variables
         self.hidden = [False,False,False,False,False,False]
         self.show_hidden_lines = True
         self.show_feedback = True
         self.show_milling_path = False
         self.show_suggestions = True
+        self.show_friction = True
 
         # Joint opening variables
         self.open_joint = False

@@ -100,6 +100,60 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset,global_offset=0
     # Return
     return indices_prop, indices_ends_prop, indices_all_prop, all_indices
 
+def joint_area_face_indices(self,all_indices,mat,area_faces,n,offset,global_offset=0):
+    # Make indices of faces for drawing method GL_QUADS
+    # 1. Faces of joint
+    indices = []
+    indices_ends = []
+    d = self.parent.dim+1
+    indices = []
+    for i in range(d):
+        for j in range(d):
+            for k in range(d):
+                ind = [i,j,k]
+                for ax in range(3):
+                    test_ind = np.array([i,j,k])
+                    test_ind = np.delete(test_ind,ax)
+                    if np.any(test_ind==self.parent.dim): continue
+                    cnt,vals = face_neighbors(mat,ind,ax,n,self.parent.fixed_sides[n])
+                    if cnt==1:
+                        for x in range(2):
+                            for y in range(2):
+                                add = [x,abs(y-x)]
+                                add.insert(ax,0)
+                                index = get_index(ind,add,self.parent.dim)
+                                if [ax,ind] in area_faces: indices.append(index)
+                                else: indices_ends.append(index)
+    # 2. Faces of component base
+    d = self.parent.dim+1
+    start = d*d*d
+    if len(self.parent.fixed_sides[n])>0:
+        for ax,dir in self.parent.fixed_sides[n]:
+            a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
+            step = 2
+            if len(self.parent.fixed_sides[n])==2: step = 1
+            off = 24*ax+12*dir+4*step
+            a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
+            # Add component side to indices
+            indices_ends.extend([a0,b0,d0,c0]) #bottom face
+            indices_ends.extend([a0,b0,b1,a1]) #side face 1
+            indices_ends.extend([b0,d0,d1,b1]) #side face 2
+            indices_ends.extend([d0,c0,c1,d1]) #side face 3
+            indices_ends.extend([c0,a0,a1,c1]) ##side face 4
+    # Format
+    indices = np.array(indices, dtype=np.uint32)
+    indices = indices + offset
+    indices_ends = np.array(indices_ends, dtype=np.uint32)
+    indices_ends = indices_ends + offset
+    # Store
+    indices_prop = ElementProperties(GL_QUADS, len(indices), len(all_indices)+global_offset, n)
+    if len(all_indices)>0: all_indices = np.concatenate([all_indices, indices])
+    else: all_indices = indices
+    indices_ends_prop = ElementProperties(GL_QUADS, len(indices_ends), len(all_indices)+global_offset, n)
+    all_indices = np.concatenate([all_indices, indices_ends])
+    # Return
+    return indices_prop, indices_ends_prop, all_indices
+
 def face_neighbors(mat,ind,ax,n,fixed_sides):
     values = []
     dim = len(mat)
@@ -552,22 +606,20 @@ class Geometries:
         if self.mainmesh and not first:
             self.parent.update_suggestions()
 
-    def create_indices(self, index=0, milling_path=False):
+    def create_indices(self, glo_off=0, milling_path=False):
         #shared lists
         all_inds = []
         self.indices_fall = []
         self.indices_lns = []
         #suggestion geometries
-        if not self.mainmesh: # for suggestions - just show basic geometry - no feedback - global offset necessary
-            glo_off = len(self.parent.mesh.indices) # global offset
-            for i in range(index): glo_off+=len(self.parent.sugs[i].indices)
+        if not self.mainmesh: # for suggestions and gallery - just show basic geometry - no feedback - global offset necessary
             for n in range(self.parent.noc):
                 nend,end,all,all_inds = joint_face_indices(self, all_inds,
                         self.voxel_matrix,self.parent.fixed_sides[n],n,n*self.parent.vn,global_offset=glo_off)
                 lns,all_inds = joint_line_indices(self,all_inds,n,n*self.parent.vn,global_offset=glo_off)
                 self.indices_fall.append(all)
                 self.indices_lns.append(lns)
-        #current geometry
+        #current geometry (main including feedback)
         else:
             self.indices_fend=[]
             self.indices_not_fend=[]
@@ -577,6 +629,10 @@ class Geometries:
             self.indices_not_fbrk = []
             self.indices_open_lines = []
             self.indices_not_fbridge = []
+            self.indices_ffric = []
+            self.indices_not_ffric = []
+            self.indices_fcont = []
+            self.indices_not_fcont = []
             self.indices_arrows = []
             self.indices_fpick_top = []
             self.indices_fpick_not_top = []
@@ -607,6 +663,10 @@ class Geometries:
                         fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.parent.fixed_sides[n][m]],n,n*self.parent.vn)
                         unbris.append(unbri)
                 else: unbris = None
+
+                # Friction ad contact faces
+                fric,nfric,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.friction_faces[n], n, n*self.parent.vn)
+                cont,ncont,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.contact_faces[n], n, n*self.parent.vn)
 
                 #picking faces
                 faces_pick_not_tops, faces_pick_tops, all_inds = joint_top_face_indices(self,all_inds,n,self.parent.noc,n*self.parent.vn)
@@ -650,6 +710,10 @@ class Geometries:
                     self.indices_not_fbrk.append(not_brk_faces)
                 if milling_path and len(self.parent.mverts[0])>0:
                     self.indices_milling_path.append(mill)
+                self.indices_ffric.append(fric)
+                self.indices_not_ffric.append(nfric)
+                self.indices_fcont.append(cont)
+                self.indices_not_fcont.append(ncont)
 
             #outline of selected faces
             if self.select.state==2:
@@ -674,10 +738,35 @@ class Geometries:
 
     def save(self):
         np.save("data/saved_height_fields.npy",self.height_fields)
+        np.savetxt("data/saved_voxmat.txt", self.voxel_matrix.reshape(27).astype(int), delimiter=',')
         np.save("data/saved_fixed_sides.npy",self.parent.fixed_sides)
 
     def load(self):
         self.height_fields = np.load("data/saved_height_fields.npy")
+        self.voxel_matrix_from_height_fields()
+        self.parent.combine_and_buffer_indices()
+
+    def load_search_results(self,index=-1):
+        # Folder
+        s = "\\"
+        location = os.path.abspath(os.getcwd())
+        location = location.split(s)
+        location.pop()
+        location = s.join(location)
+        location += "\\search_results\\noc_"+str(self.parent.noc)+"\\dim_"+str(self.parent.dim)+"\\fs_"
+        for i in range(len(self.parent.fixed_sides)):
+            for fs in self.parent.fixed_sides[i]:
+                location+=str(fs[0])+str(fs[1])
+            if i!=len(self.parent.fixed_sides)-1: location+=("_")
+        location+="\\allvalid_reduced"
+        print("Trying to load geometry from",location)
+        maxi = len(os.listdir(location))-1
+        if index==-1: index=random.randint(0,maxi)
+        self.height_fields = np.load(location+"\\height_fields_"+str(index)+".npy")
+        self.fab_directions = []
+        for i in range(self.parent.noc):
+            if i==0: self.fab_directions.append(0)
+            else: self.fab_directions.append(1)
         self.voxel_matrix_from_height_fields()
         self.parent.combine_and_buffer_indices()
 
@@ -742,29 +831,4 @@ class Geometries:
             if self.eval.breakable[n]: m6 = 1
         path = loc+"/eval_%s.txt"
         np.savetxt(path % i, [m1,m3,m5,m6])   # x,y,z equal sized 1D arrays
-
-    def load_search_results(self):
-        # Folder
-        s = "\\"
-        location = os.path.abspath(os.getcwd())
-        location = location.split(s)
-        location.pop()
-        location = s.join(location)
-        location += "\\search_results\\noc_"+str(self.noc)+"\\dim_"+str(self.dim)+"\\fs_"
-        for i in range(len(self.fixed_sides)):
-            for fs in self.fixed_sides[i]:
-                location+=str(fs[0])+str(fs[1])
-            if i!=len(self.fixed_sides)-1: location+=("_")
-        location+="\\allvalid_reduced"
-        print("Trying to load geometry from",location)
-        maxi = len(os.listdir(location))-1
-        i = random.randint(0,maxi)
-        self.height_fields = np.load(location+"\\height_fields_"+str(i)+".npy")
-        self.fab_directions = []
-        for i in range(self.noc):
-            if i==0: self.fab_directions.append(0)
-            else: self.fab_directions.append(1)
-        self.voxel_matrix_from_height_fields()
-        self.create_vertices()
-        self.create_indices()
 """

@@ -3,6 +3,7 @@ import numpy as np
 from numpy import linalg
 import math
 import copy
+import os
 from Buffer import Buffer
 from Evaluation import Evaluation
 from Fabrication import Fabrication
@@ -836,6 +837,7 @@ class Types:
         self.vertices = self.create_and_buffer_vertices(milling_path=False) # create and buffer vertices
         self.mesh = Geometries(self)
         self.sugs = []
+        self.gals = []
         self.update_suggestions()
         self.combine_and_buffer_indices()
 
@@ -953,10 +955,17 @@ class Types:
 
     def combine_and_buffer_indices(self, milling_path=False):
         self.mesh.create_indices(milling_path=milling_path)
-        for i in range(len(self.sugs)): self.sugs[i].create_indices(index=i,milling_path=False)
+        glo_off = len(self.mesh.indices) # global offset
+        for i in range(len(self.sugs)):
+            self.sugs[i].create_indices(glo_off=glo_off,milling_path=False)
+            glo_off+=len(self.sugs[i].indices)
+        for i in range(len(self.gals)):
+            self.gals[i].create_indices(glo_off=glo_off,milling_path=False)
+            glo_off+=len(self.gals[i].indices)
         indices = []
         indices.extend(self.mesh.indices)
         for mesh in self.sugs: indices.extend(mesh.indices)
+        for mesh in self.gals: indices.extend(mesh.indices)
         self.indices = np.array(indices, dtype=np.uint32)
         Buffer.buffer_indices(self.buff)
 
@@ -1028,7 +1037,7 @@ class Types:
             # Rebuffer
             self.update_unblocked_fixed_sides()
             self.create_and_buffer_vertices(milling_path=False)
-            mesh.randomize_height_fields()
+            self.mesh.randomize_height_fields()
 
     def update_component_position(self,new_fixed_sides,n):
         self.fixed_sides[n] = new_fixed_sides
@@ -1045,3 +1054,24 @@ class Types:
                 #print("Looking for valid suggestions...")
                 sugg_hfs = produce_suggestions(self,self.mesh.height_fields)
                 for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))
+
+    def init_gallery(self,start_index):
+        self.gals = []
+        self.sugs = []
+        # Folder
+        s = "\\"
+        location = os.path.abspath(os.getcwd())
+        location = location.split(s)
+        location.pop()
+        location = s.join(location)
+        location += "\\search_results\\noc_"+str(self.noc)+"\\dim_"+str(self.dim)+"\\fs_"
+        for i in range(len(self.fixed_sides)):
+            for fs in self.fixed_sides[i]:
+                location+=str(fs[0])+str(fs[1])
+            if i!=len(self.fixed_sides)-1: location+=("_")
+        location+="\\allvalid"
+        maxi = len(os.listdir(location))-1
+        for i in range(20):
+            if (i+start_index)>maxi: break
+            hfs = np.load(location+"\\height_fields_"+str(start_index+i)+".npy")
+            self.gals.append(Geometries(self,mainmesh=False,hfs=hfs))

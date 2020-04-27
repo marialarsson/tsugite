@@ -53,23 +53,60 @@ def get_ordered_outline(verts):
         if found_next: continue
     return ord_verts
 
-def get_friction(mat,slides):
-    friction = 0
-    # Define which axes are acting in friction
-    axes = [0,1,2]
-    bad_axes = []
-    for n in range(2): #for each material
-        for item in slides[n]: #for each sliding direction
-            bad_axes.append(item[0])
-    axes = [x for x in axes if x not in bad_axes]
-    # Check neighbors in relevant axes. If neighbor is other, friction is acting!
-    indices = np.argwhere(mat==0)
-    for ind in indices:
-        for ax in axes:
-            n_indices,n_values = get_axial_neighbors(mat,ind,ax)
-            for n_val in n_values:
-                if n_val==1: friction += 1
-    return friction
+def get_friction_and_contact_areas(mat,slides,fixed_sides,n):
+    friction = -1
+    contact = -1
+    ffaces = []
+    cfaces = []
+    if len(slides)>0:
+        friction = 0
+        contact = 0
+        other_fixed_sides = []
+        for n2 in range(len(fixed_sides)):
+            if n==n2: continue
+            other_fixed_sides.extend(fixed_sides[n2])
+        # Define which axes are acting in friction
+        friction_axes = [0,1,2]
+        bad_axes = []
+        for item in slides: bad_axes.append(item[0])
+        friction_axes = [x for x in friction_axes if x not in bad_axes]
+        # Check neighbors in relevant axes. If neighbor is other, friction is acting!
+        indices = np.argwhere(mat==n)
+        for ind in indices:
+            for ax in range(3):
+                for dir in range(2):
+                    nind = ind.copy()
+                    nind[ax]+=2*dir-1
+                    cont = False
+                    if nind[ax]<0:
+                        if [ax,0] in other_fixed_sides: cont = True
+                    elif nind[ax]>=len(mat):
+                        if [ax,1] in other_fixed_sides: cont = True
+                    elif mat[tuple(nind)]!=n: cont = True
+                    if cont:
+                        contact+=1
+                        find = ind.copy()
+                        find[ax]+=dir
+                        cfaces.append([ax,list(find)])
+                        if ax in friction_axes:
+                            friction += 1
+                            ffaces.append([ax,list(find)])
+        # Check neighbors for each fixed side of the current material
+        for ax,dir in fixed_sides[n]:
+            for i in range(len(mat)):
+                for j in range(len(mat)):
+                    nind = [i,j]
+                    axind = dir*(len(mat)-1)
+                    nind.insert(ax,axind)
+                    if mat[tuple(nind)]!=n: # neighboring another timber
+                        contact+=1
+                        find = nind.copy()
+                        find[ax]+=dir
+                        cfaces.append([ax,list(find)])
+                        if ax in friction_axes:
+                            friction+=1
+                            ffaces.append([ax,list(find)])
+    return friction, ffaces, contact, cfaces
 
 def is_connected(mat,n):
     connected = False
@@ -682,6 +719,10 @@ class Evaluation:
         self.breakable_outline_inds = []
         self.breakable_voxel_inds = []
         self.sliding_depths = []
+        self.friction_nums = []
+        self.friction_faces = []
+        self.contact_nums = []
+        self.contact_faces = []
         self.fab_directions = self.update(voxel_matrix,type)
 
     def update(self,voxel_matrix,type):
@@ -747,7 +788,17 @@ class Evaluation:
                     self.interlock=False
 
         # Friction
-        #friciton = get_friction(self.voxel_matrix_with_sides,self.slides)
+        self.friction_nums = []
+        self.friction_faces = []
+        self.contact_nums = []
+        self.contact_faces = []
+        for n in range(type.noc):
+            friction,ffaces,contact,cfaces, = get_friction_and_contact_areas(voxel_matrix,self.slides[n],type.fixed_sides,n)
+            self.friction_nums.append(friction)
+            self.friction_faces.append(ffaces)
+            self.contact_nums.append(contact)
+            self.contact_faces.append(cfaces)
+
 
         # Grain direction
         for n in range(type.noc):

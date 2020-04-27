@@ -143,8 +143,14 @@ class Fabrication:
             comp_ax = self.parent.fixed_sides[n][0][0]
             comp_dir = self.parent.fixed_sides[n][0][1] # component direction
             comp_vec = self.parent.pos_vecs[comp_ax]
-            if comp_dir==1: comp_vec=-comp_vec
+            #if comp_dir==1 and comp_ax!=self.parent.sax:
+            #    comp_vec=-comp_vec
+            #    print(n,"reversed")
             comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
+            comp_vec = comp_vec/np.linalg.norm(comp_vec) #unitize
+            rot_ang = angle_between([1,0,0],comp_vec)
+            if np.dot([1,0,0],comp_vec)<0: rot_ang=-rot_ang
+            if comp_dir==1 and comp_ax!=self.parent.sax: rot_ang = rot_ang+math.pi
             fdir = self.parent.mesh.fab_directions[n]
             #
             file_name = "joint_"+names[n]
@@ -162,10 +168,7 @@ class Fabrication:
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
                 if comp_ax!=fax:
-                    rot_ang = angle_between([1,0,0],comp_vec)
-                    #if np.dot([1,0,0],comp_vec)<0: rot_ang=-rot_ang # Negative / positive depending on direction
-                    #print(rot_ang,math.degrees(rot_ang))
-                    mv.rotate(-rot_ang,d)
+                    mv.rotate(rot_ang,d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False

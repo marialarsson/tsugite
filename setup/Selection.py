@@ -30,6 +30,7 @@ class Selection:
     def __init__(self,parent):
         self.state = -1 #-1: nothing, 0: hovered, 1: adding, 2: pulling, 10: timber hovered, 12: timber pulled
         self.suggstate = -1 #-1: nothing, 0: hovering first, 1: hovering secong, and so on.
+        self.gallstate = -1
         self.parent = parent
         self.n = self.x = self.y = None
         self.refresh = False

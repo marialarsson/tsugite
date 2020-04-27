@@ -108,9 +108,22 @@ def keyCallback(window,key,scancode,action,mods):
             type.mesh.select.shift = True
             type.mesh.select.refresh = True
         # Joint geometry
+        elif key==glfw.KEY_W:
+            #type.ang += 10
+            type.real_comp_width+=5
+            type.ratio = type.real_comp_depth/type.real_comp_width
+            type.voxel_sizes = [type.voxel_size,type.ratio*type.voxel_size,type.voxel_size]
+            Types.create_and_buffer_vertices(type,milling_path=False)
+            #Types.combine_and_buffer_indices(type,milling_path=False)
         elif key==glfw.KEY_N: Geometries.clear_height_fields(type.mesh)
         elif key==glfw.KEY_R: Geometries.randomize_height_fields(type.mesh)
         # Preview options
+        elif key==glfw.KEY_Y:
+            view_opt.gallery = not view_opt.gallery
+            if view_opt.gallery: type.init_gallery(0)
+            else: type.gals = []
+            Types.combine_and_buffer_indices(type,milling_path=False)
+        elif key==glfw.KEY_K: view_opt.show_friction = not view_opt.show_friction
         elif key==glfw.KEY_J:
             view_opt.show_suggestions = not view_opt.show_suggestions
             type.suggestions_on = not type.suggestions_on
@@ -145,7 +158,7 @@ def keyCallback(window,key,scancode,action,mods):
             # Save / Open
             elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(type.mesh)
             elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(type.mesh)
-            #elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_search_results(type)
+            elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_search_results(type.mesh)
             # Milling path
             elif key==glfw.KEY_M:
                 view_opt.show_milling_path = not view_opt.show_milling_path
@@ -199,6 +212,13 @@ def mouseCallback(window,button,action,mods):
                 if len(type.sugs)>index:
                     type.mesh = Geometries(type,hfs=type.sugs[index].height_fields)
                     type.sugs = []
+                    type.combine_and_buffer_indices()
+            elif type.mesh.select.gallstate>=0:
+                index = type.mesh.select.gallstate
+                if index<len(type.gals):
+                    type.mesh = Geometries(type,hfs=type.gals[index].height_fields)
+                    type.gals = []
+                    view_opt.gallery=False
                     type.combine_and_buffer_indices()
         elif action==0: #released
             if type.mesh.select.state==2: #face pulled
@@ -342,6 +362,21 @@ def display_unconnected(window,mesh):
     G1 = mesh.indices_fcon
     draw_geometries_with_excluded_area(window,G0,G1)
 
+def display_area(window,mesh,view_opt):
+    # 1. Draw hidden geometry
+    if view_opt.show_friction:
+        tin = mesh.eval.friction_nums[0]/50
+        col = [0.9-tin, 1.0, 0.9-tin]  # green
+        G0 = mesh.indices_ffric
+        G1 = mesh.indices_not_ffric
+    else:
+        tin = mesh.eval.contact_nums[0]/50
+        col = [0.9-tin, 0.9-tin, 1.0]  # blue
+        G0 = mesh.indices_fcont
+        G1 = mesh.indices_not_fcont
+    glUniform3f(5, col[0], col[1], col[2])
+    draw_geometries_with_excluded_area(window,G0,G1)
+
 def display_unbridged(window,mesh,view_opt):
     # Draw colored faces when unbridged
     for n in range(mesh.parent.noc):
@@ -408,7 +443,7 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
 
     ############################ Draw visible lines #############################
     for n in range(mesh.parent.noc):
-        if not mesh.mainmesh or (mesh.eval.interlocks[n] and view_opt.show_feedback):
+        if not mesh.mainmesh or (mesh.eval.interlocks[n] and view_opt.show_feedback) or not view_opt.show_feedback:
             glUniform3f(5,0.0,0.0,0.0) # black
             glLineWidth(lw)
         else:
@@ -418,7 +453,7 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
         G1 = mesh.indices_fall
         draw_geometries_with_excluded_area(window,G0,G1)
 
-        """
+
     if mesh.mainmesh:
         ################ When joint is fully open, draw dahsed lines ################
         if hidden and not view_opt.hidden[0] and not view_opt.hidden[1] and view_opt.open_ratio==1+0.5*(mesh.parent.noc-2):
@@ -431,7 +466,6 @@ def display_joint_geometry(window,mesh,view_opt,lw=3,hidden=True,zoom=False):
             G1 = mesh.indices_fall
             draw_geometries_with_excluded_area(window,G0,G1)
             glPopAttrib()
-            """
 
 def display_arrows(window,mesh,view_opt):
     #glClear(GL_DEPTH_BUFFER_BIT)
@@ -471,6 +505,17 @@ def display_breakable_faces(window,mesh,view_opt):
     col = [1.0, 1.0, 0.4] # light yellow
     glUniform3f(5, col[0], col[1], col[2])
     draw_geometries_with_excluded_area(window,mesh.indices_fbrk,mesh.indices_not_fbrk)
+
+def display_unfabricatable(window,mesh,view_opt):
+    col = [1.0, 0.8, 0.5] # orange
+    glUniform3f(5, col[0], col[1], col[2])
+    for n in range(mesh.parent.noc):
+        if not mesh.eval.fab_direction_ok[n]:
+            G0 = [mesh.indices_fall[n]]
+            G1 = []
+            for n2 in range(mesh.parent.noc):
+                if n2!=n: G1.append(mesh.indices_fall[n2])
+            draw_geometries_with_excluded_area(window,G0,G1)
 
 def display_breakable_lines(window,mesh,view_opt):
     # 1. Draw hidden geometry
@@ -523,37 +568,38 @@ def display_diff_voxel_from_suggestion(window,type,view_opt):
 
 def pick(window, mesh, view_opt, shader_col, show_col=False):
 
-    ######################## COLOR SHADER ###########################
-    glUseProgram(shader_col)
-    glClearColor(1.0, 1.0, 1.0, 1.0) # white
-    glEnable(GL_DEPTH_TEST)
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-    glMatrixMode(GL_MODELVIEW)
-    rot_x = pyrr.Matrix44.from_x_rotation(view_opt.xrot)
-    rot_y = pyrr.Matrix44.from_y_rotation(view_opt.yrot)
-    glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
-    glPolygonOffset(1.0,1.0)
+    if not view_opt.gallery:
+        ######################## COLOR SHADER ###########################
+        glUseProgram(shader_col)
+        glClearColor(1.0, 1.0, 1.0, 1.0) # white
+        glEnable(GL_DEPTH_TEST)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+        glMatrixMode(GL_MODELVIEW)
+        rot_x = pyrr.Matrix44.from_x_rotation(view_opt.xrot)
+        rot_y = pyrr.Matrix44.from_y_rotation(view_opt.yrot)
+        glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
+        glPolygonOffset(1.0,1.0)
 
-    ########################## Draw colorful top faces ##########################
+        ########################## Draw colorful top faces ##########################
 
-    # Draw colorful geometries
-    col_step = 1.0/(2+2*mesh.parent.dim*mesh.parent.dim)
-    for n in range(mesh.parent.noc):
-        col = np.zeros(3, dtype=np.float64)
-        col[n%3] = 1.0
-        if n>2: col[(n+1)%mesh.parent.dim] = 1.0
-        glUniform3f(5, col[0], col[1], col[2])
-        draw_geometries(window,[mesh.indices_fpick_not_top[n]],clear_depth_buffer=False)
-        if n==0 or n==mesh.parent.noc-1: mos = 1
-        else: mos = 2
-        # mos is "number of sides"
-        for m in range(mos):
-            # Draw top faces
-            for i in range(mesh.parent.dim*mesh.parent.dim):
-                col -= col_step
-                glUniform3f(5, col[0], col[1], col[2])
-                top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[n].start_index+mos*4*i+4*m, n)
-                draw_geometries(window,[top],clear_depth_buffer=False)
+        # Draw colorful geometries
+        col_step = 1.0/(2+2*mesh.parent.dim*mesh.parent.dim)
+        for n in range(mesh.parent.noc):
+            col = np.zeros(3, dtype=np.float64)
+            col[n%3] = 1.0
+            if n>2: col[(n+1)%mesh.parent.dim] = 1.0
+            glUniform3f(5, col[0], col[1], col[2])
+            draw_geometries(window,[mesh.indices_fpick_not_top[n]],clear_depth_buffer=False)
+            if n==0 or n==mesh.parent.noc-1: mos = 1
+            else: mos = 2
+            # mos is "number of sides"
+            for m in range(mos):
+                # Draw top faces
+                for i in range(mesh.parent.dim*mesh.parent.dim):
+                    col -= col_step
+                    glUniform3f(5, col[0], col[1], col[2])
+                    top = ElementProperties(GL_QUADS, 4, mesh.indices_fpick_top[n].start_index+mos*4*i+4*m, n)
+                    draw_geometries(window,[top],clear_depth_buffer=False)
 
     ############### Read pixel color at mouse position ###############
     xpos,ypos = glfw.get_cursor_pos(window)
@@ -561,28 +607,38 @@ def pick(window, mesh, view_opt, shader_col, show_col=False):
     mouse_pixel = np.array(mouse_pixel)
     pick_n = pick_d = pick_x = pick_y = None
     mesh.select.suggstate = -1
-    if xpos>1600: # suggestion side
-        if ypos>0 and ypos<1600:
-            index = int(ypos/400)
-            if mesh.select.suggstate!=index:
-                mesh.select.suggstate=index
-    elif not np.all(mouse_pixel==255): # not white / background
-            non_zeros = np.where(mouse_pixel!=0)
-            if len(non_zeros)>0:
-                if len(non_zeros[0]>0):
-                    pick_n = non_zeros[0][0]
-                    if len(non_zeros[0])>1:
-                        pick_n = pick_n+mesh.parent.dim
-                        if mouse_pixel[0]==mouse_pixel[2]: pick_n = 5
-                    val = 255-mouse_pixel[non_zeros[0][0]]
-                    i = int(0.5+val*(2+2*mesh.parent.dim*mesh.parent.dim)/255)-1
-                    if i>=0:
-                        pick_x = (int(i/mesh.parent.dim))%mesh.parent.dim
-                        pick_y = i%mesh.parent.dim
-                    pick_d = 0
-                    if pick_n==mesh.parent.noc-1: pick_d = 1
-                    elif int(i/mesh.parent.dim)>=mesh.parent.dim: pick_d = 1
-                    #print(pick_n,pick_d,pick_x,pick_y)
+    mesh.select.gallstate = -1
+    if not view_opt.gallery:
+        if xpos>1600: # suggestion side
+            if ypos>0 and ypos<1600:
+                index = int(ypos/400)
+                if mesh.select.suggstate!=index:
+                    mesh.select.suggstate=index
+        elif not np.all(mouse_pixel==255): # not white / background
+                non_zeros = np.where(mouse_pixel!=0)
+                if len(non_zeros)>0:
+                    if len(non_zeros[0]>0):
+                        pick_n = non_zeros[0][0]
+                        if len(non_zeros[0])>1:
+                            pick_n = pick_n+mesh.parent.dim
+                            if mouse_pixel[0]==mouse_pixel[2]: pick_n = 5
+                        val = 255-mouse_pixel[non_zeros[0][0]]
+                        i = int(0.5+val*(2+2*mesh.parent.dim*mesh.parent.dim)/255)-1
+                        if i>=0:
+                            pick_x = (int(i/mesh.parent.dim))%mesh.parent.dim
+                            pick_y = i%mesh.parent.dim
+                        pick_d = 0
+                        if pick_n==mesh.parent.noc-1: pick_d = 1
+                        elif int(i/mesh.parent.dim)>=mesh.parent.dim: pick_d = 1
+                        #print(pick_n,pick_d,pick_x,pick_y)
+    else: #gallerymode
+        if xpos>0 and xpos<2000 and ypos>0 and ypos<1600:
+            i = int(xpos/400)
+            j = int(ypos/400)
+            index = i*4+j
+            mesh.select.gallstate=index
+            mesh.select.state = -1
+            mesh.select.suggstate = -1
 
     ### Update selection
     if pick_x !=None and pick_d!=None and pick_y!=None and pick_n!=None:
@@ -607,8 +663,8 @@ def main():
     parser.add_argument('--nofeedback', action='store_true')
     parser.add_argument('--ang', default=90.0, type=float)
     parser.add_argument('--dim', default=3, type=int)
-    parser.add_argument('--sax', default=1, type=int)
-    parser.add_argument('--w', default=30, type=int)
+    parser.add_argument('--sax', default=2, type=int)
+    parser.add_argument('--w', default=32, type=int)
     parser.add_argument('--d', default=-1, type=int)
     args = parser.parse_args()
 
@@ -632,7 +688,8 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    fs=[[[2,0]],[[2,1]]]
+    #fs=[ [[2,0]] , [[1,0]] , [[0,0]] ]
+    fs=[ [[2,0]] , [[0,0]] ]
 
     # Initiate
     type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang, wd=[args.w,args.d])
@@ -661,7 +718,6 @@ def main():
         if (view_opt.open_joint and view_opt.open_ratio<type.noc-1) or (not view_opt.open_joint and view_opt.open_ratio>0):
             view_opt.set_joint_opening_distance(type.noc)
 
-
         # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
         if not type.mesh.select.state==2 and not type.mesh.select.state==12:
             pick(window, type.mesh, view_opt, shader_col, show_col=False)
@@ -670,41 +726,59 @@ def main():
         elif type.mesh.select.state==12:
             type.mesh.select.move(glfw.get_cursor_pos(window), view_opt.xrot, view_opt.yrot)
 
-        #if not type.mesh.eval.valid: print("not valid",len(type.sugs))
-
         # Display joint geometries (main window)
         init_display()
-        init_shader(shader_tex, view_opt)
-        display_end_grains(window,type.mesh)
-        init_shader(shader_col, view_opt)
-        if view_opt.show_feedback:
-            if any(type.mesh.eval.breakable): display_breakable_faces(window,type.mesh,view_opt)
-            if not all(type.mesh.eval.connected): display_unconnected(window,type.mesh)
-            if not all(type.mesh.eval.bridged): display_unbridged(window,type.mesh,view_opt)
-            if any(type.mesh.eval.checker): display_checker(window,type.mesh,view_opt)
-            display_arrows(window,type.mesh,view_opt)
-        if type.mesh.select.state!=-1:
-            display_selected(window,type.mesh,view_opt)
-            display_moving_rotating(window,type.mesh,view_opt)
-        display_joint_geometry(window,type.mesh,view_opt)
-        #if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable_lines(window,type.mesh,view_opt)
-        if type.mesh.select.suggstate>=0 and type.mesh.select.suggstate<len(type.sugs):
-            display_diff_voxel_from_suggestion(window,type,view_opt)
-        if view_opt.show_milling_path: display_milling_paths(window,type.mesh,view_opt)
 
-        # Display joint geometries (suggestions)
-        if view_opt.show_suggestions:
-            for i in range(len(type.sugs)):
-                glViewport(1600,1600-(i+1)*400,400,400)
-                glLoadIdentity()
-                if i==type.mesh.select.suggstate:
-                    glScissor(1600,1600-(i+1)*400,400,400)
-                    glEnable(GL_SCISSOR_TEST)
-                    glClearDepth(1.0)
-                    glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
-                    glClear(GL_COLOR_BUFFER_BIT)
-                    glDisable(GL_SCISSOR_TEST)
-                display_joint_geometry(window,type.sugs[i],view_opt,2,False,True)
+        if view_opt.gallery:
+            init_shader(shader_col, view_opt)
+            for i in range(5):
+                for j in range(4):
+                    index = i*4+j
+                    if index>=len(type.gals): break
+                    glViewport(i*400,1600-(j+1)*400,400,400)
+                    glLoadIdentity()
+                    if index==type.mesh.select.gallstate: #grey bg if selected
+                        glScissor(i*400,1600-(j+1)*400,400,400)
+                        glEnable(GL_SCISSOR_TEST)
+                        glClearDepth(1.0)
+                        glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
+                        glClear(GL_COLOR_BUFFER_BIT)
+                        glDisable(GL_SCISSOR_TEST)
+                    display_joint_geometry(window,type.gals[index],view_opt,2,False,True)
+        else:
+            init_shader(shader_tex, view_opt)
+            display_end_grains(window,type.mesh)
+            init_shader(shader_col, view_opt)
+            if view_opt.show_feedback:
+                #display_area(window,type.mesh,view_opt)
+                if not all(type.mesh.eval.fab_direction_ok): display_unfabricatable(window,type.mesh,view_opt)
+                if any(type.mesh.eval.breakable): display_breakable_faces(window,type.mesh,view_opt)
+                if not all(type.mesh.eval.connected): display_unconnected(window,type.mesh)
+                if not all(type.mesh.eval.bridged): display_unbridged(window,type.mesh,view_opt)
+                if any(type.mesh.eval.checker): display_checker(window,type.mesh,view_opt)
+                #display_arrows(window,type.mesh,view_opt)
+            if type.mesh.select.state!=-1:
+                display_selected(window,type.mesh,view_opt)
+                display_moving_rotating(window,type.mesh,view_opt)
+            display_joint_geometry(window,type.mesh,view_opt)
+            #if view_opt.show_feedback and type.mesh.eval.breakable: display_breakable_lines(window,type.mesh,view_opt)
+            if type.mesh.select.suggstate>=0 and type.mesh.select.suggstate<len(type.sugs):
+                display_diff_voxel_from_suggestion(window,type,view_opt)
+            if view_opt.show_milling_path: display_milling_paths(window,type.mesh,view_opt)
+
+            # Display joint geometries (suggestions)
+            if view_opt.show_suggestions:
+                for i in range(len(type.sugs)):
+                    glViewport(1600,1600-(i+1)*400,400,400)
+                    glLoadIdentity()
+                    if i==type.mesh.select.suggstate:
+                        glScissor(1600,1600-(i+1)*400,400,400)
+                        glEnable(GL_SCISSOR_TEST)
+                        glClearDepth(1.0)
+                        glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
+                        glClear(GL_COLOR_BUFFER_BIT)
+                        glDisable(GL_SCISSOR_TEST)
+                    display_joint_geometry(window,type.sugs[i],view_opt,2,False,True)
         glfw.swap_buffers(window)
     glfw.terminate()
 
