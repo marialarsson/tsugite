@@ -252,7 +252,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Shared variables
-    fixed_sides = [[[2,0]],[[1,0]],[[0,0]],[[2,1]]]
+    fixed_sides = [[[2,0]],[[1,0]],[[0,1]]]
     sax = 2
     noc = len(fixed_sides)
     dim = 3
@@ -279,4 +279,4 @@ if __name__ == "__main__":
 
     if args.first: first_hf(fixed_sides,sax,noc,dim,location,args.stop)
     if args.second: second_hfs(fixed_sides,sax,noc,dim,location)
-    if args.reduce: reduce(fixed_sides,sax,noc,dim,location)
+    #if args.reduce: reduce(fixed_sides,sax,noc,dim,location)

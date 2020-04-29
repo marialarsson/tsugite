@@ -19,6 +19,10 @@ class Buffer:
         self.vertex_no_info = 8
         image = Image.open("textures/end_grain_dia.jpg")
         self.img_data = np.array(list(image.getdata()), np.uint8)
+        image = Image.open("textures/friction_area.jpg")
+        self.img_data_fric = np.array(list(image.getdata()), np.uint8)
+        image = Image.open("textures/contact_area.jpg")
+        self.img_data_cont = np.array(list(image.getdata()), np.uint8)
 
     def buffer_vertices(self):
         try:
@@ -34,13 +38,19 @@ class Buffer:
         glEnableVertexAttribArray(1)
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24)) #texture
         glEnableVertexAttribArray(2)
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
+        glGenTextures(3) # texture = glGenTextures(1)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, 0)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, self.img_data)
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, 1)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, self.img_data_fric)
+        glActiveTexture(GL_TEXTURE2)
+        glBindTexture(GL_TEXTURE_2D, 2)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 400, 400, 0, GL_RGB, GL_UNSIGNED_BYTE, self.img_data_cont)
 
     def buffer_indices(self):
         cnt = 4*len(self.parent.indices)

@@ -119,14 +119,15 @@ def keyCallback(window,key,scancode,action,mods):
         elif key==glfw.KEY_R: Geometries.randomize_height_fields(type.mesh)
         # Preview options
         elif key==glfw.KEY_Y:
-            view_opt.gallery = not view_opt.gallery
-            if view_opt.gallery: type.init_gallery(0)
-            else: type.gals = []
+            if not view_opt.gallery: view_opt.gallery=True
+            if view_opt.gallery: type.init_gallery(type.gallary_start_index + 20)
             Types.combine_and_buffer_indices(type,milling_path=False)
         elif key==glfw.KEY_K: view_opt.show_friction = not view_opt.show_friction
         elif key==glfw.KEY_J:
             view_opt.show_suggestions = not view_opt.show_suggestions
             type.suggestions_on = not type.suggestions_on
+        elif key==glfw.KEY_Q:
+            view_opt.show_area = not view_opt.show_area
         elif key==glfw.KEY_T: ViewSettings.standardize_rotation(view_opt)
         elif key==glfw.KEY_A: view_opt.hidden[0] = not view_opt.hidden[0]
         elif key==glfw.KEY_B: view_opt.hidden[1] = not view_opt.hidden[1]
@@ -219,6 +220,7 @@ def mouseCallback(window,button,action,mods):
                     type.mesh = Geometries(type,hfs=type.gals[index].height_fields)
                     type.gals = []
                     view_opt.gallery=False
+                    type.gallary_start_index = -20
                     type.combine_and_buffer_indices()
         elif action==0: #released
             if type.mesh.select.state==2: #face pulled
@@ -365,16 +367,16 @@ def display_unconnected(window,mesh):
 def display_area(window,mesh,view_opt):
     # 1. Draw hidden geometry
     if view_opt.show_friction:
-        tin = mesh.eval.friction_nums[0]/50
-        col = [0.9-tin, 1.0, 0.9-tin]  # green
+        #tin = mesh.eval.friction_nums[0]/50
+        #col = [0.9-tin, 1.0, 0.9-tin]  # green
         G0 = mesh.indices_ffric
         G1 = mesh.indices_not_ffric
     else:
-        tin = mesh.eval.contact_nums[0]/50
-        col = [0.9-tin, 0.9-tin, 1.0]  # blue
+        #tin = mesh.eval.contact_nums[0]/50
+        #col = [0.9-tin, 0.9-tin, 1.0]  # blue
         G0 = mesh.indices_fcont
         G1 = mesh.indices_not_fcont
-    glUniform3f(5, col[0], col[1], col[2])
+    #glUniform3f(5, col[0], col[1], col[2])
     draw_geometries_with_excluded_area(window,G0,G1)
 
 def display_unbridged(window,mesh,view_opt):
@@ -688,8 +690,8 @@ def main():
     shader_tex = create_texture_shaders()
     shader_col = create_color_shaders()
 
-    #fs=[ [[2,0]] , [[1,0]] , [[0,0]] ]
-    fs=[ [[2,0]] , [[0,0]] ]
+    #fs=[ [[2,0]] , [[1,0]] , [[0,1]] ]
+    fs=[ [[2,0]] , [[0,0],[0,1]] ]
 
     # Initiate
     type = Types(fs=fs,sax=args.sax,dim=args.dim,ang=args.ang, wd=[args.w,args.d])
@@ -748,15 +750,24 @@ def main():
         else:
             init_shader(shader_tex, view_opt)
             display_end_grains(window,type.mesh)
+            if view_opt.show_feedback and view_opt.show_area:
+                glBindTexture(GL_TEXTURE_2D, 0)
+                if view_opt.show_friction:
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 400, 400, GL_RGB, GL_UNSIGNED_BYTE, type.buff.img_data_fric)
+                else:
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 400, 400, GL_RGB, GL_UNSIGNED_BYTE, type.buff.img_data_cont)
+                init_shader(shader_tex, view_opt)
+                display_area(window,type.mesh,view_opt)
+                glBindTexture(GL_TEXTURE_2D, 0)
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 400, 400, GL_RGB, GL_UNSIGNED_BYTE, type.buff.img_data)
             init_shader(shader_col, view_opt)
             if view_opt.show_feedback:
-                #display_area(window,type.mesh,view_opt)
                 if not all(type.mesh.eval.fab_direction_ok): display_unfabricatable(window,type.mesh,view_opt)
                 if any(type.mesh.eval.breakable): display_breakable_faces(window,type.mesh,view_opt)
                 if not all(type.mesh.eval.connected): display_unconnected(window,type.mesh)
                 if not all(type.mesh.eval.bridged): display_unbridged(window,type.mesh,view_opt)
                 if any(type.mesh.eval.checker): display_checker(window,type.mesh,view_opt)
-                #display_arrows(window,type.mesh,view_opt)
+                display_arrows(window,type.mesh,view_opt)
             if type.mesh.select.state!=-1:
                 display_selected(window,type.mesh,view_opt)
                 display_moving_rotating(window,type.mesh,view_opt)

@@ -840,6 +840,7 @@ class Types:
         self.gals = []
         self.update_suggestions()
         self.combine_and_buffer_indices()
+        self.gallary_start_index = -20
 
     def create_and_buffer_vertices(self, milling_path=False):
         self.jverts = []
@@ -847,8 +848,8 @@ class Types:
         self.mverts = []
         self.gcodeverts = []
 
-        for n in range(self.noc):
-            self.jverts.append(self.create_joint_vertices(n))
+        for ax in range(3):
+            self.jverts.append(self.create_joint_vertices(ax))
 
         if milling_path:
             for n in range(self.noc):
@@ -873,14 +874,14 @@ class Types:
 
         if milling_path and len(self.mverts[0])>0:
             self.m_start = []
-            mst = self.noc*self.vn+self.van
+            mst = 3*self.vn+self.van
             for n in range(self.noc):
                 self.m_start.append(mst)
                 mst += int(len(self.mverts[n])/8)
 
         Buffer.buffer_vertices(self.buff)
 
-    def create_joint_vertices(self,n):
+    def create_joint_vertices(self, ax):
         vertices = []
         r = g = b = 0.0
         # Create vectors - one for each of the 3 axis
@@ -898,7 +899,6 @@ class Types:
                 self.pos_vecs[ax] = rotate_vector_around_axis(self.pos_vecs[ax],self.pos_vecs[self.sax],theta)
                 self.pos_vecs[ax] = self.pos_vecs[ax]/math.cos(math.radians(abs(self.ang-90)))
         # Add all vertices of the dim*dim*dim voxel cube
-        ax = self.fixed_sides[n][0][0]
         for i in range(self.dim+1):
             for j in range(self.dim+1):
                 for k in range(self.dim+1):
@@ -1056,6 +1056,7 @@ class Types:
                 for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))
 
     def init_gallery(self,start_index):
+        self.gallary_start_index = start_index
         self.gals = []
         self.sugs = []
         # Folder
@@ -1069,7 +1070,7 @@ class Types:
             for fs in self.fixed_sides[i]:
                 location+=str(fs[0])+str(fs[1])
             if i!=len(self.fixed_sides)-1: location+=("_")
-        location+="\\allvalid"
+        location+="\\allvalid_reduced"
         maxi = len(os.listdir(location))-1
         for i in range(20):
             if (i+start_index)>maxi: break

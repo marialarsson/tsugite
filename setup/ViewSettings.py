@@ -14,8 +14,9 @@ class ViewSettings:
         self.show_hidden_lines = True
         self.show_feedback = True
         self.show_milling_path = False
-        self.show_suggestions = True
+        self.show_suggestions = False
         self.show_friction = True
+        self.show_area = False
 
         # Joint opening variables
         self.open_joint = False

@@ -100,7 +100,7 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset,global_offset=0
     # Return
     return indices_prop, indices_ends_prop, indices_all_prop, all_indices
 
-def joint_area_face_indices(self,all_indices,mat,area_faces,n,offset,global_offset=0):
+def joint_area_face_indices(self,all_indices,mat,area_faces,n):
     # Make indices of faces for drawing method GL_QUADS
     # 1. Faces of joint
     indices = []
@@ -112,6 +112,7 @@ def joint_area_face_indices(self,all_indices,mat,area_faces,n,offset,global_offs
             for k in range(d):
                 ind = [i,j,k]
                 for ax in range(3):
+                    offset = ax*self.parent.vn
                     test_ind = np.array([i,j,k])
                     test_ind = np.delete(test_ind,ax)
                     if np.any(test_ind==self.parent.dim): continue
@@ -122,34 +123,35 @@ def joint_area_face_indices(self,all_indices,mat,area_faces,n,offset,global_offs
                                 add = [x,abs(y-x)]
                                 add.insert(ax,0)
                                 index = get_index(ind,add,self.parent.dim)
-                                if [ax,ind] in area_faces: indices.append(index)
-                                else: indices_ends.append(index)
+                                if [ax,ind] in area_faces: indices.append(index+offset)
+                                else: indices_ends.append(index+offset)
     # 2. Faces of component base
     d = self.parent.dim+1
     start = d*d*d
     if len(self.parent.fixed_sides[n])>0:
         for ax,dir in self.parent.fixed_sides[n]:
+            offset = ax*self.parent.vn
             a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
             step = 2
             if len(self.parent.fixed_sides[n])==2: step = 1
             off = 24*ax+12*dir+4*step
             a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
             # Add component side to indices
-            indices_ends.extend([a0,b0,d0,c0]) #bottom face
-            indices_ends.extend([a0,b0,b1,a1]) #side face 1
-            indices_ends.extend([b0,d0,d1,b1]) #side face 2
-            indices_ends.extend([d0,c0,c1,d1]) #side face 3
-            indices_ends.extend([c0,a0,a1,c1]) ##side face 4
+            indices_ends.extend([a0+offset,b0+offset,d0+offset,c0+offset]) #bottom face
+            indices_ends.extend([a0+offset,b0+offset,b1+offset,a1+offset]) #side face 1
+            indices_ends.extend([b0+offset,d0+offset,d1+offset,b1+offset]) #side face 2
+            indices_ends.extend([d0+offset,c0+offset,c1+offset,d1+offset]) #side face 3
+            indices_ends.extend([c0+offset,a0+offset,a1+offset,c1+offset]) ##side face 4
     # Format
     indices = np.array(indices, dtype=np.uint32)
-    indices = indices + offset
+    #indices = indices + offset
     indices_ends = np.array(indices_ends, dtype=np.uint32)
-    indices_ends = indices_ends + offset
+    #indices_ends = indices_ends + offset
     # Store
-    indices_prop = ElementProperties(GL_QUADS, len(indices), len(all_indices)+global_offset, n)
+    indices_prop = ElementProperties(GL_QUADS, len(indices), len(all_indices), n)
     if len(all_indices)>0: all_indices = np.concatenate([all_indices, indices])
     else: all_indices = indices
-    indices_ends_prop = ElementProperties(GL_QUADS, len(indices_ends), len(all_indices)+global_offset, n)
+    indices_ends_prop = ElementProperties(GL_QUADS, len(indices_ends), len(all_indices), n)
     all_indices = np.concatenate([all_indices, indices_ends])
     # Return
     return indices_prop, indices_ends_prop, all_indices
@@ -614,9 +616,10 @@ class Geometries:
         #suggestion geometries
         if not self.mainmesh: # for suggestions and gallery - just show basic geometry - no feedback - global offset necessary
             for n in range(self.parent.noc):
+                ax = self.parent.fixed_sides[n][0][0]
                 nend,end,all,all_inds = joint_face_indices(self, all_inds,
-                        self.voxel_matrix,self.parent.fixed_sides[n],n,n*self.parent.vn,global_offset=glo_off)
-                lns,all_inds = joint_line_indices(self,all_inds,n,n*self.parent.vn,global_offset=glo_off)
+                        self.voxel_matrix,self.parent.fixed_sides[n],n,ax*self.parent.vn,global_offset=glo_off)
+                lns,all_inds = joint_line_indices(self,all_inds,n,ax*self.parent.vn,global_offset=glo_off)
                 self.indices_fall.append(all)
                 self.indices_lns.append(lns)
         #current geometry (main including feedback)
@@ -642,11 +645,12 @@ class Geometries:
             self.indices_breakable_lines = []
             self.indices_milling_path = []
             for n in range(self.parent.noc):
+                ax = self.parent.fixed_sides[n][0][0]
                 #Faces
                 nend,end,con,all_inds = joint_face_indices(self, all_inds,
-                        self.eval.voxel_matrix_connected,self.parent.fixed_sides[n],n,n*self.parent.vn)
+                        self.eval.voxel_matrix_connected,self.parent.fixed_sides[n],n,ax*self.parent.vn)
                 if not self.eval.connected[n]:
-                    fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,n*self.parent.vn)
+                    fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,ax*self.parent.vn)
                     self.indices_not_fcon.append(uncon)
                     all = ElementProperties(GL_QUADS, con.count+uncon.count, con.start_index, n)
                 else:
@@ -654,7 +658,7 @@ class Geometries:
                     all = con
 
                 #breakable and not breakable faces
-                fne,fe,brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.breakable_voxmat,[],n,n*self.parent.vn)
+                fne,fe,brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.breakable_voxmat,[],n,ax*self.parent.vn)
                 fne,fe,not_brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.non_breakable_voxmat,self.parent.fixed_sides[n],n,n*self.parent.vn)
 
                 if not self.eval.bridged[n]:
@@ -665,29 +669,29 @@ class Geometries:
                 else: unbris = None
 
                 # Friction ad contact faces
-                fric,nfric,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.friction_faces[n], n, n*self.parent.vn)
-                cont,ncont,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.contact_faces[n], n, n*self.parent.vn)
+                fric,nfric,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.friction_faces[n], n)
+                cont,ncont,all_inds = joint_area_face_indices(self, all_inds, self.voxel_matrix, self.eval.contact_faces[n], n)
 
                 #picking faces
-                faces_pick_not_tops, faces_pick_tops, all_inds = joint_top_face_indices(self,all_inds,n,self.parent.noc,n*self.parent.vn)
+                faces_pick_not_tops, faces_pick_tops, all_inds = joint_top_face_indices(self,all_inds,n,self.parent.noc,ax*self.parent.vn)
 
                 #Lines
-                lns,all_inds = joint_line_indices(self,all_inds,n,n*self.parent.vn)
+                lns,all_inds = joint_line_indices(self,all_inds,n,ax*self.parent.vn)
 
                 # Chessboard feedback lines
                 if self.eval.checker[n]:
-                    chess,all_inds = chess_line_indices(self,all_inds,self.eval.checker_vertices[n],n,n*self.parent.vn)
+                    chess,all_inds = chess_line_indices(self,all_inds,self.eval.checker_vertices[n],n,ax*self.parent.vn)
                 else: chess = []
                 # Breakable lines
                 if self.eval.breakable:
-                    break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_outline_inds[n],n,n*self.parent.vn)
+                    break_lns, all_inds = break_line_indices(self,all_inds,self.eval.breakable_outline_inds[n],n,ax*self.parent.vn)
 
                 # Opening lines
-                open,all_inds = open_line_indices(self,all_inds,n,n*self.parent.vn)
+                open,all_inds = open_line_indices(self,all_inds,n,ax*self.parent.vn)
                 self.indices_open_lines.append(open)
 
                 #arrows
-                larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,self.parent.noc*self.parent.vn)
+                larr, farr, all_inds = arrow_indices(self, all_inds,self.eval.slides[n],n,3*self.parent.vn)
                 arrows = [larr,farr]
 
                 if milling_path and len(self.parent.mverts[0])>0:
