@@ -3,6 +3,7 @@ from OpenGL.GL import *
 import OpenGL.GL.shaders
 import random
 import math
+import time
 
 class ViewSettings:
     def __init__(self):
@@ -44,19 +45,23 @@ class ViewSettings:
     def set_joint_opening_distance(self,noc):
         if self.open_joint: # open joint
             if self.open_start_time==None:
-                self.open_start_time = glfw.get_time()
+                self.open_start_time = time.time()
                 self.close_start_time = None
-            self.open_ratio = self.open_start_dist + 1.2 * (glfw.get_time()-self.open_start_time)
+            self.open_ratio = self.open_start_dist + 1.2 * (time.time()-self.open_start_time)
             if self.open_ratio>=1+0.5*(noc-2):
                 self.open_ratio=1+0.5*(noc-2)
             self.close_start_dist = self.open_ratio
         else: # close joint
             if self.close_start_time==None:
-                self.close_start_time = glfw.get_time()
+                self.close_start_time = time.time()
                 self.open_start_time = None
-            self.open_ratio = self.close_start_dist - 1.2 * (glfw.get_time()-self.close_start_time)
+            self.open_ratio = self.close_start_dist - 1.2 * (time.time()-self.close_start_time)
             if self.open_ratio<0: self.open_ratio = 0
             self.open_start_dist = self.open_ratio
+
+    def set_absolute_joint_opening_distance(self,noc,val):
+        self.open_ratio = val/100
+
 
     def update_rotation(self, window):
         # Rotate view by dragging

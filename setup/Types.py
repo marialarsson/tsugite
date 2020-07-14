@@ -474,9 +474,6 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
                     if dia1 or dia2:
                         rounded = True
         if rounded:
-            extra_off_dist=-type.fab.vtol
-            #off_vec_a = set_vector_length(off_vec_a,np.linalg.norm(off_vec_a)+extra_off_dist)
-            #off_vec_b = set_vector_length(off_vec_b,np.linalg.norm(off_vec_b)+extra_off_dist)
 
             nind = tuple(np.argwhere(rv.neighbors==1)[0])
             off_vec_a = -neighbor_vectors_a[nind]
@@ -1016,6 +1013,10 @@ class Types:
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.randomize_height_fields()
 
+    def update_angle(self,ang):
+        self.ang = ang
+        self.create_and_buffer_vertices(milling_path=False)
+        
     def update_number_of_components(self,new_noc):
         if new_noc!=self.noc:
             # Increasing number of components
@@ -1070,9 +1071,12 @@ class Types:
             for fs in self.fixed_sides[i]:
                 location+=str(fs[0])+str(fs[1])
             if i!=len(self.fixed_sides)-1: location+=("_")
-        location+="\\allvalid_reduced"
+        location+="\\allvalid"
         maxi = len(os.listdir(location))-1
         for i in range(20):
             if (i+start_index)>maxi: break
-            hfs = np.load(location+"\\height_fields_"+str(start_index+i)+".npy")
-            self.gals.append(Geometries(self,mainmesh=False,hfs=hfs))
+            try:
+                hfs = np.load(location+"\\height_fields_"+str(start_index+i)+".npy")
+                self.gals.append(Geometries(self,mainmesh=False,hfs=hfs))
+            except:
+                abc = 0

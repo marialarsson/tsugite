@@ -120,8 +120,8 @@ class Fabrication:
         self.real_component_size = self.parent.real_comp_width-0.5 #29.5 #44.45 #36.5 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 3.00 #milling bit radius in mm
-        self.tol = 0.10 #0.15 #tolerance in mm
+        self.rad = 5.00 #milling bit radius in mm
+        self.tol = 0.15 #0.10 #tolerance in mm
         self.rad -= self.tol
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio
@@ -129,7 +129,7 @@ class Fabrication:
         self.vtol = self.tol/self.ratio
         self.ext = 1.0
         self.vext = self.ext/self.ratio
-        self.dep = 1.0 #milling depth in mm
+        self.dep = 1.5 #milling depth in mm
 
     def export_gcode(self,file_name):
         # make sure that the z axis of the gcode is facing up
@@ -143,28 +143,35 @@ class Fabrication:
             comp_ax = self.parent.fixed_sides[n][0][0]
             comp_dir = self.parent.fixed_sides[n][0][1] # component direction
             comp_vec = self.parent.pos_vecs[comp_ax]
-            #if comp_dir==1 and comp_ax!=self.parent.sax:
-            #    comp_vec=-comp_vec
-            #    print(n,"reversed")
+            if comp_dir==0 and comp_ax!=self.parent.sax:
+                comp_vec=-comp_vec
             comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
             comp_vec = comp_vec/np.linalg.norm(comp_vec) #unitize
-            rot_ang = angle_between([1,0,0],comp_vec)
-            if np.dot([1,0,0],comp_vec)<0: rot_ang=-rot_ang
-            if comp_dir==1 and comp_ax!=self.parent.sax: rot_ang = rot_ang+math.pi
+            print(n,comp_vec)
+            xax = np.array([1,0,0])
+            rot_ang = angle_between(xax,comp_vec)
+            aaxis = np.cross(xax,comp_vec)
+            if np.dot(comp_vec, np.cross(aaxis, xax))<0: #>
+                rot_ang=-rot_ang
             fdir = self.parent.mesh.fab_directions[n]
+            if fdir==0: rot_ang+=math.pi #1
             #
             file_name = "joint_"+names[n]
-            file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".gcode","w")
+            file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".nc","w")
             ###initialization
             file.write("%\n")
             file.write("G90 (Absolute [G91 is incremental])\n")
-            file.write("G21 (set unit[mm])\n")
-            file.write("G54\n")
-            file.write("F1000.0S6000 (Feeding 2000mm/min, Spindle 6000rpm)\n")
             file.write("G17 (set XY plane for circle path)\n")
-            file.write("M03 (spindle start)\n")
-            speed = 300
+            file.write("G94 (set unit/minute)\n")
+            file.write("G21 (set unit[mm])\n")
+            file.write("F400. (Feeding 400mm/min)\n")
+            file.write("S6000 (Spindle 6000rpm)\n")
+            file.write("M3 (spindle start)\n")
+            file.write("G54\n")
+
+            #speed = 400
             ###content
+            currentg = ""
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
                 if comp_ax!=fax:
@@ -186,17 +193,32 @@ class Fabrication:
 
                 #write to file
                 if arc and clockwise:
-                    #file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
-                    file.write("G02 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
+                    if i==0: file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+" F400."+"\n")
+                    else: file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+"\n")
+                    currentg=="G2"
                 elif arc and not clockwise:
-                    #file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia+self.tol)+" F "+str(speed)+"\n")
-                    file.write("G03 X "+mv.xstr+" Y "+mv.ystr+" R "+str(self.dia)+" F "+str(speed)+"\n")
-                elif i==0 or pmv.x!=mv.x or pmv.y!=mv.y: file.write("G01 X "+mv.xstr+" Y "+mv.ystr+" F "+str(speed)+"\n")
+                    if i==0: file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+" F400."+"\n")
+                    else: file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+"\n")
+                    currentg = "G3"
+                elif i==0 or pmv.x!=mv.x or pmv.y!=mv.y:
+                    if currentg=="G1":
+                        if i==0: file.write("X"+mv.xstr+" Y"+mv.ystr+" F400."+"\n")
+                        else: file.write("X"+mv.xstr+" Y"+mv.ystr+"\n")
+                    else:
+                        if i==0: file.write("G1 X"+mv.xstr+" Y"+mv.ystr+" F400."+"\n")
+                        else: file.write("G1 X"+mv.xstr+" Y"+mv.ystr+"\n")
+                        currentg=="G1"
                 ##
-                if i==0 or pmv.z!=mv.z: file.write("G01 Z "+mv.zstr+" F "+str(speed)+"\n")
+                if i==0 or pmv.z!=mv.z:
+                    if currentg=="G1":
+                        file.write("Z"+mv.zstr+"\n")
+                    else:
+                        file.write("G1 Z"+mv.zstr+"\n")
+                        currentg = "G1"
             ###end
-            file.write("M05 (Spindle stop)\n")
-            file.write("M02(end of program)\n")
+            file.write("M5 (Spindle stop)\n")
+            file.write("M2 (end of program)\n")
+            file.write("M30 (delete sd file)\n")
             file.write("%\n")
-            print("Exported",file_name+".gcode.")
+            print("Exported",file_name+".nc")
             file.close()

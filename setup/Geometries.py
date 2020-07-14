@@ -742,7 +742,8 @@ class Geometries:
 
     def save(self):
         np.save("data/saved_height_fields.npy",self.height_fields)
-        np.savetxt("data/saved_voxmat.txt", self.voxel_matrix.reshape(27).astype(int), delimiter=',')
+        num = int(self.parent.dim**3)
+        np.savetxt("data/saved_voxmat.txt", self.voxel_matrix.reshape(num).astype(int), delimiter=',')
         np.save("data/saved_fixed_sides.npy",self.parent.fixed_sides)
 
     def load(self):
@@ -762,7 +763,7 @@ class Geometries:
             for fs in self.parent.fixed_sides[i]:
                 location+=str(fs[0])+str(fs[1])
             if i!=len(self.parent.fixed_sides)-1: location+=("_")
-        location+="\\allvalid_reduced"
+        location+="\\allvalid"
         print("Trying to load geometry from",location)
         maxi = len(os.listdir(location))-1
         if index==-1: index=random.randint(0,maxi)
