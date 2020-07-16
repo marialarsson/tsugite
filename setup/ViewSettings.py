@@ -73,8 +73,25 @@ class ViewSettings:
             self.xrot = self.xrot0 + xdiff
             self.yrot = self.yrot0 + ydiff
 
+
+    def update_rotation_xy(self, x, y):
+        # Rotate view by dragging
+        if self.dragged:
+            xpos, ypos = x, y
+            ratio = 0.001
+            ydiff = ratio*(xpos-self.xstart)
+            xdiff = ratio*(ypos-self.ystart)
+            self.xrot = self.xrot0 + xdiff
+            self.yrot = self.yrot0 + ydiff
+
     def start_rotation(self, window):
         self.xstart, self.ystart = glfw.get_cursor_pos(window)
+        self.dragged = True
+        self.xrot0 = self.xrot
+        self.yrot0 = self.yrot
+
+    def start_rotation_xy(self, x, y):
+        self.xstart, self.ystart = x, y
         self.dragged = True
         self.xrot0 = self.xrot
         self.yrot0 = self.yrot

@@ -7,8 +7,8 @@ import pyrr
 import sys
 from Types import Types
 from Geometries import Geometries
-from ViewSettings import ViewSettings
 from Buffer import ElementProperties
+from ViewSettings import ViewSettings
 import ctypes
 import math
 import cv2
@@ -157,8 +157,8 @@ def keyCallback(window,key,scancode,action,mods):
             elif key==glfw.KEY_LEFT and type.sax!=0:
                 Types.update_sliding_direction(type,0)
             # Save / Open
-            elif key==glfw.KEY_S: print("Saving joint..."); Geometries.save(type.mesh)
-            elif key==glfw.KEY_O: print("Opening saved joint..."); Geometries.load(type.mesh)
+            elif key==glfw.KEY_S: Geometries.save(type.mesh)
+            elif key==glfw.KEY_O: Geometries.open(type.mesh)
             elif key==glfw.KEY_L: print("Loading saved joint from computational search..."); Geometries.load_search_results(type.mesh)
             # Milling path
             elif key==glfw.KEY_M:
@@ -669,7 +669,7 @@ def main():
     parser.add_argument('--gal3', default=0, type=int)
     parser.add_argument('--dim', default=3, type=int)
     parser.add_argument('--sax', default=2, type=int)
-    parser.add_argument('--w', default=44, type=int) #32
+    parser.add_argument('--w', default=38, type=int) #32
     parser.add_argument('--d', default=-1, type=int)
     args = parser.parse_args()
 

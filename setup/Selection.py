@@ -60,16 +60,18 @@ class Selection:
         self.state=-1
         self.refresh = True
 
-    def edit(self,mouse_pos,screen_xrot,screen_yrot):
+    def edit(self,mouse_pos,screen_xrot,screen_yrot,w=1600,h=1600):
         self.current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
         self.current_height = self.start_height
         ## Mouse vector
-        mouse_vec = self.current_pos-self.start_pos
-        mouse_vec[0] = mouse_vec[0]/800
-        mouse_vec[1] = mouse_vec[1]/800
+        mouse_vec = np.array(self.current_pos-self.start_pos)
+        mouse_vec = mouse_vec.astype(float)
+        mouse_vec[0] = 2*mouse_vec[0]/w
+        mouse_vec[1] = 2*mouse_vec[1]/h
         ## Sliding direction vector
         sdir_vec = [0,0,0]
-        sdir_vec[self.parent.parent.sax] = -self.parent.parent.voxel_size
+        #sdir_vec[self.parent.parent.sax] = -self.parent.parent.voxel_size #<-old
+        sdir_vec = np.copy(self.parent.parent.pos_vecs[self.parent.parent.sax])  #<-new
         rot_x = pyrr.Matrix33.from_x_rotation(screen_xrot)
         rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
         sdir_vec = np.dot(sdir_vec,rot_x*rot_y)
@@ -79,7 +81,7 @@ class Selection:
         #sinang = linalg.norm(np.cross(mouse_vec, joint_vec))
         #ang = math.degrees(np.arctan2(sinang, cosang))
         val = int(linalg.norm(mouse_vec)/linalg.norm(sdir_vec)+0.5)
-        if cosang!=None and cosang>0: val = -val
+        if cosang!=None and cosang<0: val = -val
         if self.start_height + val>self.parent.parent.dim: val = self.parent.parent.dim-self.start_height
         elif self.start_height+val<0: val = -self.start_height
         self.current_height = self.start_height + val
@@ -104,7 +106,8 @@ class Selection:
         self.new_fixed_sides_for_display = copy.deepcopy(self.parent.parent.fixed_sides[self.n])
         self.current_pos = np.array([mouse_pos[0],-mouse_pos[1]])
         ## Mouse vector
-        mouse_vec = self.current_pos-self.start_pos
+        mouse_vec = np.array(self.current_pos-self.start_pos)
+        mouse_vec = mouse_vec.astype(float)
         mouse_vec[0] = mouse_vec[0]/800
         mouse_vec[1] = mouse_vec[1]/800
         ## Check that the move distance is above some treshhold

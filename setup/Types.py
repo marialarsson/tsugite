@@ -810,7 +810,7 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, wd=[30.0,30.0]):
+    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, wd=[30.0,30.0], fabtol=0.15, fabrad=3.00, hfs=[]):
         self.sax = sax
         self.fixed_sides = fs
         self.noc = len(fs) #number of components
@@ -826,13 +826,13 @@ class Types:
         #self.voxel_sizes.insert(self.sax,self.voxel_sizes[1])
         ### above. new for non-square sections. might need to be revised. <--------------------------------
         self.component_length = 0.5*self.component_size
-        self.fab = Fabrication(self)
+        self.fab = Fabrication(self, tol=fabtol, rad=fabrad)
         self.vertex_no_info = 8
         self.ang = ang
         self.buff = Buffer(self) #initiating the buffer
         self.update_unblocked_fixed_sides()
         self.vertices = self.create_and_buffer_vertices(milling_path=False) # create and buffer vertices
-        self.mesh = Geometries(self)
+        self.mesh = Geometries(self, hfs=hfs)
         self.sugs = []
         self.gals = []
         self.update_suggestions()
@@ -1016,7 +1016,14 @@ class Types:
     def update_angle(self,ang):
         self.ang = ang
         self.create_and_buffer_vertices(milling_path=False)
-        
+
+    def update_timber_width_and_height(self,w,d):
+        self.real_comp_width = w
+        self.real_comp_depth = d
+        self.ratio = d/w
+        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
+        self.create_and_buffer_vertices(milling_path=False)
+
     def update_number_of_components(self,new_noc):
         if new_noc!=self.noc:
             # Increasing number of components

@@ -115,13 +115,14 @@ class MillVertex:
             self.arc_ctr = np.array(self.arc_ctr)
 
 class Fabrication:
-    def __init__(self,parent):
+    def __init__(self,parent,tol=0.15,rad=3.00):
         self.parent = parent
         self.real_component_size = self.parent.real_comp_width-0.5 #29.5 #44.45 #36.5 #mm
         self.real_voxel_size = self.real_component_size/self.parent.dim
         self.ratio = self.real_component_size/self.parent.component_size
-        self.rad = 5.00 #milling bit radius in mm
-        self.tol = 0.15 #0.10 #tolerance in mm
+        self.rad_real = rad #milling bit radius in mm
+        self.rad = self.rad_real #milling bit radius in mm
+        self.tol = tol #0.10 #tolerance in mm
         self.rad -= self.tol
         self.dia = 2*self.rad
         self.vdia = self.dia/self.ratio
@@ -130,8 +131,9 @@ class Fabrication:
         self.ext = 1.0
         self.vext = self.ext/self.ratio
         self.dep = 1.5 #milling depth in mm
+        self.extra_rot = 0
 
-    def export_gcode(self,file_name):
+    def export_gcode(self,filename_tsu="C:/Users/makal/Dropbox/gcode/joint.tsu"):
         # make sure that the z axis of the gcode is facing up
         fax = self.parent.sax
         coords = [0,1]
@@ -147,7 +149,6 @@ class Fabrication:
                 comp_vec=-comp_vec
             comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
             comp_vec = comp_vec/np.linalg.norm(comp_vec) #unitize
-            print(n,comp_vec)
             xax = np.array([1,0,0])
             rot_ang = angle_between(xax,comp_vec)
             aaxis = np.cross(xax,comp_vec)
@@ -155,9 +156,10 @@ class Fabrication:
                 rot_ang=-rot_ang
             fdir = self.parent.mesh.fab_directions[n]
             if fdir==0: rot_ang+=math.pi #1
+            rot_ang+=self.extra_rot ###for roland machine etc###############################
             #
-            file_name = "joint_"+names[n]
-            file = open("C:/Users/makal/Dropbox/gcode/"+file_name+".nc","w")
+            file_name = filename_tsu[:-4] + "_"+names[n]+".gcode"
+            file = open(file_name,"w")
             ###initialization
             file.write("%\n")
             file.write("G90 (Absolute [G91 is incremental])\n")
@@ -215,10 +217,10 @@ class Fabrication:
                     else:
                         file.write("G1 Z"+mv.zstr+"\n")
                         currentg = "G1"
-            ###end
+            #end
             file.write("M5 (Spindle stop)\n")
             file.write("M2 (end of program)\n")
             file.write("M30 (delete sd file)\n")
             file.write("%\n")
-            print("Exported",file_name+".nc")
+            print("Exported",file_name)
             file.close()

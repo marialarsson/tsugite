@@ -740,16 +740,88 @@ class Geometries:
         self.voxel_matrix_from_height_fields()
         self.parent.combine_and_buffer_indices()
 
-    def save(self):
-        np.save("data/saved_height_fields.npy",self.height_fields)
-        num = int(self.parent.dim**3)
-        np.savetxt("data/saved_voxmat.txt", self.voxel_matrix.reshape(num).astype(int), delimiter=',')
-        np.save("data/saved_fixed_sides.npy",self.parent.fixed_sides)
+    def save(self,filename="joint.tsu"):
 
-    def load(self):
-        self.height_fields = np.load("data/saved_height_fields.npy")
-        self.voxel_matrix_from_height_fields()
-        self.parent.combine_and_buffer_indices()
+        #Inititate
+        file = open(filename,"w")
+
+        # Joint properties
+        file.write("SAX "+str(self.parent.sax)+"\n")
+        file.write("NOT "+str(self.parent.noc)+"\n")
+        file.write("RES "+str(self.parent.dim)+"\n")
+        file.write("ANG "+str(self.parent.ang)+"\n")
+        file.write("TDW "+str(self.parent.real_comp_width)+"\n")
+        file.write("TDD "+str(self.parent.real_comp_depth)+"\n")
+
+        # Fixed sides
+        file.write("FSS ")
+        for n in range(len(self.parent.fixed_sides)):
+            for i in range(len(self.parent.fixed_sides[n])):
+                file.write(str(int(self.parent.fixed_sides[n][i][0]))+",")
+                file.write(str(int(self.parent.fixed_sides[n][i][1])))
+                if i!=len(self.parent.fixed_sides[n])-1: file.write(".")
+            if n!=len(self.parent.fixed_sides)-1: file.write(":")
+
+        # Joint geometry
+        file.write("\nHFS \n")
+        for n in range(len(self.height_fields)):
+            for i in range(len(self.height_fields[n])):
+                for j in range(len(self.height_fields[n][i])):
+                    file.write(str(int(self.height_fields[n][i][j])))
+                    if j!=len(self.height_fields[n][i])-1: file.write(",")
+                if i!=len(self.height_fields[n])-1: file.write(":")
+            if n!=len(self.height_fields)-1: file.write("\n")
+
+        #Finalize
+        print("Saved",filename)
+        file.close()
+
+    def open(self,filename="joint.tsu"):
+
+        # Open
+        file = open(filename,"r")
+
+        # Default values
+        sax = 0
+        noc = 2
+        dim = 3
+        ang = 90
+        w = d = 44
+        fs = [[[2,0]],[[2,1]]]
+
+        # Read
+        hfs = []
+        hfi = 999
+        for i,line in enumerate(file.readlines()):
+            items = line.split( )
+            if items[0]=="SAX": sax = int(items[1])
+            elif items[0]=="NOT": noc = int(items[1])
+            elif items[0]=="RES": dim = int(items[1])
+            elif items[0]=="ANG": ang = int(float(items[1]))
+            elif items[0]=="TDW": w = int(float(items[1]))
+            elif items[0]=="TDD": d = int(float(items[1]))
+            elif items[0]=="FSS":
+                fs = []
+                for tim_fss in items[1].split(":"):
+                    temp = []
+                    for tim_fs in tim_fss.split("."):
+                        axdir = tim_fs.split(",")
+                        ax = int(float(axdir[0]))
+                        dir = int(float(axdir[1]))
+                        temp.append([ax,dir])
+                    fs.append(temp)
+            elif items[0]=="HFS": hfi = i
+            elif i>hfi:
+                hf = []
+                for row in line.split(":"):
+                    temp = []
+                    for item in row.split(","): temp.append(int(float(item)))
+                    hf.append(temp)
+                hfs.append(hf)
+        hfs = np.array(hfs)
+
+        # Reinitiate
+        self.parent.__init__(fs=fs, sax=sax, dim=dim, ang=ang, wd=[w,d], hfs=hfs)
 
     def load_search_results(self,index=-1):
         # Folder
@@ -790,50 +862,3 @@ class Geometries:
                     if h<h2: self.height_fields[i][tuple(ind)]=h
         self.voxel_matrix_from_height_fields()
         self.parent.combine_and_buffer_indices()
-
-"""
-
-    def set_height_fields(self,hfs):
-        self.height_fields = hfs
-        self.voxel_matrix_from_height_fields()
-        self.create_vertices()
-        self.create_indices()
-
-
-    def user_study_design_finished(self,args,duration,click_cnt):
-        dir = os.getcwd()
-        # remove "/setup"
-        dir = dir.split("\\")
-        dir.pop()
-        loc = ""
-        for item in dir: loc+=item+"/"
-        loc += "/user_study"
-        if not os.path.exists(loc): os.mkdir(loc)
-        if args.feedback: loc += "/with_feedback"
-        else: loc += "/without_feedback"
-        if not os.path.exists(loc): os.mkdir(loc)
-        loc += "/stage"+str(args.type)
-        if not os.path.exists(loc): os.mkdir(loc)
-        loc += "/"+args.username
-        if not os.path.exists(loc): os.mkdir(loc)
-        path = loc+"/height_fields_%s.npy"
-        i = 0
-        while os.path.exists(path % i): i=i+1
-        # save geometry
-        np.save(path % i,self.height_fields)
-        # save data
-        path = loc+"/data_%s.txt"
-        np.savetxt(path % i, [duration,click_cnt])   # x,y,z equal sized 1D arrays
-        # save joint performance evaluation
-        m1 = 0 # connectivity
-        m3 = 0 # checker board
-        m5 = 0 # multiple sliding directions
-        m6 = 0 # fragile parts
-        for n in range(self.noc):
-            if not self.eval.connected[n]: m1 = 1
-            if self.eval.checker[n]: m3 = 1
-            if len(self.eval.slides[n])>1: m5 = 1
-            if self.eval.breakable[n]: m6 = 1
-        path = loc+"/eval_%s.txt"
-        np.savetxt(path % i, [m1,m3,m5,m6])   # x,y,z equal sized 1D arrays
-"""

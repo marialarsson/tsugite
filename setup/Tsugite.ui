@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Tsugite.exe</string>
+   <string>Tsugite</string>
   </property>
   <property name="iconSize">
    <size>
@@ -25,8 +25,8 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>352</width>
-      <height>1501</height>
+      <width>361</width>
+      <height>1401</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="V_layout">
@@ -44,24 +44,14 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="label_8">
+      <widget class="QPushButton" name="buttonOPEN">
        <property name="text">
-        <string>Open/close joint (Space)</string>
+        <string>Open/close joint</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QSlider" name="sliderOPEN">
-       <property name="maximum">
-        <number>100</number>
-       </property>
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QCheckBox" name="checkBox">
+      <widget class="QCheckBox" name="checkFEED">
        <property name="text">
         <string>Show Feedback (F)</string>
        </property>
@@ -71,11 +61,21 @@
       </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkBox_2">
+      <widget class="QCheckBox" name="checkSUG">
        <property name="text">
         <string>Show suggestions (S)</string>
        </property>
        <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkBox">
+       <property name="text">
+        <string>Show area of friction/contact (A)</string>
+       </property>
+       <property name="tristate">
         <bool>true</bool>
        </property>
       </widget>
@@ -93,7 +93,7 @@
         <widget class="QComboBox" name="comboSLIDE">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
          </property>
@@ -129,7 +129,7 @@
         <widget class="QSpinBox" name="spinBoxNUM">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
          </property>
@@ -156,7 +156,7 @@
         <widget class="QSpinBox" name="spinBoxRES">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
          </property>
@@ -178,7 +178,7 @@
        <item>
         <widget class="QLabel" name="label_4">
          <property name="text">
-          <string>Angle (degrees)</string>
+          <string>Angle</string>
          </property>
         </widget>
        </item>
@@ -186,9 +186,15 @@
         <widget class="QDoubleSpinBox" name="spinANG">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="suffix">
+          <string>°</string>
          </property>
          <property name="decimals">
           <number>1</number>
@@ -218,7 +224,7 @@
        <item>
         <widget class="QLabel" name="label_11">
          <property name="text">
-          <string>Width (mm)</string>
+          <string>Width</string>
          </property>
         </widget>
        </item>
@@ -226,9 +232,15 @@
         <widget class="QDoubleSpinBox" name="spinW">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="suffix">
+          <string> mm</string>
          </property>
          <property name="decimals">
           <number>1</number>
@@ -251,7 +263,7 @@
        <item>
         <widget class="QLabel" name="label_12">
          <property name="text">
-          <string>Depth (mm)</string>
+          <string>Depth</string>
          </property>
         </widget>
        </item>
@@ -259,9 +271,15 @@
         <widget class="QDoubleSpinBox" name="spinD">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="suffix">
+          <string> mm</string>
          </property>
          <property name="decimals">
           <number>1</number>
@@ -284,14 +302,23 @@
        <item>
         <widget class="QPushButton" name="buttonR">
          <property name="text">
-          <string>Randomize</string>
+          <string>Randomize (R)</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+         <property name="default">
+          <bool>false</bool>
+         </property>
+         <property name="flat">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QPushButton" name="buttonC">
          <property name="text">
-          <string>Clear</string>
+          <string>Clear (C)</string>
          </property>
         </widget>
        </item>
@@ -338,26 +365,35 @@
        <item>
         <widget class="QLabel" name="label_6">
          <property name="text">
-          <string>Milling bit diameter (mm)</string>
+          <string>Milling bit diameter</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="lineEdit_4">
+        <widget class="QDoubleSpinBox" name="spinDIA">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
-         </property>
-         <property name="text">
-          <string>6</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
          </property>
-         <property name="placeholderText">
-          <string>6</string>
+         <property name="suffix">
+          <string> mm</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="maximum">
+          <double>50.000000000000000</double>
+         </property>
+         <property name="value">
+          <double>6.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -368,33 +404,85 @@
        <item>
         <widget class="QLabel" name="label_7">
          <property name="text">
-          <string>Tolerances (mm)</string>
+          <string>Tolerances</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="lineEdit_5">
+        <widget class="QDoubleSpinBox" name="spinTOL">
          <property name="maximumSize">
           <size>
-           <width>80</width>
+           <width>120</width>
            <height>16777215</height>
           </size>
-         </property>
-         <property name="text">
-          <string>0.05</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
          </property>
-         <property name="placeholderText">
-          <string>0.05</string>
+         <property name="suffix">
+          <string> mm</string>
+         </property>
+         <property name="maximum">
+          <double>5.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+         <property name="value">
+          <double>0.150000000000000</double>
          </property>
         </widget>
        </item>
       </layout>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkBox_3">
+      <layout class="QHBoxLayout" name="horizontalLayout_6">
+       <item>
+        <widget class="QLabel" name="label_13">
+         <property name="text">
+          <string>Rotate milling path</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="spinPATHROT">
+         <property name="maximumSize">
+          <size>
+           <width>120</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="layoutDirection">
+          <enum>Qt::LeftToRight</enum>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="suffix">
+          <string>°</string>
+         </property>
+         <property name="minimum">
+          <number>-360</number>
+         </property>
+         <property name="maximum">
+          <number>360</number>
+         </property>
+         <property name="singleStep">
+          <number>90</number>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_14">
+       <property name="text">
+        <string>(defult rotation: X-axis aligned)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkPATH">
        <property name="text">
         <string>Show milling path (M)</string>
        </property>
@@ -412,13 +500,17 @@
    <widget class="QWidget" name="horizontalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>380</x>
       <y>10</y>
-      <width>1421</width>
-      <height>1501</height>
+      <width>1491</width>
+      <height>1511</height>
      </rect>
     </property>
-    <layout class="QHBoxLayout" name="H_layout"/>
+    <layout class="QHBoxLayout" name="H_layout">
+     <property name="sizeConstraint">
+      <enum>QLayout::SetDefaultConstraint</enum>
+     </property>
+    </layout>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -435,18 +527,11 @@
      <string>File</string>
     </property>
     <addaction name="actionNew"/>
-    <addaction name="actionLoad"/>
+    <addaction name="actionOpen"/>
     <addaction name="actionSave"/>
-    <addaction name="actionSave_screenshot"/>
-   </widget>
-   <widget class="QMenu" name="menuEdit">
-    <property name="title">
-     <string>Edit</string>
-    </property>
-    <addaction name="actionUndo"/>
-    <addaction name="actionRedo"/>
-    <addaction name="actionClear"/>
-    <addaction name="actionRandomize"/>
+    <addaction name="actionSaveas"/>
+    <addaction name="separator"/>
+    <addaction name="actionImage"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -460,41 +545,60 @@
      <addaction name="actionB"/>
      <addaction name="actionC"/>
      <addaction name="actionD"/>
+     <addaction name="separator"/>
+     <addaction name="actionShow_all"/>
     </widget>
     <widget class="QMenu" name="menuSet_view">
      <property name="title">
       <string>Set view</string>
      </property>
+     <addaction name="actionAxo"/>
      <addaction name="actionTop"/>
      <addaction name="actionBottom"/>
      <addaction name="actionFront"/>
      <addaction name="actionBack"/>
      <addaction name="actionRight"/>
      <addaction name="actionLeft"/>
-     <addaction name="actionAxo"/>
     </widget>
     <addaction name="actionShow_hidden_lines"/>
     <addaction name="menuShow_hide_timbers"/>
     <addaction name="menuSet_view"/>
    </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuEdit"/>
    <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSave">
    <property name="text">
-    <string>Save (S)</string>
+    <string>Save</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+   <property name="shortcutVisibleInContextMenu">
+    <bool>true</bool>
    </property>
   </action>
-  <action name="actionLoad">
+  <action name="actionOpen">
    <property name="text">
-    <string>Open</string>
+    <string>Open...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+   <property name="shortcutVisibleInContextMenu">
+    <bool>true</bool>
    </property>
   </action>
-  <action name="actionSave_screenshot">
+  <action name="actionImage">
    <property name="text">
-    <string>Save screenshot (P)</string>
+    <string>Save image...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+P</string>
+   </property>
+   <property name="shortcutVisibleInContextMenu">
+    <bool>true</bool>
    </property>
   </action>
   <action name="actionUndo">
@@ -510,6 +614,12 @@
   <action name="actionNew">
    <property name="text">
     <string>New</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+   <property name="shortcutVisibleInContextMenu">
+    <bool>true</bool>
    </property>
   </action>
   <action name="actionSave_as">
@@ -528,63 +638,130 @@
    </property>
   </action>
   <action name="actionShow_hidden_lines">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Show/hide hidden lines</string>
    </property>
   </action>
   <action name="actionA">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>A</string>
    </property>
   </action>
   <action name="actionB">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>B</string>
    </property>
   </action>
   <action name="actionC">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>C</string>
    </property>
   </action>
   <action name="actionD">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>D</string>
    </property>
   </action>
   <action name="actionTop">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Top</string>
    </property>
   </action>
   <action name="actionBottom">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Bottom</string>
    </property>
   </action>
   <action name="actionLeft">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Left</string>
    </property>
   </action>
   <action name="actionRight">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Right</string>
    </property>
   </action>
   <action name="actionAxo">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Axo</string>
    </property>
   </action>
   <action name="actionFront">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Front</string>
    </property>
   </action>
   <action name="actionBack">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Back</string>
+   </property>
+  </action>
+  <action name="actionSaveas">
+   <property name="text">
+    <string>Save As...</string>
+   </property>
+   <property name="shortcutVisibleInContextMenu">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionShow_all">
+   <property name="text">
+    <string>Show all</string>
    </property>
   </action>
  </widget>
