@@ -13,6 +13,11 @@ from Fabrication import RoughPixel
 from Geometries import Geometries
 from Geometries import get_index
 
+def normalize(v):
+    norm = linalg.norm(v)
+    if norm == 0: return v
+    else: return v / norm
+
 def mat_from_fields(hfs,ax): ### duplicated function - also exists in Geometries
     dim = len(hfs[0])
     mat = np.zeros(shape=(dim,dim,dim))
@@ -247,16 +252,17 @@ def rough_milling_path(type,rough_pixs,lay_num,n):
     off_ax = axes[1] # milling offset axis
 
     # Define fabrication parameters
-    no_lanes = 2+math.ceil((type.fab.real_voxel_size-2*type.fab.dia)/type.fab.dia)
-    lane_width = (type.voxel_size-type.fab.vdia)/(no_lanes-1)
-    ratio = np.linalg.norm(type.pos_vecs[axes[1]])/type.voxel_size
+
+    no_lanes = 2+math.ceil(((type.real_tim_dims[axes[1]]/type.dim)-2*type.fab.dia)/type.fab.dia)
+    lane_width = (type.voxel_sizes[axes[1]]-type.fab.vdia)/(no_lanes-1)
+    ratio = np.linalg.norm(type.pos_vecs[axes[1]])/type.voxel_sizes[axes[1]]
     v_vrad = type.fab.vrad*ratio
     lane_width = lane_width*ratio
 
 
     # create offset direction vectors
-    dir_vec = type.pos_vecs[axes[0]]/np.linalg.norm(type.pos_vecs[axes[0]])
-    off_vec = type.pos_vecs[axes[1]]/np.linalg.norm(type.pos_vecs[axes[1]])
+    dir_vec = normalize(type.pos_vecs[axes[0]])
+    off_vec = normalize(type.pos_vecs[axes[1]])
 
     # get top ones to cut out
     for pix in rough_pixs:
@@ -541,7 +547,7 @@ def get_layered_vertices(type,outline,n,i,no_z,dep):
     fdir = type.mesh.fab_directions[n]
     # add startpoint
     start_vert = [outline[0].x,outline[0].y,outline[0].z]
-    safe_height = outline[0].pt[type.sax]-(2*fdir-1)*i*type.voxel_size-0.2*(2*fdir-1)*type.voxel_size
+    safe_height = outline[0].pt[type.sax]-(2*fdir-1)*i*type.voxel_sizes[type.sax]-0.2*(2*fdir-1)*type.voxel_sizes[type.sax]
     start_vert[type.sax] = safe_height
     mverts.append(MillVertex(start_vert))
     verts.extend([start_vert[0],start_vert[1],start_vert[2],r,g,b,tx,ty])
@@ -704,15 +710,16 @@ def milling_path_vertices(type,n):
     vertices = []
     milling_vertices = []
 
+    min_vox_size = np.min(type.voxel_sizes)
     # Check that the milling bit is not too large for the voxel size
-    if type.fab.real_voxel_size<type.fab.dia: print("Could not generate milling path. The milling bit is too large.")
-    min_ang = math.degrees(math.asin((type.fab.vrad+type.fab.vtol)/type.voxel_size))
+    if np.min(type.voxel_sizes)<type.fab.vdia: print("Could not generate milling path. The milling bit is too large.")
+    min_ang = math.degrees(math.asin((type.fab.vrad+type.fab.vtol)/min_vox_size))
     max_ang = 180-min_ang
     if type.ang<min_ang or type.ang>max_ang: print("Could not generate milling path. The angle is out of range.")
 
     # Calculate depth constants
-    no_z = int(type.fab.real_voxel_size/type.fab.dep)
-    dep = type.voxel_size/no_z
+    no_z = int(type.ratio*type.voxel_sizes[type.sax]/type.fab.dep)
+    dep = type.voxel_sizes[type.sax]/no_z
 
     # Defines axes and vectors
     fdir = type.mesh.fab_directions[n]
@@ -750,17 +757,19 @@ def milling_path_vertices(type,n):
 
         # Pad 2d matrix with fixed sides
         lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(type,lay_mat) #OK
+        #lay_mat = np.where(lay_mat<0, 6, lay_mat)  ################################################################
         org_lay_mat = copy.deepcopy(lay_mat) #OK
-
 
         # Get/browse regions
         for reg_num in range(type.dim*type.dim):
 
             # Get indices of a region
             inds = np.argwhere((lay_mat!=-1) & (lay_mat!=n)) #OK
+            #inds = np.argwhere(lay_mat!=n) ########################################################################
             if len(inds)==0: break #OK
             reg_inds = get_diff_neighbors(lay_mat,[inds[0]],n) #OK
 
+            """
             # Anaylize which voxels needs to be roguhly cut initially
             # 1. Add all open voxels in the region
             rough_inds = []
@@ -773,6 +782,7 @@ def milling_path_vertices(type,n):
                     verts,mverts = get_layered_vertices(type,rough_path,n,lay_num,no_z,dep)
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
+            """
 
 
             # Overwrite detected regin in original matrix
@@ -780,6 +790,8 @@ def milling_path_vertices(type,n):
 
             # Make a list of all edge vertices of the outline of the region
             reg_verts = get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n) #OK
+
+
 
             # Order the vertices to create an outline
             for isl_num in range(10):
@@ -792,11 +804,14 @@ def milling_path_vertices(type,n):
                 #Get a sequence of ordered vertices
                 reg_ord_verts,reg_verts,closed = get_sublist_of_ordered_verts(reg_verts) #OK
 
+                #Extend line by -1 situation when necessary
+                reg_ord_verts = 
+
                 # Make outline of ordered vertices (for dedugging olny!!!!!!!)
-                #if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
+                if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
 
                 # Offset vertices according to boundary condition (and remove if redundant)
-                outline = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
+                #outline = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
 
                 # Get z height and extend vertices to global list
                 if len(reg_ord_verts)>1 and len(outline)>0:
@@ -810,23 +825,18 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, wd=[30.0,30.0], fabtol=0.15, fabrad=3.00, hfs=[]):
+    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
         self.sax = sax
         self.fixed_sides = fs
         self.noc = len(fs) #number of components
         self.dim = dim
         self.suggestions_on = True
         self.component_size = 0.275
-        self.voxel_size = self.component_size/self.dim #<------to be removed
-        ### below. new for non-square sections. might need to be revised. <--------------------------------
-        self.real_comp_width = wd[0]
-        self.real_comp_depth = wd[1]
-        self.ratio = wd[1]/wd[0]
-        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
-        #self.voxel_sizes.insert(self.sax,self.voxel_sizes[1])
-        ### above. new for non-square sections. might need to be revised. <--------------------------------
+        self.real_tim_dims = np.array(td)
         self.component_length = 0.5*self.component_size
-        self.fab = Fabrication(self, tol=fabtol, rad=fabrad)
+        self.ratio = np.average(self.real_tim_dims)/self.component_size
+        self.voxel_sizes = np.copy(self.real_tim_dims)/(self.ratio*self.dim)
+        self.fab = Fabrication(self, tol=fabtol, dia=fabdia, ext=fabext, extra_rot_deg=fabrot)
         self.vertex_no_info = 8
         self.ang = ang
         self.buff = Buffer(self) #initiating the buffer
@@ -876,7 +886,7 @@ class Types:
                 self.m_start.append(mst)
                 mst += int(len(self.mverts[n])/8)
 
-        Buffer.buffer_vertices(self.buff)
+        self.buff.buffer_vertices()
 
     def create_joint_vertices(self, ax):
         vertices = []
@@ -906,7 +916,7 @@ class Types:
                     pos = ivec+jvec+kvec
                     x,y,z = pos
                     # texture coordinates
-                    tex_coords = [i,j,k]
+                    tex_coords = [i,j,k] ##################################################################
                     tex_coords.pop(ax)
                     tx = tex_coords[0]/self.dim
                     ty = tex_coords[1]/self.dim
@@ -923,7 +933,7 @@ class Types:
                         for y in range(2):
                             other_vecs = copy.deepcopy(self.pos_vecs)
                             other_vecs.pop(ax)
-                            vs = self.voxel_sizes.copy()
+                            vs = list(self.voxel_sizes).copy()
                             vs.pop(ax)
                             other_vecs[0] = other_vecs[0]/np.linalg.norm(other_vecs[0])
                             other_vecs[1] = other_vecs[1]/np.linalg.norm(other_vecs[1])
@@ -951,6 +961,7 @@ class Types:
         return vertices
 
     def combine_and_buffer_indices(self, milling_path=False):
+        self.update_suggestions()
         self.mesh.create_indices(milling_path=milling_path)
         glo_off = len(self.mesh.indices) # global offset
         for i in range(len(self.sugs)):
@@ -996,7 +1007,8 @@ class Types:
                     if dir==0 and i==0: continue
                     if dir==1 and i==self.noc-1: continue
                     blocked = True
-        if blocked: print("Blocked sliding direction")
+        if blocked:
+            return False, "This sliding direction is blocked"
         else:
             self.sax = sax
             self.update_unblocked_fixed_sides()
@@ -1004,12 +1016,11 @@ class Types:
             self.mesh.voxel_matrix_from_height_fields()
             for mesh in self.sugs: mesh.voxel_matrix_from_height_fields()
             self.combine_and_buffer_indices()
+            return True, ''
 
     def update_dimension(self,add):
         self.dim+=add
-        self.voxel_size = self.component_size/self.dim
-        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
-        #self.fab.real_voxel_size = self.fab.real_component_size/self.dim
+        self.voxel_sizes = np.copy(self.real_tim_dims)/(self.ratio*self.dim)
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.randomize_height_fields()
 
@@ -1017,12 +1028,14 @@ class Types:
         self.ang = ang
         self.create_and_buffer_vertices(milling_path=False)
 
-    def update_timber_width_and_height(self,w,d):
-        self.real_comp_width = w
-        self.real_comp_depth = d
-        self.ratio = d/w
-        self.voxel_sizes = [self.voxel_size,self.ratio*self.voxel_size,self.voxel_size]
-        self.create_and_buffer_vertices(milling_path=False)
+    def update_timber_width_and_height(self,inds,val,milling_path=False):
+        for i in inds: self.real_tim_dims[i]=val
+        self.ratio = np.average(self.real_tim_dims)/self.component_size
+        self.voxel_sizes = np.copy(self.real_tim_dims)/(self.ratio*self.dim)
+        self.fab.vdia = self.fab.dia/self.ratio
+        self.fab.vrad = self.fab.rad/self.ratio
+        self.fab.vtol = self.fab.tol/self.ratio
+        self.create_and_buffer_vertices(milling_path)
 
     def update_number_of_components(self,new_noc):
         if new_noc!=self.noc:
@@ -1052,6 +1065,29 @@ class Types:
         self.update_unblocked_fixed_sides()
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.voxel_matrix_from_height_fields()
+        self.combine_and_buffer_indices()
+
+    def reset(self, fs=[[[2,0]],[[2,1]]], sax=2, dim=3, ang=90., td=[44.0,44.0,44.0], fabdia=6.0, fabtol=0.15, fabrot=0.0, fabext="gcode", hfs=[]):
+        self.fixed_sides=fs
+        self.noc=len(self.fixed_sides)
+        self.sax=sax
+        self.dim=dim
+        self.ang=ang
+        self.real_tim_dims = np.array(td)
+        self.ratio = np.average(self.real_tim_dims)/self.component_size
+        self.voxel_sizes = np.copy(self.real_tim_dims)/(self.ratio*self.dim)
+        self.fab.tol=fabtol
+        self.fab.real_dia = fabdia
+        self.fab.rad = 0.5*self.fab.real_dia-self.fab.tol
+        self.fab.dia = 2*self.fab.rad
+        self.fab.vdia = self.fab.dia/self.ratio
+        self.fab.vrad = self.fab.rad/self.ratio
+        self.fab.vtol = self.fab.tol/self.ratio
+        self.fab.rot=fabrot
+        self.fab.ext=fabext
+        self.mesh = Geometries(self, hfs=hfs)
+        self.update_unblocked_fixed_sides()
+        self.create_and_buffer_vertices(milling_path=False)
         self.combine_and_buffer_indices()
 
     def update_suggestions(self):
@@ -1087,3 +1123,100 @@ class Types:
                 self.gals.append(Geometries(self,mainmesh=False,hfs=hfs))
             except:
                 abc = 0
+
+    def save(self,filename="joint.tsu"):
+
+        #Inititate
+        file = open(filename,"w")
+
+        # Joint properties
+        file.write("SAX "+str(self.sax)+"\n")
+        file.write("NOT "+str(self.noc)+"\n")
+        file.write("RES "+str(self.dim)+"\n")
+        file.write("ANG "+str(self.ang)+"\n")
+        file.write("TDX "+str(self.real_tim_dims[0])+"\n")
+        file.write("TDY "+str(self.real_tim_dims[1])+"\n")
+        file.write("TDZ "+str(self.real_tim_dims[2])+"\n")
+        file.write("DIA "+str(self.fab.real_dia)+"\n")
+        file.write("TOL "+str(self.fab.tol)+"\n")
+        file.write("ROT "+str(self.fab.extra_rot_deg)+"\n")
+        file.write("EXT "+self.fab.ext+"\n")
+
+        # Fixed sides
+        file.write("FSS ")
+        for n in range(len(self.fixed_sides)):
+            for i in range(len(self.fixed_sides[n])):
+                file.write(str(int(self.fixed_sides[n][i][0]))+",")
+                file.write(str(int(self.fixed_sides[n][i][1])))
+                if i!=len(self.fixed_sides[n])-1: file.write(".")
+            if n!=len(self.fixed_sides)-1: file.write(":")
+
+        # Joint geometry
+        file.write("\nHFS \n")
+        for n in range(len(self.mesh.height_fields)):
+            for i in range(len(self.mesh.height_fields[n])):
+                for j in range(len(self.mesh.height_fields[n][i])):
+                    file.write(str(int(self.mesh.height_fields[n][i][j])))
+                    if j!=len(self.mesh.height_fields[n][i])-1: file.write(",")
+                if i!=len(self.mesh.height_fields[n])-1: file.write(":")
+            if n!=len(self.mesh.height_fields)-1: file.write("\n")
+
+        #Finalize
+        print("Saved",filename)
+        file.close()
+
+    def open(self,filename="joint.tsu"):
+
+        # Open
+        file = open(filename,"r")
+
+        # Default values
+        sax = self.sax
+        noc = self.noc
+        dim = self.dim
+        ang = self.ang
+        dx, dy, dz = self.real_tim_dims
+        dia = self.fab.real_dia
+        tol = self.fab.tol
+        rot = self.fab.extra_rot_deg
+        ext = self.fab.ext
+        fs = self.fixed_sides
+
+        # Read
+        hfs = []
+        hfi = 999
+        for i,line in enumerate(file.readlines()):
+            items = line.split( )
+            if items[0]=="SAX": sax = int(items[1])
+            elif items[0]=="NOT": noc = int(items[1])
+            elif items[0]=="RES": dim = int(items[1])
+            elif items[0]=="ANG": ang = float(items[1])
+            elif items[0]=="TDX": dx = float(items[1])
+            elif items[0]=="TDY": dy = float(items[1])
+            elif items[0]=="TDZ": dz = float(items[1])
+            elif items[0]=="DIA": dia = float(items[1])
+            elif items[0]=="TOL": tol = float(items[1])
+            elif items[0]=="ROT": rot = float(items[1])
+            elif items[0]=="EXT": ext = items[1]
+            elif items[0]=="FSS":
+                fs = []
+                for tim_fss in items[1].split(":"):
+                    temp = []
+                    for tim_fs in tim_fss.split("."):
+                        axdir = tim_fs.split(",")
+                        ax = int(float(axdir[0]))
+                        dir = int(float(axdir[1]))
+                        temp.append([ax,dir])
+                    fs.append(temp)
+            elif items[0]=="HFS": hfi = i
+            elif i>hfi:
+                hf = []
+                for row in line.split(":"):
+                    temp = []
+                    for item in row.split(","): temp.append(int(float(item)))
+                    hf.append(temp)
+                hfs.append(hf)
+        hfs = np.array(hfs)
+
+        # Reinitiate
+        self.reset(fs=fs, sax=sax, dim=dim, ang=ang, td=[dx,dy,dz], fabdia=dia, fabtol=tol, fabrot=rot, fabext=ext, hfs=hfs)

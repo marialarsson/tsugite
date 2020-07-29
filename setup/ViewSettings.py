@@ -1,4 +1,3 @@
-import glfw
 from OpenGL.GL import *
 import OpenGL.GL.shaders
 import random
@@ -15,7 +14,7 @@ class ViewSettings:
         self.show_hidden_lines = True
         self.show_feedback = True
         self.show_milling_path = False
-        self.show_suggestions = False
+        self.show_suggestions = True
         self.show_friction = True
         self.show_area = False
 
@@ -63,15 +62,15 @@ class ViewSettings:
         self.open_ratio = val/100
 
 
-    def update_rotation(self, window):
-        # Rotate view by dragging
-        if self.dragged:
-            xpos, ypos = glfw.get_cursor_pos(window)
-            ratio = 0.001
-            ydiff = ratio*(xpos-self.xstart)
-            xdiff = ratio*(ypos-self.ystart)
-            self.xrot = self.xrot0 + xdiff
-            self.yrot = self.yrot0 + ydiff
+    #def update_rotation(self, window):
+    #    # Rotate view by dragging
+    #    if self.dragged:
+    #        xpos, ypos = glfw.get_cursor_pos(window)
+    #        ratio = 0.001
+    #        ydiff = ratio*(xpos-self.xstart)
+    #        xdiff = ratio*(ypos-self.ystart)
+    #        self.xrot = self.xrot0 + xdiff
+    #        self.yrot = self.yrot0 + ydiff
 
 
     def update_rotation_xy(self, x, y):
@@ -84,11 +83,11 @@ class ViewSettings:
             self.xrot = self.xrot0 + xdiff
             self.yrot = self.yrot0 + ydiff
 
-    def start_rotation(self, window):
-        self.xstart, self.ystart = glfw.get_cursor_pos(window)
-        self.dragged = True
-        self.xrot0 = self.xrot
-        self.yrot0 = self.yrot
+    #def start_rotation(self, window):
+    #    self.xstart, self.ystart = glfw.get_cursor_pos(window)
+    #    self.dragged = True
+    #    self.xrot0 = self.xrot
+    #    self.yrot0 = self.yrot
 
     def start_rotation_xy(self, x, y):
         self.xstart, self.ystart = x, y

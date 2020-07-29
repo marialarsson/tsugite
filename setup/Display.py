@@ -5,7 +5,8 @@ import numpy as np
 import pyrr
 
 class Display:
-    def __init__(self,type):
+    def __init__(self,parent,type):
+        self.parent = parent
         self.type = type
         self.view = ViewSettings() #view
         self.create_color_shaders()
@@ -196,9 +197,9 @@ class Display:
         self.type.mesh.select.suggstate = -1
         self.type.mesh.select.gallstate = -1
         if not self.view.gallery:
-            if xpos>1600: # suggestion side
-                if ypos>0 and ypos<1600:
-                    index = int(ypos/400)
+            if xpos>self.parent.width-self.parent.wstep: # suggestion side
+                if ypos>0 and ypos<self.parent.height:
+                    index = int(ypos/self.parent.hstep)
                     if self.type.mesh.select.suggstate!=index:
                         self.type.mesh.select.suggstate=index
             elif not np.all(mouse_pixel==255): # not white / background
@@ -265,9 +266,38 @@ class Display:
             for val in range(0,abs(self.type.mesh.select.val)+1):
                 if self.type.mesh.select.val<0: val = -val
                 pulled_vec = [0,0,0]
-                pulled_vec[self.type.sax] = val*self.type.voxel_size
+                pulled_vec[self.type.sax] = val*self.type.voxel_sizes[self.type.sax]
                 self.draw_geometries([self.type.mesh.outline_selected_faces],translation_vec=np.array(pulled_vec))
             glPopAttrib()
+
+    def difference_suggestion(self,index):
+        glPushAttrib(GL_ENABLE_BIT)
+        
+        # draw faces of additional part
+        glUniform3f(5, 1.0, 1.0, 1.0) # white
+        for n in range(self.type.noc):
+            G0 = [self.type.sugs[index].indices_fall[n]]
+            G1 = self.type.mesh.indices_fall
+            self.draw_geometries_with_excluded_area(G0,G1)
+
+        # draw faces of subtracted part
+        glUniform3f(5, 1.0, 0.5, 0.5) # pink/red
+        for n in range(self.type.noc):
+            G0 = [self.type.mesh.indices_fall[n]]
+            G1 = self.type.sugs[index].indices_fall
+            self.draw_geometries_with_excluded_area(G0,G1)
+
+        # draw outlines
+        glUniform3f(5, 0.0, 0.0, 0.0) # black
+        glLineWidth(3)
+        glEnable(GL_LINE_STIPPLE)
+        glLineStipple(2, 0xAAAA)
+        for n in range(self.type.noc):
+            G0 = [self.type.sugs[index].indices_lns[n]]
+            G1 = self.type.sugs[index].indices_fall
+            self.draw_geometries_with_excluded_area(G0,G1)
+        glPopAttrib()
+
 
     def moving_rotating(self):
         # Draw moved_rotated component before action is finalized

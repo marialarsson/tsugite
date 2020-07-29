@@ -55,20 +55,25 @@ class GLWidget(QGLWidget):
     def initializeGL(self):
         self.qglClearColor(QColor(255, 255, 255))
         glEnable(GL_DEPTH_TEST)                  # enable depth testing
-        glEnable(GL_SCISSOR_TEST)
         sax = self.parent.findChild(QComboBox, "comboSLIDE").currentIndex()
         dim = self.parent.findChild(QSpinBox, "spinBoxRES").value()
         ang = self.parent.findChild(QDoubleSpinBox, "spinANG").value()
-        w = self.parent.findChild(QDoubleSpinBox, "spinW").value()
-        d = self.parent.findChild(QDoubleSpinBox, "spinD").value()
-        rad = 0.5*self.parent.findChild(QDoubleSpinBox, "spinDIA").value()
+        dx = self.parent.findChild(QDoubleSpinBox, "spinDX").value()
+        dy = self.parent.findChild(QDoubleSpinBox, "spinDY").value()
+        dz = self.parent.findChild(QDoubleSpinBox, "spinDZ").value()
+        dia = self.parent.findChild(QDoubleSpinBox, "spinDIA").value()
         tol = self.parent.findChild(QDoubleSpinBox, "spinTOL").value()
-        self.type = Types(fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, wd=[w,d], fabtol=tol, fabrad=rad)
-        self.display = Display(self.type)
+        rot = self.parent.findChild(QSpinBox, "spinPATHROT").value()
+        if self.parent.findChild(QRadioButton, "radioGCODE").isChecked(): ext = "gcode"
+        elif self.parent.findChild(QRadioButton, "radioNC").isChecked(): ext = "nc"
+        self.type = Types(fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fabext=ext, fabrot=rot)
+        self.display = Display(self,self.type)
 
     def resizeGL(self, width, height):
         self.width = width
         self.height = height
+        self.wstep = int(0.5+width/5)
+        self.hstep = int(0.5+height/4)
         glViewport(0, 0, width, height)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -77,58 +82,84 @@ class GLWidget(QGLWidget):
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+        glViewport(0,0,self.width-self.wstep,self.height)
+        glLoadIdentity()
 
         self.display.update()
 
-        # Gallery
+        if not self.display.view.gallery:
+            glViewport(0,0,self.width-self.wstep,self.height)
+            glLoadIdentity()
+            # Color picking / editing
+            # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
+            if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
+                self.display.pick(self.x,self.y,self.height)
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+            elif self.type.mesh.select.state==2: # Edit joint geometry
+                self.type.mesh.select.edit([self.x,self.y], self.display.view.xrot, self.display.view.yrot, w=self.width, h=self.height)
+            elif self.type.mesh.select.state==12: # Edit timber orientation/position
+                self.type.mesh.select.move([self.x,self.y], self.display.view.xrot, self.display.view.yrot)
 
-        # Color picking / editing
-        # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
-        if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
-            self.display.pick(self.x,self.y,self.height)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        elif self.type.mesh.select.state==2: # Edit joint geometry
-            self.type.mesh.select.edit([self.x,self.y], self.display.view.xrot, self.display.view.yrot, w=self.width, h=self.height)
-        elif self.type.mesh.select.state==12: # Edit timber orientation/position
-            self.type.mesh.select.move([self.x,self.y], self.display.view.xrot, self.display.view.yrot)
+            if self.type.mesh.select.suggstate>=0:
+                index=self.type.mesh.select.suggstate
+                if len(self.type.sugs)>index: self.display.difference_suggestion(index)
 
-        # Display main geometry
-        self.display.end_grains()
-        if self.display.view.show_feedback:
-            self.display.unfabricatable()
-            self.display.nondurable()
-            self.display.unconnected()
-            self.display.unbridged()
-            self.display.checker()
-            self.display.arrows()
-            show_area=False #<--replace by checkbox...
-            if show_area:
-                self.display.area()
-        self.display.joint_geometry()
+            # Display main geometry
+            self.display.end_grains()
+            if self.display.view.show_feedback:
+                self.display.unfabricatable()
+                self.display.nondurable()
+                self.display.unconnected()
+                self.display.unbridged()
+                self.display.checker()
+                self.display.arrows()
+                show_area=False #<--replace by checkbox...
+                if show_area:
+                    self.display.area()
 
-        # Display editing in action
-        self.display.selected()
-        self.display.moving_rotating()
+            self.display.joint_geometry()
 
-        # Display milling paths
-        self.display.milling_paths()
+            # Display editing in action
+            self.display.selected()
+            self.display.moving_rotating()
 
-        # Suggestions
+            # Display milling paths
+            self.display.milling_paths()
+
+            # Suggestions
+            if self.display.view.show_suggestions:
+                for i in range(len(self.type.sugs)):
+                    hquater = self.height/4
+                    wquater = self.width/5
+                    glViewport(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
+                    glLoadIdentity()
+                    if i==self.type.mesh.select.suggstate:
+                        glEnable(GL_SCISSOR_TEST)
+                        glScissor(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
+                        glClearDepth(1.0)
+                        glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
+                        glClear(GL_COLOR_BUFFER_BIT)
+                        glDisable(GL_SCISSOR_TEST)
+                    self.display.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
+        else:
+            print("gallery mode")
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             if time.time()-self.click_time<0.2:
                 self.display.view.open_joint = not self.display.view.open_joint
             elif self.type.mesh.select.state==0: #face hovered
-                self.type.mesh.select.start_pull([e.x(),e.y()])
+                self.type.mesh.select.start_pull([self.parent.scaling*e.x(),self.parent.scaling*e.y()])
             elif self.type.mesh.select.state==10: #body hovered
-                self.type.mesh.select.start_move([e.x(),e.y()])
+                self.type.mesh.select.start_move([self.parent.scaling*e.x(),self.parent.scaling*e.y()],h=self.height)
             #SUGGESTION PICK
-            #elif self.type.mesh.select.suggstate>=0:
-            #    index = type.mesh.select.suggstate
-            #    if len(type.sugs)>index:
-            #        type.mesh = Geometries(type,hfs=type.sugs[index].height_fields)
-            #        type.sugs = []
-            #        type.combine_and_buffer_indices()
+            elif self.type.mesh.select.suggstate>=0:
+                index = self.type.mesh.select.suggstate
+                if len(self.type.sugs)>index:
+                    self.type.mesh = Geometries(self.type,hfs=self.type.sugs[index].height_fields)
+                    self.type.sugs = []
+                    self.type.combine_and_buffer_indices()
+                    self.type.mesh.select.suggstate=-1
             #GALLERY PICK
             #elif type.mesh.select.gallstate>=0:
             #    index = type.mesh.select.gallstate
@@ -140,13 +171,13 @@ class GLWidget(QGLWidget):
             #        type.combine_and_buffer_indices()
             else: self.click_time = time.time()
         elif e.button() == Qt.RightButton:
-            self.display.view.start_rotation_xy(e.x(),e.y())
+            self.display.view.start_rotation_xy(self.parent.scaling*e.x(),self.parent.scaling*e.y())
 
     def mouseMoveEvent(self, e):
-        self.x = e.x()
-        self.y = e.y()
+        self.x = self.parent.scaling*e.x()
+        self.y = self.parent.scaling*e.y()
         if self.display.view.dragged:
-            self.display.view.update_rotation_xy(e.x(),e.y())
+            self.display.view.update_rotation_xy(self.x,self.y)
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton:
@@ -157,14 +188,12 @@ class GLWidget(QGLWidget):
         elif e.button() == Qt.RightButton:
             self.display.view.end_rotation()
 
-    def keyPressEvent(self, e):
-        if e.key()==Qt.Key_S:
-            print('S')
-
 class mainWindow(QMainWindow):
 
     def __init__(self, *args):
         super(mainWindow, self).__init__(*args)
+
+        self.scaling = self.devicePixelRatioF()
 
         loadUi('Tsugite.ui', self)
         self.setupUi()
@@ -176,6 +205,7 @@ class mainWindow(QMainWindow):
 
         self.glWidget = GLWidget(self)
         self.H_layout.addWidget(self.glWidget)
+
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage("To open and close the joint: PRESS 'Open/close joint' button or DOUBLE-CLICK anywhere inside the window.")
@@ -198,8 +228,10 @@ class mainWindow(QMainWindow):
         self.findChild(QSpinBox, "spinBoxNUM").valueChanged.connect(self.change_number_of_timbers)
         self.findChild(QSpinBox, "spinBoxRES").valueChanged.connect(self.change_resolution)
         self.findChild(QDoubleSpinBox, "spinANG").valueChanged.connect(self.set_angle_of_intersection)
-        self.findChild(QDoubleSpinBox, "spinW").valueChanged.connect(self.set_timber_width)
-        self.findChild(QDoubleSpinBox, "spinD").valueChanged.connect(self.set_timber_depth)
+        self.findChild(QCheckBox, "checkCUBE").stateChanged.connect(self.set_all_timber_same)
+        self.findChild(QDoubleSpinBox, "spinDX").valueChanged.connect(self.set_timber_X)
+        self.findChild(QDoubleSpinBox, "spinDY").valueChanged.connect(self.set_timber_Y)
+        self.findChild(QDoubleSpinBox, "spinDZ").valueChanged.connect(self.set_timber_Z)
         self.findChild(QPushButton, "buttonR").clicked.connect(self.randomize_geometry)
         self.findChild(QPushButton, "buttonC").clicked.connect(self.clear_geometry)
         #gallery
@@ -209,12 +241,25 @@ class mainWindow(QMainWindow):
         self.findChild(QSpinBox, "spinPATHROT").valueChanged.connect(self.set_milling_path_extra_rotation)
         self.findChild(QCheckBox, "checkPATH").stateChanged.connect(self.set_millingpath_view)
         self.findChild(QPushButton, "buttonGCODE").clicked.connect(self.export_gcode)
-        #---Menu
+        self.findChild(QRadioButton, "radioGCODE").toggled.connect(self.set_gcode_as_standard)
+        self.findChild(QRadioButton, "radioNC").toggled.connect(self.set_nccode_as_standard)
+        #---MENU
+        #---File
         self.findChild(QAction, "actionNew").triggered.connect(self.new_file)
         self.findChild(QAction, "actionOpen").triggered.connect(self.open_file)
         self.findChild(QAction, "actionSave").triggered.connect(self.save_file)
         self.findChild(QAction, "actionSaveas").triggered.connect(self.save_file_as)
         self.findChild(QAction, "actionImage").triggered.connect(self.save_screenshot)
+        #---View
+        self.findChild(QAction, "actionHIDDEN").triggered.connect(self.show_hide_hidden_lines)
+        self.findChild(QAction, "actionA").triggered.connect(self.show_hide_timbers)
+        self.findChild(QAction, "actionB").triggered.connect(self.show_hide_timbers)
+        self.findChild(QAction, "actionC").triggered.connect(self.show_hide_timbers)
+        self.findChild(QAction, "actionD").triggered.connect(self.show_hide_timbers)
+        self.findChild(QAction, "actionALL").triggered.connect(self.show_all_timbers)
+        self.findChild(QAction, "actionAXO").triggered.connect(self.set_standard_rotation)
+        self.findChild(QAction, "actionPLN").triggered.connect(self.set_closest_plane_rotation)
+
 
     @pyqtSlot()
     def open_close_joint(self):
@@ -228,7 +273,9 @@ class mainWindow(QMainWindow):
     @pyqtSlot()
     def change_sliding_axis(self):
         ax = self.findChild(QComboBox, "comboSLIDE").currentIndex()
-        self.glWidget.type.update_sliding_direction(ax)
+        bool, msg = self.glWidget.type.update_sliding_direction(ax)
+        print("msg")
+        #QMessageBox = ...
 
     @pyqtSlot()
     def change_number_of_timbers(self):
@@ -247,14 +294,47 @@ class mainWindow(QMainWindow):
         self.glWidget.type.update_angle(val)
 
     @pyqtSlot()
-    def set_timber_width(self):
-        val = self.findChild(QDoubleSpinBox, "spinW").value()
-        self.glWidget.type.update_timber_width_and_height(val,self.glWidget.type.real_comp_depth)
+    def set_timber_X(self):
+        val = self.findChild(QDoubleSpinBox, "spinDX").value()
+        mp = self.glWidget.display.view.show_milling_path
+        if mp: self.glWidget.type.create_and_buffer_vertices(milling_path=True)
+        if self.findChild(QCheckBox, "checkCUBE").isChecked():
+            self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
+            self.findChild(QDoubleSpinBox, "spinDY").setValue(val)
+            self.findChild(QDoubleSpinBox, "spinDZ").setValue(val)
+        else:
+            self.glWidget.type.update_timber_width_and_height([0],val,milling_path=mp)
 
     @pyqtSlot()
-    def set_timber_depth(self):
-        val = self.findChild(QDoubleSpinBox, "spinD").value()
-        self.glWidget.type.update_timber_width_and_height(self.glWidget.type.real_comp_width,val)
+    def set_timber_Y(self):
+        val = self.findChild(QDoubleSpinBox, "spinDY").value()
+        mp = self.glWidget.display.view.show_milling_path
+        if self.findChild(QCheckBox, "checkCUBE").isChecked():
+            self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
+            self.findChild(QDoubleSpinBox, "spinDX").setValue(val)
+            self.findChild(QDoubleSpinBox, "spinDZ").setValue(val)
+        else:
+            self.glWidget.type.update_timber_width_and_height([1],val,milling_path=mp)
+
+    @pyqtSlot()
+    def set_timber_Z(self):
+        val = self.findChild(QDoubleSpinBox, "spinDZ").value()
+        mp = self.glWidget.display.view.show_milling_path
+        if self.findChild(QCheckBox, "checkCUBE").isChecked():
+            self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
+            self.findChild(QDoubleSpinBox, "spinDX").setValue(val)
+            self.findChild(QDoubleSpinBox, "spinDY").setValue(val)
+        else:
+            self.glWidget.type.update_timber_width_and_height([2],val,milling_path=mp)
+
+    @pyqtSlot()
+    def set_all_timber_same(self):
+        mp = self.glWidget.display.view.show_milling_path
+        if self.findChild(QCheckBox, "checkCUBE").isChecked():
+            val = self.glWidget.type.real_tim_dims[0]
+            self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
+            self.findChild(QDoubleSpinBox, "spinDY").setValue(val)
+            self.findChild(QDoubleSpinBox, "spinDZ").setValue(val)
 
     @pyqtSlot()
     def randomize_geometry(self):
@@ -267,10 +347,11 @@ class mainWindow(QMainWindow):
     @pyqtSlot()
     def set_milling_bit_diameter(self):
         val = self.findChild(QDoubleSpinBox, "spinDIA").value()
-        self.glWidget.type.fab.rad = 0.5*val-self.glWidget.type.fab.tol
+        self.glWidget.type.fab.real_dia = val
+        self.glWidget.type.fab.rad = 0.5*self.glWidget.type.fab.real_dia-self.glWidget.type.fab.tol
         self.glWidget.type.fab.dia = 2*self.glWidget.type.fab.rad
-        self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.fab.ratio
-        self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.fab.ratio
+        self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.ratio
+        self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.ratio
         if self.glWidget.display.view.show_milling_path:
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
@@ -279,18 +360,18 @@ class mainWindow(QMainWindow):
     def set_fab_tolerance(self):
         val = self.findChild(QDoubleSpinBox, "spinTOL").value()
         self.glWidget.type.fab.tol = val
-        self.glWidget.type.fab.rad = self.glWidget.type.fab.rad_real #milling bit radius in mm
-        self.glWidget.type.fab.rad -= self.glWidget.type.fab.tol
+        self.glWidget.type.fab.rad = 0.5*self.glWidget.type.fab.real_dia-self.glWidget.type.fab.tol
         self.glWidget.type.fab.dia = 2*self.glWidget.type.fab.rad
-        self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.fab.ratio
-        self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.fab.ratio
+        self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.ratio
+        self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.ratio
+        self.glWidget.type.fab.vtol = self.glWidget.type.fab.tol/self.glWidget.type.ratio
         if self.glWidget.display.view.show_milling_path:
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
 
     def set_milling_path_extra_rotation(self):
         val = self.findChild(QSpinBox, "spinPATHROT").value()
-        self.glWidget.type.fab.extra_rot = math.radians(val)
+        self.glWidget.type.fab.extra_rot_deg = val
 
     @pyqtSlot()
     def set_millingpath_view(self):
@@ -304,19 +385,29 @@ class mainWindow(QMainWindow):
     def export_gcode(self):
         if not self.glWidget.display.view.show_milling_path:
             self.glWidget.display.view.show_milling_path = True
+            self.findChild(QCheckBox, "checkPATH").setChecked(True)
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
         self.glWidget.type.fab.export_gcode(filename_tsu=self.filename)
 
     @pyqtSlot()
+    def set_gcode_as_standard(self):
+        bool = self.findChild(QRadioButton, "radioGCODE").isChecked()
+        if bool: self.glWidget.type.fab.ext = "gcode"
+
+    @pyqtSlot()
+    def set_nccode_as_standard(self):
+        bool = self.findChild(QRadioButton, "radioNC").isChecked()
+        if bool: self.glWidget.type.fab.ext = "nc"
+
+    @pyqtSlot()
     def new_file(self):
         self.filename = get_untitled_filename("Untitled","tsu","_")
-        #check so that untitled is not already used, if so add 1 , 2, 3 etc.
         self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
-        rad = 0.5*self.findChild(QDoubleSpinBox, "spinDIA").value()
-        tol = self.findChild(QDoubleSpinBox, "spinTOL").value()
-        self.glWidget.type = Types(fs=[[[2,0]],[[2,1]]],sax=0,dim=3,ang=90.0, wd=[44,44], fabtol=tol, fabrad=rad)
+        self.glWidget.display.view.show_milling_path=False
+        self.glWidget.type.reset()
         self.set_ui_values()
+        self.show_all_timbers()
 
     @pyqtSlot()
     def open_file(self):
@@ -324,12 +415,13 @@ class mainWindow(QMainWindow):
         if filename!='':
             self.filename = filename
             self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
-            self.glWidget.type.mesh.open(self.filename)
+            self.findChild(QCheckBox, "checkCUBE").setChecked(False)
+            self.glWidget.type.open(self.filename)
             self.set_ui_values()
 
     @pyqtSlot()
     def save_file(self):
-        self.glWidget.type.mesh.save(self.filename)
+        self.glWidget.type.save(self.filename)
 
     @pyqtSlot()
     def save_file_as(self):
@@ -337,7 +429,7 @@ class mainWindow(QMainWindow):
         if filename!='':
             self.filename = filename
             self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
-            self.glWidget.type.mesh.save(self.filename)
+            self.glWidget.type.save(self.filename)
 
     @pyqtSlot()
     def save_screenshot(self):
@@ -350,15 +442,74 @@ class mainWindow(QMainWindow):
             cv2.imwrite(img_filename, image)
             print("Saved screenshot to",img_filename)
 
+    @pyqtSlot()
+    def show_hide_hidden_lines(self):
+        self.glWidget.display.view.show_hidden_lines = self.findChild(QAction, "actionHIDDEN").isChecked()
+
+    @pyqtSlot()
+    def show_hide_timbers(self):
+        names = ["A","B","C","D"]
+        for i,item in enumerate(names):
+            bool = self.findChild(QAction, "action"+names[i]).isChecked()
+            self.glWidget.display.view.hidden[i] = not bool
+
+    @pyqtSlot()
+    def show_all_timbers(self):
+        names = ["A","B","C","D"]
+        for i,item in enumerate(names):
+            self.findChild(QAction, "action"+names[i]).setChecked(True)
+            self.glWidget.display.view.hidden[i] = False
+
+    @pyqtSlot()
+    def set_standard_rotation(self):
+        self.glWidget.display.view.xrot = 0.8
+        self.glWidget.display.view.yrot = 0.4
+
+    @pyqtSlot()
+    def set_closest_plane_rotation(self):
+        xrot = self.glWidget.display.view.xrot
+        yrot = self.glWidget.display.view.yrot
+        nang = 0.5*math.pi
+        xrot = round(xrot/nang,0)*nang
+        yrot = round(yrot/nang,0)*nang
+        self.glWidget.display.view.xrot = xrot
+        self.glWidget.display.view.yrot = yrot
+
     def set_ui_values(self):
         self.findChild(QComboBox, "comboSLIDE").setCurrentIndex(self.glWidget.type.sax)
         self.findChild(QSpinBox, "spinBoxNUM").setValue(self.glWidget.type.noc)
         self.findChild(QSpinBox, "spinBoxRES").setValue(self.glWidget.type.dim)
         self.findChild(QDoubleSpinBox, "spinANG").setValue(self.glWidget.type.ang)
-        self.findChild(QDoubleSpinBox, "spinW").setValue(self.glWidget.type.real_comp_width)
-        self.findChild(QDoubleSpinBox, "spinD").setValue(self.glWidget.type.real_comp_depth)
+        self.findChild(QDoubleSpinBox, "spinDX").setValue(self.glWidget.type.real_tim_dims[0])
+        self.findChild(QDoubleSpinBox, "spinDY").setValue(self.glWidget.type.real_tim_dims[1])
+        self.findChild(QDoubleSpinBox, "spinDZ").setValue(self.glWidget.type.real_tim_dims[2])
+        if np.max(self.glWidget.type.real_tim_dims)==np.min(self.glWidget.type.real_tim_dims):
+            self.findChild(QCheckBox, "checkCUBE").setChecked(True)
+        else: self.findChild(QCheckBox, "checkCUBE").setChecked(False)
+        self.findChild(QDoubleSpinBox, "spinDIA").setValue(self.glWidget.type.fab.real_dia)
+        self.findChild(QDoubleSpinBox, "spinTOL").setValue(self.glWidget.type.fab.tol)
+        self.findChild(QSpinBox, "spinPATHROT").setValue(int(self.glWidget.type.fab.extra_rot_deg))
+        if self.glWidget.type.fab.ext=="gcode":
+            self.findChild(QRadioButton, "radioGCODE").setChecked(True)
+        elif self.glWidget.type.fab.ext=="nc":
+            self.findChild(QRadioButton, "radioNC").setChecked(True)
 
+    def keyPressEvent(self, e):
+        if e.key()==Qt.Key_Shift:
+            self.glWidget.type.mesh.select.shift = True
+            self.glWidget.type.mesh.select.refresh = True
+
+    def keyReleaseEvent(self, e):
+        if e.key()==Qt.Key_Shift:
+            self.glWidget.type.mesh.select.shift = False
+            self.glWidget.type.mesh.select.refresh = True
+
+#deal with dpi
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True) #enable highdpi scaling
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True) #use highdpi icons
 app = QApplication(sys.argv)
+#screen = app.screens()[0]
+#dpi = screen.physicalDotsPerInch()
 window = mainWindow()
 window.show()
 sys.exit(app.exec_())

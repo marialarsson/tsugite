@@ -76,14 +76,14 @@ class MillVertex:
         self.is_arc = is_arc
         self.arc_ctr = np.array(arc_ctr)
 
-    def scale_and_swap(self,ax,dir,ratio,real_component_size,coords,d,n):
+    def scale_and_swap(self,ax,dir,ratio,real_tim_dims,coords,d,n):
         #sawp
         xyz = [ratio*self.x,ratio*self.y,ratio*self.z]
         if ax==2: xyz[1] = -xyz[1]
         xyz = xyz[coords[0]],xyz[coords[1]],xyz[coords[2]]
         self.x,self.y,self.z = xyz[0],xyz[1],xyz[2]
         #move z down, flip if component b
-        self.z = -(2*dir-1)*self.z-0.5*real_component_size
+        self.z = -(2*dir-1)*self.z-0.5*real_tim_dims[ax]
         self.y = -(2*dir-1)*self.y
         self.pt = np.array([self.x,self.y,self.z])
         self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
@@ -95,7 +95,7 @@ class MillVertex:
             self.arc_ctr = [ratio*self.arc_ctr[0],ratio*self.arc_ctr[1],ratio*self.arc_ctr[2]] #ratio*self.arc_ctr
             if ax==2: self.arc_ctr[1] = -self.arc_ctr[1]
             self.arc_ctr = [self.arc_ctr[coords[0]],self.arc_ctr[coords[1]],self.arc_ctr[coords[2]]]
-            self.arc_ctr[2] = -(2*dir-1)*self.arc_ctr[2]-0.5*real_component_size
+            self.arc_ctr[2] = -(2*dir-1)*self.arc_ctr[2]-0.5*real_tim_dims[ax]
             self.arc_ctr[1] = -(2*dir-1)*self.arc_ctr[1]
             self.arc_ctr = np.array(self.arc_ctr)
 
@@ -115,23 +115,18 @@ class MillVertex:
             self.arc_ctr = np.array(self.arc_ctr)
 
 class Fabrication:
-    def __init__(self,parent,tol=0.15,rad=3.00):
+    def __init__(self,parent,tol=0.15,dia=6.00,ext="gcode",extra_rot_deg=0):
         self.parent = parent
-        self.real_component_size = self.parent.real_comp_width-0.5 #29.5 #44.45 #36.5 #mm
-        self.real_voxel_size = self.real_component_size/self.parent.dim
-        self.ratio = self.real_component_size/self.parent.component_size
-        self.rad_real = rad #milling bit radius in mm
-        self.rad = self.rad_real #milling bit radius in mm
+        self.real_dia = dia #milling bit radius in mm
         self.tol = tol #0.10 #tolerance in mm
-        self.rad -= self.tol
+        self.rad = 0.5*self.real_dia-self.tol
         self.dia = 2*self.rad
-        self.vdia = self.dia/self.ratio
-        self.vrad = self.rad/self.ratio
-        self.vtol = self.tol/self.ratio
-        self.ext = 1.0
-        self.vext = self.ext/self.ratio
+        self.vdia = self.dia/self.parent.ratio
+        self.vrad = self.rad/self.parent.ratio
+        self.vtol = self.tol/self.parent.ratio
         self.dep = 1.5 #milling depth in mm
-        self.extra_rot = 0
+        self.extra_rot_deg = extra_rot_deg
+        self.ext = ext
 
     def export_gcode(self,filename_tsu="C:/Users/makal/Dropbox/gcode/joint.tsu"):
         # make sure that the z axis of the gcode is facing up
@@ -155,10 +150,11 @@ class Fabrication:
             if np.dot(comp_vec, np.cross(aaxis, xax))<0: #>
                 rot_ang=-rot_ang
             fdir = self.parent.mesh.fab_directions[n]
-            if fdir==0: rot_ang+=math.pi #1
-            rot_ang+=self.extra_rot ###for roland machine etc###############################
+            if fdir==0:
+                rot_ang=rot_ang+math.pi+math.radians(self.extra_rot_deg) ###for roland machine etc###############################
+            else: rot_ang-=math.radians(self.extra_rot_deg) ###for roland machine etc###############################
             #
-            file_name = filename_tsu[:-4] + "_"+names[n]+".gcode"
+            file_name = filename_tsu[:-4] + "_"+names[n]+"."+self.ext
             file = open(file_name,"w")
             ###initialization
             file.write("%\n")
@@ -170,12 +166,13 @@ class Fabrication:
             file.write("S6000 (Spindle 6000rpm)\n")
             file.write("M3 (spindle start)\n")
             file.write("G54\n")
+            file.write("F400.\n")
 
             #speed = 400
             ###content
             currentg = ""
             for i,mv in enumerate(self.parent.gcodeverts[n]):
-                mv.scale_and_swap(fax,fdir,self.ratio,self.real_component_size,coords,d,n)
+                mv.scale_and_swap(fax,fdir,self.parent.ratio,self.parent.real_tim_dims,coords,d,n)
                 if comp_ax!=fax:
                     mv.rotate(rot_ang,d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
@@ -195,28 +192,15 @@ class Fabrication:
 
                 #write to file
                 if arc and clockwise:
-                    if i==0: file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+" F400."+"\n")
-                    else: file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+"\n")
-                    currentg=="G2"
+                    file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
                 elif arc and not clockwise:
-                    if i==0: file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+" F400."+"\n")
-                    else: file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(self.dia)+"\n")
-                    currentg = "G3"
-                elif i==0 or pmv.x!=mv.x or pmv.y!=mv.y:
-                    if currentg=="G1":
-                        if i==0: file.write("X"+mv.xstr+" Y"+mv.ystr+" F400."+"\n")
-                        else: file.write("X"+mv.xstr+" Y"+mv.ystr+"\n")
-                    else:
-                        if i==0: file.write("G1 X"+mv.xstr+" Y"+mv.ystr+" F400."+"\n")
-                        else: file.write("G1 X"+mv.xstr+" Y"+mv.ystr+"\n")
-                        currentg=="G1"
-                ##
-                if i==0 or pmv.z!=mv.z:
-                    if currentg=="G1":
-                        file.write("Z"+mv.zstr+"\n")
-                    else:
-                        file.write("G1 Z"+mv.zstr+"\n")
-                        currentg = "G1"
+                    file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
+                else:
+                    file.write("G1 ")
+                    if i==0 or mv.x!=pmv.x: file.write("X"+mv.xstr+" ")
+                    if i==0 or mv.y!=pmv.y: file.write("Y"+mv.ystr+" ")
+                    if i==0 or mv.z!=pmv.z: file.write("Z"+mv.zstr+" ")
+                    file.write("\n")
             #end
             file.write("M5 (Spindle stop)\n")
             file.write("M2 (end of program)\n")
