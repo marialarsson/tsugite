@@ -66,7 +66,7 @@ class GLWidget(QGLWidget):
         rot = self.parent.findChild(QSpinBox, "spinPATHROT").value()
         if self.parent.findChild(QRadioButton, "radioGCODE").isChecked(): ext = "gcode"
         elif self.parent.findChild(QRadioButton, "radioNC").isChecked(): ext = "nc"
-        self.type = Types(fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fabext=ext, fabrot=rot)
+        self.type = Types(self,fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fabext=ext, fabrot=rot)
         self.display = Display(self,self.type)
 
     def resizeGL(self, width, height):
@@ -100,10 +100,6 @@ class GLWidget(QGLWidget):
             elif self.type.mesh.select.state==12: # Edit timber orientation/position
                 self.type.mesh.select.move([self.x,self.y], self.display.view.xrot, self.display.view.yrot)
 
-            if self.type.mesh.select.suggstate>=0:
-                index=self.type.mesh.select.suggstate
-                if len(self.type.sugs)>index: self.display.difference_suggestion(index)
-
             # Display main geometry
             self.display.end_grains()
             if self.display.view.show_feedback:
@@ -116,8 +112,11 @@ class GLWidget(QGLWidget):
                 show_area=False #<--replace by checkbox...
                 if show_area:
                     self.display.area()
-
             self.display.joint_geometry()
+
+            if self.type.mesh.select.suggstate>=0:
+                index=self.type.mesh.select.suggstate
+                if len(self.type.sugs)>index: self.display.difference_suggestion(index)
 
             # Display editing in action
             self.display.selected()

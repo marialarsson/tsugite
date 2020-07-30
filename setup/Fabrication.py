@@ -22,7 +22,7 @@ def rotate_vector_around_axis(vec=[3,5,0], axis=[4,4,1], theta=1.2): #example va
     return rotated_vec
 
 class RegionVertex:
-    def __init__(self,ind,abs_ind,neighbors,neighbor_values,dia=False):
+    def __init__(self,ind,abs_ind,neighbors,neighbor_values,dia=False,minus_one_neighbor=False):
         self.ind = ind
         self.i = ind[0]
         self.j = ind[1]
@@ -32,13 +32,17 @@ class RegionVertex:
         self.block_count = np.sum(self.flat_neighbors==1)
         self.free_count = np.sum(self.flat_neighbors==2)
         ##
+        self.minus_one_neighbor=minus_one_neighbor
+        ##
         self.dia = dia
         ##
         self.neighbor_values = np.array(neighbor_values)
         self.flat_neighbor_values = self.neighbor_values.flatten()
+        #
+        self.add_vec = np.array([0.0,0.0,0.0])
 
-    def set_pos(self,pos):
-        self.pos = pos
+#    def set_pos(self,pos):
+#        self.pos = pos
 
 class RoughPixel:
     def __init__(self,ind,mat,pad_loc,dim,n):

@@ -1,4 +1,5 @@
 from OpenGL.GL import *
+from PyQt5.QtWidgets import *
 import numpy as np
 from numpy import linalg
 import math
@@ -217,7 +218,9 @@ def get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n):
                         oneigbors = np.array(oneigbors)
                         reg_verts.append(RegionVertex(ind,abs_ind,oneigbors,neighbor_values,dia=True))
                 else: # normal situation
-                    reg_verts.append(RegionVertex(ind,abs_ind,neigbors,neighbor_values))
+                    if any_minus_one_neighbor(ind,lay_mat): mon = True
+                    else: mon = False
+                    reg_verts.append(RegionVertex(ind,abs_ind,neigbors,neighbor_values,minus_one_neighbor=mon))
     return reg_verts
 
 def get_diff_neighbors(mat2,inds,val):
@@ -505,7 +508,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
             outline.append(MillVertex(pts[0],is_arc=True,arc_ctr=ctr))
             outline.append(MillVertex(pts[1],is_arc=True,arc_ctr=ctr))
         else: # other corner
-            pt = pt+off_vec
+            pt = pt+off_vec +rv.add_vec
             outline.append(MillVertex(pt))
         if len(outline)>2 and outline[0].is_arc and test_first:
             # if the previous one was an arc but it was the first point of the outline,
@@ -528,7 +531,7 @@ def get_outline(type,verts,lay_num,n):
         add = [0,0,0]
         add[type.sax] = 1-fdir
         i_pt = get_index(ind,add,type.dim)
-        pt = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
+        pt = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)+rv.add_vec
         outline.append(MillVertex(pt))
     return outline
 
@@ -624,6 +627,23 @@ def check_free_sides(type,ind,dir_ax,off_ax,n):
     off_sides = np.array(off_sides)
     return dir_sides,off_sides
 
+def any_minus_one_neighbor(ind,lay_mat):
+    bool = False
+    #print(lay_mat)
+    for add0 in range(-1,1,1):
+        temp = []
+        temp2 = []
+        for add1 in range(-1,1,1):
+            # Define neighbor index to test
+            nind = [ind[0]+add0,ind[1]+add1]
+            # If test index is within bounds
+            if np.all(np.array(nind)>=0) and nind[0]<lay_mat.shape[0] and nind[1]<lay_mat.shape[1]:
+                # If the value is -1
+                if lay_mat[tuple(nind)]==-1:
+                    bool = True
+                    break
+    return bool
+
 def get_neighbors_in_out(ind,reg_inds,lay_mat,org_lay_mat,n):
     # 0 = in region
     # 1 = outside region, block
@@ -706,6 +726,31 @@ def is_additional_outer_corner(type,rv,ind,ax,n):
             if outer_corner: break
     return outer_corner
 
+def adjust_edge(rvs,type,ext_dist,lay_num,n):
+    fdir = type.mesh.fab_directions[n]
+    for i in range(2):
+        rv = rvs[-1*i]
+        if rv.minus_one_neighbor:
+            prv = rvs[1-3*i]
+            #get first pnt
+            ind = rv.ind.copy()
+            ind.insert(type.sax,(type.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
+            add = [0,0,0]
+            add[type.sax] = 1-fdir
+            i_pt = get_index(ind,add,type.dim)
+            pt0 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
+            #get second pnt
+            ind = prv.ind.copy()
+            ind.insert(type.sax,(type.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
+            add = [0,0,0]
+            add[type.sax] = 1-fdir
+            i_pt = get_index(ind,add,type.dim)
+            pt1 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
+            #
+            vec = pt0-pt1
+            vec = set_vector_length(vec,ext_dist)
+            rv.add_vec=vec
+
 def milling_path_vertices(type,n):
     vertices = []
     milling_vertices = []
@@ -757,7 +802,6 @@ def milling_path_vertices(type,n):
 
         # Pad 2d matrix with fixed sides
         lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(type,lay_mat) #OK
-        #lay_mat = np.where(lay_mat<0, 6, lay_mat)  ################################################################
         org_lay_mat = copy.deepcopy(lay_mat) #OK
 
         # Get/browse regions
@@ -765,11 +809,10 @@ def milling_path_vertices(type,n):
 
             # Get indices of a region
             inds = np.argwhere((lay_mat!=-1) & (lay_mat!=n)) #OK
-            #inds = np.argwhere(lay_mat!=n) ########################################################################
             if len(inds)==0: break #OK
             reg_inds = get_diff_neighbors(lay_mat,[inds[0]],n) #OK
 
-            """
+
             # Anaylize which voxels needs to be roguhly cut initially
             # 1. Add all open voxels in the region
             rough_inds = []
@@ -782,7 +825,7 @@ def milling_path_vertices(type,n):
                     verts,mverts = get_layered_vertices(type,rough_path,n,lay_num,no_z,dep)
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
-            """
+
 
 
             # Overwrite detected regin in original matrix
@@ -790,8 +833,6 @@ def milling_path_vertices(type,n):
 
             # Make a list of all edge vertices of the outline of the region
             reg_verts = get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n) #OK
-
-
 
             # Order the vertices to create an outline
             for isl_num in range(10):
@@ -805,13 +846,13 @@ def milling_path_vertices(type,n):
                 reg_ord_verts,reg_verts,closed = get_sublist_of_ordered_verts(reg_verts) #OK
 
                 #Extend line by -1 situation when necessary
-                reg_ord_verts = 
+                if any(-1 in x for x in lay_mat): adjust_edge(reg_ord_verts,type,type.fab.vrad,lay_num,n)
 
                 # Make outline of ordered vertices (for dedugging olny!!!!!!!)
-                if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
+                #if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
 
                 # Offset vertices according to boundary condition (and remove if redundant)
-                #outline = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
+                outline = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
 
                 # Get z height and extend vertices to global list
                 if len(reg_ord_verts)>1 and len(outline)>0:
@@ -825,7 +866,8 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
+    def __init__(self,parent,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
+        self.parent=parent
         self.sax = sax
         self.fixed_sides = fs
         self.noc = len(fs) #number of components
@@ -850,6 +892,8 @@ class Types:
         self.gallary_start_index = -20
 
     def create_and_buffer_vertices(self, milling_path=False):
+        if not milling_path:
+            self.parent.parent.findChild(QCheckBox, "checkPATH").setChecked(False)
         self.jverts = []
         self.everts = []
         self.mverts = []

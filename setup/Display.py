@@ -272,20 +272,19 @@ class Display:
 
     def difference_suggestion(self,index):
         glPushAttrib(GL_ENABLE_BIT)
-        
         # draw faces of additional part
-        glUniform3f(5, 1.0, 1.0, 1.0) # white
-        for n in range(self.type.noc):
-            G0 = [self.type.sugs[index].indices_fall[n]]
-            G1 = self.type.mesh.indices_fall
-            self.draw_geometries_with_excluded_area(G0,G1)
+        #glUniform3f(5, 1.0, 1.0, 1.0) # white
+        #for n in range(self.type.noc):
+        #    G0 = [self.type.sugs[index].indices_fall[n]]
+        #    G1 = self.type.mesh.indices_fall
+        #    self.draw_geometries_with_excluded_area(G0,G1)
 
         # draw faces of subtracted part
-        glUniform3f(5, 1.0, 0.5, 0.5) # pink/red
-        for n in range(self.type.noc):
-            G0 = [self.type.mesh.indices_fall[n]]
-            G1 = self.type.sugs[index].indices_fall
-            self.draw_geometries_with_excluded_area(G0,G1)
+        #glUniform3f(5, 1.0, 0.5, 0.5) # pink/red
+        #for n in range(self.type.noc):
+        #    G0 = [self.type.mesh.indices_fall[n]]
+        #    G1 = self.type.sugs[index].indices_fall
+        #    self.draw_geometries_with_excluded_area(G0,G1)
 
         # draw outlines
         glUniform3f(5, 0.0, 0.0, 0.0) # black
