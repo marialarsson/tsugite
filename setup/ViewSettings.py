@@ -61,18 +61,6 @@ class ViewSettings:
     def set_absolute_joint_opening_distance(self,noc,val):
         self.open_ratio = val/100
 
-
-    #def update_rotation(self, window):
-    #    # Rotate view by dragging
-    #    if self.dragged:
-    #        xpos, ypos = glfw.get_cursor_pos(window)
-    #        ratio = 0.001
-    #        ydiff = ratio*(xpos-self.xstart)
-    #        xdiff = ratio*(ypos-self.ystart)
-    #        self.xrot = self.xrot0 + xdiff
-    #        self.yrot = self.yrot0 + ydiff
-
-
     def update_rotation_xy(self, x, y):
         # Rotate view by dragging
         if self.dragged:
@@ -82,12 +70,6 @@ class ViewSettings:
             xdiff = ratio*(ypos-self.ystart)
             self.xrot = self.xrot0 + xdiff
             self.yrot = self.yrot0 + ydiff
-
-    #def start_rotation(self, window):
-    #    self.xstart, self.ystart = glfw.get_cursor_pos(window)
-    #    self.dragged = True
-    #    self.xrot0 = self.xrot
-    #    self.yrot0 = self.yrot
 
     def start_rotation_xy(self, x, y):
         self.xstart, self.ystart = x, y

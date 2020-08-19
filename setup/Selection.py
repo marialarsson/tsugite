@@ -3,12 +3,17 @@ import pyrr
 from numpy import linalg
 import copy
 import math
+from Misc import FixedSide
 
 def angle_between_with_direction(v0, v1):
     v0 = v0 / np.linalg.norm(v0)
     v1 = v1 / np.linalg.norm(v1)
     angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
     return math.degrees(angle)
+
+def unitize(v):
+    uv = v/np.linalg.norm(v)
+    return uv
 
 def get_same_height_neighbors(hfield,inds):
     dim = len(hfield)
@@ -31,6 +36,7 @@ def get_same_height_neighbors(hfield,inds):
     if len(new_inds)>len(inds):
         new_inds = get_same_height_neighbors(hfield,new_inds)
     return new_inds
+
 
 class Selection:
     def __init__(self,parent):
@@ -93,8 +99,8 @@ class Selection:
     def start_move(self,mouse_pos, h=1600):
         self.state=12
         self.start_pos = np.array([mouse_pos[0],h-mouse_pos[1]])
-        self.new_fixed_sides = self.parent.parent.fixed_sides[self.n]
-        self.new_fixed_sides_for_display = self.parent.parent.fixed_sides[self.n]
+        self.new_fixed_sides = self.parent.parent.fixed.sides[self.n]
+        self.new_fixed_sides_for_display = self.parent.parent.fixed.sides[self.n]
         self.parent.parent.combine_and_buffer_indices # for move preview outline
 
     def end_move(self):
@@ -105,8 +111,8 @@ class Selection:
     def move(self,mouse_pos,screen_xrot,screen_yrot,w=1600,h=1600): # actually move OR rotate
         sax = self.parent.parent.sax
         noc = self.parent.parent.noc
-        self.new_fixed_sides = copy.deepcopy(self.parent.parent.fixed_sides[self.n])
-        self.new_fixed_sides_for_display = copy.deepcopy(self.parent.parent.fixed_sides[self.n])
+        self.new_fixed_sides = copy.deepcopy(self.parent.parent.fixed.sides[self.n])
+        self.new_fixed_sides_for_display = copy.deepcopy(self.parent.parent.fixed.sides[self.n])
         self.current_pos = np.array([mouse_pos[0],h-mouse_pos[1]])
         ## Mouse vector
         mouse_vec = np.array(self.current_pos-self.start_pos)
@@ -117,9 +123,10 @@ class Selection:
         move_dist = linalg.norm(mouse_vec)
         if move_dist>0.01:
             ## Get component direction vector
-            comp_ax = self.parent.parent.fixed_sides[self.n][0][0] # component axis
-            comp_dir = self.parent.parent.fixed_sides[self.n][0][1]
-            comp_vec = 2.5*(2*comp_dir-1)*self.parent.parent.component_size*self.parent.parent.pos_vecs[comp_ax]/np.linalg.norm(self.parent.parent.pos_vecs[comp_ax])
+            comp_ax = self.parent.parent.fixed.sides[self.n][0].ax # component axis
+            comp_dir = self.parent.parent.fixed.sides[self.n][0].dir
+            comp_len = 2.5*(2*comp_dir-1)*self.parent.parent.component_size
+            comp_vec = comp_len*unitize(self.parent.parent.pos_vecs[comp_ax])
             ## Flatten vector to screen
             rot_x = pyrr.Matrix33.from_x_rotation(screen_xrot)
             rot_y = pyrr.Matrix33.from_y_rotation(screen_yrot)
@@ -129,7 +136,7 @@ class Selection:
             ang = angle_between_with_direction(mouse_vec, comp_vec)
             oax = None
             absang = abs(ang)%180
-            if absang>45 and absang<135: #rotation mode
+            if absang>45 and absang<135: # Timber rotation mode
                 # Check plane of rotating by checking which axis the vector is more alinged to
                 other_axes = [0,1,2]
                 other_axes.pop(comp_ax)
@@ -160,52 +167,44 @@ class Selection:
                 if screen_vec[2]<0: screen_dir=-1
                 ###
                 self.new_fixed_sides_for_display = []
-                blocked = False
-                for i in range(len(self.parent.parent.fixed_sides[self.n])):
-                    ndir = self.parent.parent.fixed_sides[self.n][i][1]
+                for i in range(len(self.parent.parent.fixed.sides[self.n])):
+                    ndir = self.parent.parent.fixed.sides[self.n][i].dir
                     ordered = False
                     if comp_ax<oax and oax-comp_ax==1: ordered=True
                     elif oax<comp_ax and comp_ax-oax==2: ordered=True
                     if (clockwise and not ordered) or (not clockwise and ordered):
                         ndir=1-ndir
                     if screen_dir>0: ndir=1-ndir
-                    side = [oax,ndir]
+                    side = FixedSide(oax,ndir)
                     self.new_fixed_sides_for_display.append(side)
-                    if side==[sax,0] and self.n!=0: blocked=True; break
-                    if side==[sax,1] and self.n!=noc-1: blocked=True; break
-                    if side not in self.parent.parent.unblocked_fixed_sides:
-                        blocked = True
-                if not blocked: self.new_fixed_sides = self.new_fixed_sides_for_display
-                else: print("Blocked rotation")
-            else: # moveing mode
+                    if side.ax==sax and side.dir==0 and self.n!=0: blocked=True; break
+                    if side.ax==sax and side.dir==1 and self.n!=noc-1: blocked=True; break
+            else: # Timber moveing mode
                 length_ratio = linalg.norm(mouse_vec)/linalg.norm(comp_vec)
-                if length_ratio>0.2: #treshhold
-                    if len(self.parent.parent.fixed_sides[self.n])==1 and length_ratio<0.5: # moved just a bit, L to T
-                        if [comp_ax,1] not in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.append([comp_ax,1])
-                        elif [comp_ax,0] not in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.insert(0,[comp_ax,0])
-                    # L long move or T short move
-                    if absang>135:
-                        if [comp_ax,0] in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.pop(0)
-                        if [comp_ax,1] not in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.append([comp_ax,1])
-                    else:
-                        if [comp_ax,1] in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.pop()
-                        if [comp_ax,0] not in self.parent.parent.fixed_sides[self.n]:
-                            self.new_fixed_sides_for_display.insert(0,[comp_ax,0])
-                # check if the direction is blocked
-                blocked = False
+                if length_ratio>0.15: #treshhold "if moved a little bit"
+                    side_num = len(self.parent.parent.fixed.sides[self.n])
+                    if side_num==1 and absang>135: #L
+                        if length_ratio<0.5: # moved just a bit, L to T
+                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,0),FixedSide(comp_ax,1)]
+                        elif length_ratio<1.5: # moved a lot, L to other L
+                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,1-comp_dir)]
+                    elif side_num==2 and length_ratio<1.5: #T
+                        if absang>135: self.new_fixed_sides_for_display = [FixedSide(comp_ax,1)] # positive direction
+                        else: self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)] # negative direction                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)]
+            # check if the direction is blocked
+            blocked = False
+            for side in self.new_fixed_sides_for_display:
+                if side.unique(self.parent.parent.fixed.unblocked):
+                    blocked=True
+            if blocked:
+                all_same = True
                 for side in self.new_fixed_sides_for_display:
-                    if side==[sax,0] and self.n!=0: blocked=True; break
-                    if side==[sax,1] and self.n!=noc-1: blocked=True; break
-                    if side not in self.parent.parent.fixed_sides[self.n]:
-                        if side not in self.parent.parent.unblocked_fixed_sides:
-                            blocked = True
-                if not blocked: self.new_fixed_sides = self.new_fixed_sides_for_display
-                else: print("Blocked move")
+                    if side.unique(self.parent.parent.fixed.sides[self.n]):
+                        all_same=False
+                if all_same: blocked = False
+            if not blocked: self.new_fixed_sides = self.new_fixed_sides_for_display
 
-        if not np.equal(self.parent.parent.fixed_sides[self.n],np.array(self.new_fixed_sides_for_display)).all():
+
+
+        if not np.equal(self.parent.parent.fixed.sides[self.n],np.array(self.new_fixed_sides_for_display)).all():
             self.parent.parent.combine_and_buffer_indices()# for move/rotate preview outline # cant you show this by tansformation instead?

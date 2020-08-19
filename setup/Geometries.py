@@ -11,6 +11,7 @@ from Buffer import Buffer
 from Buffer import ElementProperties
 import copy
 import os
+from Misc import FixedSide
 
 # Supporting functions
 def get_random_height_fields(dim,noc):
@@ -65,19 +66,21 @@ def joint_face_indices(self,all_indices,mat,fixed_sides,n,offset,global_offset=0
                                 add.insert(ax,0)
                                 index = get_index(ind,add,self.parent.dim)
                                 if len(fixed_sides)>0:
-                                    if fixed_sides[0][0]==ax: indices_ends.append(index)
-                                    else: indices.append(index)
+                                    if fixed_sides[0].ax==ax:
+                                        indices_ends.append(index)
+                                    else:
+                                        indices.append(index)
                                 else: indices.append(index)
 
         # 2. Faces of component base
         d = self.parent.dim+1
         start = d*d*d
         if len(fixed_sides)>0:
-            for ax,dir in fixed_sides:
-                a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
+            for side in fixed_sides:
+                a1,b1,c1,d1 = get_corner_indices(side.ax,side.dir,self.parent.dim)
                 step = 2
-                if len(self.parent.fixed_sides[n])==2: step = 1
-                off = 24*ax+12*dir+4*step
+                if len(self.parent.fixed.sides[n])==2: step = 1
+                off = 24*side.ax+12*side.dir+4*step
                 a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
                 # Add component side to indices
                 indices_ends.extend([a0,b0,d0,c0]) #bottom face
@@ -116,7 +119,7 @@ def joint_area_face_indices(self,all_indices,mat,area_faces,n):
                     test_ind = np.array([i,j,k])
                     test_ind = np.delete(test_ind,ax)
                     if np.any(test_ind==self.parent.dim): continue
-                    cnt,vals = face_neighbors(mat,ind,ax,n,self.parent.fixed_sides[n])
+                    cnt,vals = face_neighbors(mat,ind,ax,n,self.parent.fixed.sides[n])
                     if cnt==1:
                         for x in range(2):
                             for y in range(2):
@@ -128,13 +131,13 @@ def joint_area_face_indices(self,all_indices,mat,area_faces,n):
     # 2. Faces of component base
     d = self.parent.dim+1
     start = d*d*d
-    if len(self.parent.fixed_sides[n])>0:
-        for ax,dir in self.parent.fixed_sides[n]:
-            offset = ax*self.parent.vn
-            a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
+    if len(self.parent.fixed.sides[n])>0:
+        for side in self.parent.fixed.sides[n]:
+            offset = side.ax*self.parent.vn
+            a1,b1,c1,d1 = get_corner_indices(side.ax,side.dir,self.parent.dim)
             step = 2
-            if len(self.parent.fixed_sides[n])==2: step = 1
-            off = 24*ax+12*dir+4*step
+            if len(self.parent.fixed.sides[n])==2: step = 1
+            off = 24*side.ax+12*side.dir+4*step
             a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
             # Add component side to indices
             indices_ends.extend([a0+offset,b0+offset,d0+offset,c0+offset]) #bottom face
@@ -168,10 +171,10 @@ def face_neighbors(mat,ind,ax,n,fixed_sides):
             val = mat[tuple(ind2)]
         elif len(fixed_sides)>0:
             for fixed_side in fixed_sides:
-                ind3 = np.delete(ind2,fixed_side[0])
+                ind3 = np.delete(ind2,fixed_side.ax)
                 if np.all(ind3>=0) and np.all(ind3<dim):
-                    if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n
-                    elif ind2[fixed_side[0]]>=dim and fixed_side[1]==1: val = n
+                    if ind2[fixed_side.ax]<0 and fixed_side.dir==0: val = n
+                    elif ind2[fixed_side.ax]>=dim and fixed_side.dir==1: val = n
         values.append(val)
     values = np.array(values)
     count = np.count_nonzero(values==n)
@@ -198,7 +201,7 @@ def get_index(ind,add,dim):
     return index
 
 def joint_line_indices(self,all_indices,n,offset,global_offset=0):
-    fixed_sides = self.parent.fixed_sides[n]
+    fixed_sides = self.parent.fixed.sides[n]
     d = self.parent.dim+1
     indices = []
     for i in range(d):
@@ -218,11 +221,11 @@ def joint_line_indices(self,all_indices,n,offset,global_offset=0):
                         indices.extend([start_i,end_i])
     #Outline of component base
     start = d*d*d
-    for ax,dir in fixed_sides:
-        a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
+    for side in fixed_sides:
+        a1,b1,c1,d1 = get_corner_indices(side.ax,side.dir,self.parent.dim)
         step = 2
-        if len(self.parent.fixed_sides[n])==2: step = 1
-        off = 24*ax+12*dir+4*step
+        if len(self.parent.fixed.sides[n])==2: step = 1
+        off = 24*side.ax+12*side.dir+4*step
         a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
         indices.extend([a0,b0, b0,d0, d0,c0, c0,a0])
         indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
@@ -247,11 +250,11 @@ def line_neighbors(self,ind,ax,n):
                 val = self.voxel_matrix[tuple(ind2)]
             else:
                 for n2 in range(self.parent.noc):
-                    for fixed_side in self.parent.fixed_sides[n2]:
-                        ind3 = np.delete(ind2,fixed_side[0])
+                    for side in self.parent.fixed.sides[n2]:
+                        ind3 = np.delete(ind2,side.ax)
                         if np.all(ind3>=0) and np.all(ind3<self.parent.dim):
-                            if ind2[fixed_side[0]]<0 and fixed_side[1]==0: val = n2
-                            elif ind2[fixed_side[0]]>=self.parent.dim and fixed_side[1]==1: val = n2
+                            if ind2[side.ax]<0 and side.dir==0: val = n2
+                            elif ind2[side.ax]>=self.parent.dim and side.dir==1: val = n2
             values.append(val)
     values = np.array(values)
     count = np.count_nonzero(values==n)
@@ -386,10 +389,10 @@ def joint_top_face_indices(self,all_indices,n,noc,offset):
                     ind = [i,j]
                     ind.insert(ax,k)
                     # count number of neigbors (0, 1, or 2)
-                    cnt,vals = face_neighbors(self.voxel_matrix,ind,ax,n,self.parent.fixed_sides[n])
+                    cnt,vals = face_neighbors(self.voxel_matrix,ind,ax,n,self.parent.fixed.sides[n])
                     on_free_base = False
                     # add base if edge component
-                    if ax==sax and ax!=self.parent.fixed_sides[n][0][0] and len(sdirs)==1:
+                    if ax==sax and ax!=self.parent.fixed.sides[n][0].ax and len(sdirs)==1:
                         base = sdirs[0]*self.parent.dim
                         if ind[ax]==base: on_free_base=True
                     if cnt==1 or on_free_base:
@@ -410,11 +413,11 @@ def joint_top_face_indices(self,all_indices,n,noc,offset):
     # 2. Faces of component base
     d = self.parent.dim+1
     start = d*d*d
-    for ax,dir in self.parent.fixed_sides[n]:
-        a1,b1,c1,d1 = get_corner_indices(ax,dir,self.parent.dim)
+    for side in self.parent.fixed.sides[n]:
+        a1,b1,c1,d1 = get_corner_indices(side.ax,side.dir,self.parent.dim)
         step = 2
-        if len(self.parent.fixed_sides[n])==2: step = 1
-        off = 24*ax+12*dir+4*step
+        if len(self.parent.fixed.sides[n])==2: step = 1
+        off = 24*side.ax+12*side.dir+4*step
         a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
         # Add component side to indices
         indices.extend([a0,b0,d0,c0]) #bottom face
@@ -484,16 +487,16 @@ def component_outline_indices(self,all_indices,fixed_sides,n,offset):
     start = d*d*d
     #Outline of component base
     #1) Base of first fixed side
-    ax = fixed_sides[0][0]
-    dir = fixed_sides[0][1]
+    ax = fixed_sides[0].ax
+    dir = fixed_sides[0].dir
     step = 2
     if len(fixed_sides)==2: step = 1
     off = 24*ax+12*dir+4*step
     a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
     #2) Base of first fixed side OR top of component
     if len(fixed_sides)==2:
-        ax = fixed_sides[1][0]
-        dir = fixed_sides[1][1]
+        ax = fixed_sides[1].ax
+        dir = fixed_sides[1].dir
         off = 24*ax+12*dir+4*step
         a1,b1,c1,d1 = start+off,start+off+1,start+off+2,start+off+3
     else:
@@ -522,7 +525,7 @@ def get_same_neighbors(ind,fixed_sides,voxel_matrix,dim):
             add.insert(ax,2*n-1)
             add = np.array(add)
             ind2 = ind+add
-            if (ind2[ax]<0 or ind2[ax]>=dim) and [ax,n] in fixed_sides:
+            if (ind2[ax]<0 or ind2[ax]>=dim) and not FixedSide(ax,n).unique(fixed_sides): #and [ax,n] in fixed_sides:
                 val2 = val
             elif np.all(ind2>=0) and np.all(ind2<dim):
                 val2 = voxel_matrix[tuple(ind2)]
@@ -543,19 +546,19 @@ def get_count(ind,neighbors,fixed_sides,voxel_matrix,dim):
         val2 = None
         # Check fixed sides
         if (i<0 or i>=dim) and j>=0 and j<dim and k>=0 and k<dim:
-            if i<0 and [0,0] in fixed_sides:
+            if i<0 and not FixedSide(0,0).unique(fixed_sides): #[0,0] in fixed_sides:
                 val2 = val
-            elif i>=dim and [0,1] in fixed_sides:
+            elif i>=dim and not FixedSide(0,1).unique(fixed_sides): #[0,1] in fixed_sides:
                 val2 = val
         elif (j<0 or j>=dim) and i>=0 and i<dim and k>=0 and k<dim:
-            if j<0 and [1,0] in fixed_sides:
+            if j<0 and not FixedSide(1,0).unique(fixed_sides): #[1,0] in fixed_sides:
                 val2 = val
-            elif j>=dim and [1,1] in fixed_sides:
+            elif j>=dim and not FixedSide(1,1).unique(fixed_sides): #[1,1] in fixed_sides:
                 val2 = val
         elif (k<0 or k>=dim) and i>=0 and i<dim and j>=0 and j<dim:
-            if k<0 and [2,0] in fixed_sides:
+            if k<0 and not FixedSide(2,0).unique(fixed_sides): #[2,0] in fixed_sides:
                 val2 = val
-            elif k>=dim and [2,1] in fixed_sides:
+            elif k>=dim and not FixedSide(2,1).unique(fixed_sides): #[2,1] in fixed_sides:
                 val2 = val
         # Check neighbours
         elif np.all(np.array([i,j,k])>=0) and np.all(np.array([i,j,k])<dim):
@@ -616,9 +619,9 @@ class Geometries:
         #suggestion geometries
         if not self.mainmesh: # for suggestions and gallery - just show basic geometry - no feedback - global offset necessary
             for n in range(self.parent.noc):
-                ax = self.parent.fixed_sides[n][0][0]
+                ax = self.parent.fixed.sides[n][0].ax
                 nend,end,all,all_inds = joint_face_indices(self, all_inds,
-                        self.voxel_matrix,self.parent.fixed_sides[n],n,ax*self.parent.vn,global_offset=glo_off)
+                        self.voxel_matrix,self.parent.fixed.sides[n],n,ax*self.parent.vn,global_offset=glo_off)
                 lns,all_inds = joint_line_indices(self,all_inds,n,ax*self.parent.vn,global_offset=glo_off)
                 self.indices_fall.append(all)
                 self.indices_lns.append(lns)
@@ -645,10 +648,10 @@ class Geometries:
             self.indices_breakable_lines = []
             self.indices_milling_path = []
             for n in range(self.parent.noc):
-                ax = self.parent.fixed_sides[n][0][0]
+                ax = self.parent.fixed.sides[n][0].ax
                 #Faces
                 nend,end,con,all_inds = joint_face_indices(self, all_inds,
-                        self.eval.voxel_matrix_connected,self.parent.fixed_sides[n],n,ax*self.parent.vn)
+                        self.eval.voxel_matrix_connected,self.parent.fixed.sides[n],n,ax*self.parent.vn)
                 if not self.eval.connected[n]:
                     fne,fe,uncon,all_inds = joint_face_indices(self,all_inds,self.eval.voxel_matrix_unconnected,[],n,ax*self.parent.vn)
                     self.indices_not_fcon.append(uncon)
@@ -659,12 +662,12 @@ class Geometries:
 
                 #breakable and not breakable faces
                 fne,fe,brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.breakable_voxmat,[],n,ax*self.parent.vn)
-                fne,fe,not_brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.non_breakable_voxmat,self.parent.fixed_sides[n],n,n*self.parent.vn)
+                fne,fe,not_brk_faces,all_inds = joint_face_indices(self,all_inds,self.eval.non_breakable_voxmat,self.parent.fixed.sides[n],n,n*self.parent.vn)
 
                 if not self.eval.bridged[n]:
                     unbris = []
                     for m in range(2):
-                        fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.parent.fixed_sides[n][m]],n,n*self.parent.vn)
+                        fne,fe,unbri,all_inds = joint_face_indices(self, all_inds,self.eval.voxel_matrices_unbridged[n][m],[self.parent.fixed.sides[n][m]],n,n*self.parent.vn)
                         unbris.append(unbri)
                 else: unbris = None
 
@@ -748,10 +751,10 @@ class Geometries:
         location.pop()
         location = s.join(location)
         location += "\\search_results\\noc_"+str(self.parent.noc)+"\\dim_"+str(self.parent.dim)+"\\fs_"
-        for i in range(len(self.parent.fixed_sides)):
-            for fs in self.parent.fixed_sides[i]:
+        for i in range(len(self.parent.fixed.sides)):
+            for fs in self.parent.fixed.sides[i]:
                 location+=str(fs[0])+str(fs[1])
-            if i!=len(self.parent.fixed_sides)-1: location+=("_")
+            if i!=len(self.parent.fixed.sides)-1: location+=("_")
         location+="\\allvalid"
         print("Trying to load geometry from",location)
         maxi = len(os.listdir(location))-1

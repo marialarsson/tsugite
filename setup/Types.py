@@ -13,6 +13,7 @@ from Fabrication import RegionVertex
 from Fabrication import RoughPixel
 from Geometries import Geometries
 from Geometries import get_index
+from Misc import FixedSides
 
 def normalize(v):
     norm = linalg.norm(v)
@@ -80,26 +81,6 @@ def arrow_vertices(self):
     vertices = np.array(vertices, dtype = np.float32) #converts to correct format
     return vertices
 
-def next_fixed_sides(fixed_sides):
-    new_fixed_sides = []
-    for ax in range(3):
-        ax = 2-ax
-        for dir in range(2):
-            new_fixed_side = [ax,dir]
-            unique = True
-            for other_fixed_sides in fixed_sides:
-                for oax,odir in other_fixed_sides:
-                    if oax==ax and odir==dir:
-                        unique=False
-                        break
-                if not unique: break
-            if unique:
-                new_fixed_sides.append(new_fixed_side)
-                break
-        if len(new_fixed_sides)>0:
-            break
-    return new_fixed_sides
-
 def produce_suggestions(type,hfs):
     valid_suggestions = []
     for i in range(len(hfs)):
@@ -131,37 +112,37 @@ def layer_mat_from_cube(type,lay_num,n):
 def pad_layer_mat_with_fixed_sides(type,mat):
     pad_loc = [[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1]]
-    for n2 in range(len(type.fixed_sides)):
-        for oax,odir in type.fixed_sides[n2]:
-            if oax==type.sax: continue
+    for n2 in range(len(type.fixed.sides)):
+        for oside in type.fixed.sides[n2]:
+            if oside.ax==type.sax: continue
             axes = [0,0,0]
-            axes[oax] = 1
+            axes[oside.ax] = 1
             axes.pop(type.sax)
             oax = axes.index(1)
-            pad_loc[oax][odir] = 1
-            pad_val[oax][odir] = n2
+            pad_loc[oside.ax][oside.dir] = 1
+            pad_val[oside.ax][oside.dir] = n2
     pad_loc = tuple(map(tuple, pad_loc))
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
     # take care of -1 corners
-    for fixed_sides_1 in type.fixed_sides:
-        for fixed_sides_2 in type.fixed_sides:
-            for ax1,dir1 in fixed_sides_1:
-                if ax1==type.sax: continue
+    for fixed_sides_1 in type.fixed.sides:
+        for fixed_sides_2 in type.fixed.sides:
+            for side1 in fixed_sides_1:
+                if side1.ax==type.sax: continue
                 axes = [0,0,0]
-                axes[ax1] = 1
+                axes[side1.ax] = 1
                 axes.pop(type.sax)
                 ax1 = axes.index(1)
-                for ax2,dir2 in fixed_sides_2:
-                    if ax2==type.sax: continue
+                for side2 in fixed_sides_2:
+                    if side2.ax==type.sax: continue
                     axes = [0,0,0]
-                    axes[ax2] = 1
+                    axes[side2.ax] = 1
                     axes.pop(type.sax)
                     ax2 = axes.index(1)
                     if ax1==ax2: continue
                     ind = [0,0]
-                    ind[ax1] = dir1*(mat.shape[ax1]-1)
-                    ind[ax2] = dir2*(mat.shape[ax2]-1)
+                    ind[ax1] = side1.dir*(mat.shape[ax1]-1)
+                    ind[ax2] = side2.dir*(mat.shape[ax2]-1)
                     mat[tuple(ind)] = -1
     return mat,pad_loc
 
@@ -467,6 +448,10 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
         if rv.region_count==1 and rv.free_count!=3:
             nind = tuple(np.argwhere(rv.neighbors==0)[0])
             off_vecs.append(neighbor_vectors[nind])
+            if np.any(rv.flat_neighbor_values==-2):
+                nind = tuple(np.argwhere(rv.neighbor_values==-2)[0])
+                off_vecs.append(neighbor_vectors[nind])
+
         off_vec = np.average(off_vecs,axis=0)
         # check if it is an outer corner that should be rounded
         rounded = False
@@ -508,7 +493,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
             outline.append(MillVertex(pts[0],is_arc=True,arc_ctr=ctr))
             outline.append(MillVertex(pts[1],is_arc=True,arc_ctr=ctr))
         else: # other corner
-            pt = pt+off_vec +rv.add_vec
+            pt = pt+off_vec
             outline.append(MillVertex(pt))
         if len(outline)>2 and outline[0].is_arc and test_first:
             # if the previous one was an arc but it was the first point of the outline,
@@ -531,7 +516,7 @@ def get_outline(type,verts,lay_num,n):
         add = [0,0,0]
         add[type.sax] = 1-fdir
         i_pt = get_index(ind,add,type.dim)
-        pt = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)+rv.add_vec
+        pt = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
         outline.append(MillVertex(pt))
     return outline
 
@@ -585,48 +570,6 @@ def get_layered_vertices(type,outline,n,i,no_z,dep):
 
     return verts,mverts
 
-def check_free_sides(type,ind,dir_ax,off_ax,n):
-    dir_sides = [1,1] #free
-    off_sides = [1,1]
-    #
-    # dir
-    if ind[dir_ax]>0:
-        pind = ind.copy()
-        pind[dir_ax] += -1
-        pval = type.mesh.voxel_matrix[tuple(pind)]
-        if int(pval)==int(n): dir_sides[0]=0
-    elif [dir_ax,0] in type.fixed_sides[n]:
-        dir_sides[0]=0
-    #
-    if ind[dir_ax]<type.dim-1:
-        pind = ind.copy()
-        pind[dir_ax] += 1
-        pval = type.mesh.voxel_matrix[tuple(pind)]
-        if int(pval)==int(n): dir_sides[1]=0
-    elif [dir_ax,1] in type.fixed_sides[n]:
-        dir_sides[1]=0
-    #
-    # off
-    if ind[off_ax]>0:
-        pind = ind.copy()
-        pind[off_ax] += -1
-        pval = type.mesh.voxel_matrix[tuple(pind)]
-        if int(pval)==int(n): off_sides[0]=0
-    elif [off_ax,0] in type.fixed_sides[n]:
-        off_sides[0]=0
-    #
-    if ind[off_ax]<type.dim-1:
-        pind = ind.copy()
-        pind[off_ax] += 1
-        pval = type.mesh.voxel_matrix[tuple(pind)]
-        if int(pval)==int(n): off_sides[1]=0
-    elif [off_ax,1] in type.fixed_sides[n]:
-        off_sides[1]=0
-    #
-    dir_sides = np.array(dir_sides)
-    off_sides = np.array(off_sides)
-    return dir_sides,off_sides
-
 def any_minus_one_neighbor(ind,lay_mat):
     bool = False
     #print(lay_mat)
@@ -673,6 +616,7 @@ def get_neighbors_in_out(ind,reg_inds,lay_mat,org_lay_mat,n):
                     val =-1
                 elif lay_mat[tuple(nind)]<0:
                     type = 2 # free
+                    val = -2
                 else: type = 1 # blocked
 
             if val==None:
@@ -709,13 +653,13 @@ def filleted_points(pt,one_voxel,off_dist,ax,n):
 def is_additional_outer_corner(type,rv,ind,ax,n):
     outer_corner = False
     if rv.region_count==1 and rv.block_count==1:
-        other_fixed_sides = type.fixed_sides.copy()
+        other_fixed_sides = type.fixed.sides.copy()
         other_fixed_sides.pop(n)
         for sides in other_fixed_sides:
-            for oax,odir in sides:
-                if oax==ax: continue
+            for side in sides:
+                if side.ax==ax: continue
                 axes = [0,0,0]
-                axes[oax] = 1
+                axes[side.ax] = 1
                 axes.pop(ax)
                 oax = axes.index(1)
                 not_oax = axes.index(0)
@@ -725,31 +669,6 @@ def is_additional_outer_corner(type,rv,ind,ax,n):
                         break
             if outer_corner: break
     return outer_corner
-
-def adjust_edge(rvs,type,ext_dist,lay_num,n):
-    fdir = type.mesh.fab_directions[n]
-    for i in range(2):
-        rv = rvs[-1*i]
-        if rv.minus_one_neighbor:
-            prv = rvs[1-3*i]
-            #get first pnt
-            ind = rv.ind.copy()
-            ind.insert(type.sax,(type.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
-            add = [0,0,0]
-            add[type.sax] = 1-fdir
-            i_pt = get_index(ind,add,type.dim)
-            pt0 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
-            #get second pnt
-            ind = prv.ind.copy()
-            ind.insert(type.sax,(type.dim-1)*(1-fdir)+(2*fdir-1)*lay_num)
-            add = [0,0,0]
-            add[type.sax] = 1-fdir
-            i_pt = get_index(ind,add,type.dim)
-            pt1 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
-            #
-            vec = pt0-pt1
-            vec = set_vector_length(vec,ext_dist)
-            rv.add_vec=vec
 
 def milling_path_vertices(type,n):
     vertices = []
@@ -845,9 +764,6 @@ def milling_path_vertices(type,n):
                 #Get a sequence of ordered vertices
                 reg_ord_verts,reg_verts,closed = get_sublist_of_ordered_verts(reg_verts) #OK
 
-                #Extend line by -1 situation when necessary
-                if any(-1 in x for x in lay_mat): adjust_edge(reg_ord_verts,type,type.fab.vrad,lay_num,n)
-
                 # Make outline of ordered vertices (for dedugging olny!!!!!!!)
                 #if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
 
@@ -866,11 +782,11 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,parent,fs=[[[2,0]],[[2,1]]],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
+    def __init__(self,parent,fs=[],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
         self.parent=parent
         self.sax = sax
-        self.fixed_sides = fs
-        self.noc = len(fs) #number of components
+        self.fixed = FixedSides(self)
+        self.noc = len(self.fixed.sides) #number of components
         self.dim = dim
         self.suggestions_on = True
         self.component_size = 0.275
@@ -882,7 +798,7 @@ class Types:
         self.vertex_no_info = 8
         self.ang = ang
         self.buff = Buffer(self) #initiating the buffer
-        self.update_unblocked_fixed_sides()
+        self.fixed.update_unblocked()
         self.vertices = self.create_and_buffer_vertices(milling_path=False) # create and buffer vertices
         self.mesh = Geometries(self, hfs=hfs)
         self.sugs = []
@@ -1021,41 +937,19 @@ class Types:
         self.indices = np.array(indices, dtype=np.uint32)
         Buffer.buffer_indices(self.buff)
 
-    def update_unblocked_fixed_sides(self):
-        unblocked_sides = []
-        for ax in range(3):
-            for dir in range(2):
-                side = [ax,dir]
-                blocked = False
-                for sides in self.fixed_sides:
-                    if side in sides:
-                        blocked=True
-                        break
-                if not blocked:
-                    unblocked_sides.append(side)
-        self.unblocked_fixed_sides = unblocked_sides
-        ### and is it possible to rotate?
-        self.rot=True
-        for sides in self.fixed_sides:
-            ax = sides[0][0]
-            # if one or more component axes are aligned with the sliding axes (sax), rotation cannot be performed
-            if ax==self.sax:
-                self.rot=False
-                break
-
     def update_sliding_direction(self,sax):
         blocked = False
-        for i,sides in enumerate(self.fixed_sides):
-            for ax,dir in sides:
-                if ax==sax:
-                    if dir==0 and i==0: continue
-                    if dir==1 and i==self.noc-1: continue
+        for i,sides in enumerate(self.fixed.sides):
+            for side in sides:
+                if side.ax==sax:
+                    if side.dir==0 and i==0: continue
+                    if side.dir==1 and i==self.noc-1: continue
                     blocked = True
         if blocked:
             return False, "This sliding direction is blocked"
         else:
             self.sax = sax
-            self.update_unblocked_fixed_sides()
+            self.fixed.update_unblocked()
             self.create_and_buffer_vertices(milling_path=False)
             self.mesh.voxel_matrix_from_height_fields()
             for mesh in self.sugs: mesh.voxel_matrix_from_height_fields()
@@ -1085,35 +979,37 @@ class Types:
         if new_noc!=self.noc:
             # Increasing number of components
             if new_noc>self.noc:
-                if len(self.unblocked_fixed_sides)>=(new_noc-self.noc):
+                if len(self.fixed.unblocked)>=(new_noc-self.noc):
                     for i in range(new_noc-self.noc):
-                        nfs = next_fixed_sides(self.fixed_sides)
-                        if self.fixed_sides[-1][0][0]==self.sax: # last component is aligned with the sliding axis
-                            self.fixed_sides.insert(-1,nfs)
+                        random_i = random.randint(0,len(self.fixed.unblocked)-1)
+                        if self.fixed.sides[-1][0].ax==self.sax: # last component is aligned with the sliding axis
+                            self.fixed.sides.insert(-1,self.unblocked[random_i])
                         else:
-                            self.fixed_sides.append(nfs)
+                            self.fixed.sides.append(self.self.unblocked[random_i])
                         #also consider if it is aligned and should be the first one in line... rare though...
+                        self.fixed.update_unblocked()
                     self.noc = new_noc
             # Decreasing number of components
             elif new_noc<self.noc:
                 for i in range(self.noc-new_noc):
-                    self.fixed_sides.pop()
+                    self.fixed.sides.pop()
                 self.noc = new_noc
             # Rebuffer
-            self.update_unblocked_fixed_sides()
+            self.fixed.update_unblocked()
             self.create_and_buffer_vertices(milling_path=False)
             self.mesh.randomize_height_fields()
 
-    def update_component_position(self,new_fixed_sides,n):
-        self.fixed_sides[n] = new_fixed_sides
-        self.update_unblocked_fixed_sides()
+    def update_component_position(self,new_sides,n):
+        self.fixed.sides[n] = new_sides
+        print(new_sides)
+        self.fixed.update_unblocked()
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.voxel_matrix_from_height_fields()
         self.combine_and_buffer_indices()
 
-    def reset(self, fs=[[[2,0]],[[2,1]]], sax=2, dim=3, ang=90., td=[44.0,44.0,44.0], fabdia=6.0, fabtol=0.15, fabrot=0.0, fabext="gcode", hfs=[]):
-        self.fixed_sides=fs
-        self.noc=len(self.fixed_sides)
+    def reset(self, fs=None, sax=2, dim=3, ang=90., td=[44.0,44.0,44.0], fabdia=6.0, fabtol=0.15, fabrot=0.0, fabext="gcode", hfs=[]):
+        self.fixed = FixedSides(self,fs=fs)
+        self.noc=len(self.fixed.sides)
         self.sax=sax
         self.dim=dim
         self.ang=ang
@@ -1127,10 +1023,10 @@ class Types:
         self.fab.vdia = self.fab.dia/self.ratio
         self.fab.vrad = self.fab.rad/self.ratio
         self.fab.vtol = self.fab.tol/self.ratio
-        self.fab.rot=fabrot
+        self.fab.extra_rot_deg=fabrot
         self.fab.ext=fabext
         self.mesh = Geometries(self, hfs=hfs)
-        self.update_unblocked_fixed_sides()
+        self.fixed.update_unblocked()
         self.create_and_buffer_vertices(milling_path=False)
         self.combine_and_buffer_indices()
 
@@ -1154,10 +1050,10 @@ class Types:
         location.pop()
         location = s.join(location)
         location += "\\search_results\\noc_"+str(self.noc)+"\\dim_"+str(self.dim)+"\\fs_"
-        for i in range(len(self.fixed_sides)):
-            for fs in self.fixed_sides[i]:
-                location+=str(fs[0])+str(fs[1])
-            if i!=len(self.fixed_sides)-1: location+=("_")
+        for i in range(len(self.fixed.sides)):
+            for fs in self.fixed.sides[i]:
+                location+=str(fs.ax)+str(fs.dir)
+            if i!=len(self.fixed.sides)-1: location+=("_")
         location+="\\allvalid"
         maxi = len(os.listdir(location))-1
         for i in range(20):
@@ -1188,12 +1084,12 @@ class Types:
 
         # Fixed sides
         file.write("FSS ")
-        for n in range(len(self.fixed_sides)):
-            for i in range(len(self.fixed_sides[n])):
-                file.write(str(int(self.fixed_sides[n][i][0]))+",")
-                file.write(str(int(self.fixed_sides[n][i][1])))
-                if i!=len(self.fixed_sides[n])-1: file.write(".")
-            if n!=len(self.fixed_sides)-1: file.write(":")
+        for n in range(len(self.fixed.sides)):
+            for i in range(len(self.fixed.sides[n])):
+                file.write(str(int(self.fixed.sides[n][i].ax))+",")
+                file.write(str(int(self.fixed.sides[n][i].dir)))
+                if i!=len(self.fixed.sides[n])-1: file.write(".")
+            if n!=len(self.fixed.sides)-1: file.write(":")
 
         # Joint geometry
         file.write("\nHFS \n")
@@ -1224,7 +1120,7 @@ class Types:
         tol = self.fab.tol
         rot = self.fab.extra_rot_deg
         ext = self.fab.ext
-        fs = self.fixed_sides
+        fs = self.fixed.sides
 
         # Read
         hfs = []
@@ -1242,16 +1138,7 @@ class Types:
             elif items[0]=="TOL": tol = float(items[1])
             elif items[0]=="ROT": rot = float(items[1])
             elif items[0]=="EXT": ext = items[1]
-            elif items[0]=="FSS":
-                fs = []
-                for tim_fss in items[1].split(":"):
-                    temp = []
-                    for tim_fs in tim_fss.split("."):
-                        axdir = tim_fs.split(",")
-                        ax = int(float(axdir[0]))
-                        dir = int(float(axdir[1]))
-                        temp.append([ax,dir])
-                    fs.append(temp)
+            elif items[0]=="FSS": fs = FixedSides(self,side_str=items[1]).sides
             elif items[0]=="HFS": hfi = i
             elif i>hfi:
                 hf = []

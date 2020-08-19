@@ -38,11 +38,7 @@ class RegionVertex:
         ##
         self.neighbor_values = np.array(neighbor_values)
         self.flat_neighbor_values = self.neighbor_values.flatten()
-        #
-        self.add_vec = np.array([0.0,0.0,0.0])
 
-#    def set_pos(self,pos):
-#        self.pos = pos
 
 class RoughPixel:
     def __init__(self,ind,mat,pad_loc,dim,n):
@@ -141,8 +137,8 @@ class Fabrication:
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
         for n in range(self.parent.noc):
-            comp_ax = self.parent.fixed_sides[n][0][0]
-            comp_dir = self.parent.fixed_sides[n][0][1] # component direction
+            comp_ax = self.parent.fixed.sides[n][0].ax
+            comp_dir = self.parent.fixed.sides[n][0].dir # component direction
             comp_vec = self.parent.pos_vecs[comp_ax]
             if comp_dir==0 and comp_ax!=self.parent.sax:
                 comp_vec=-comp_vec
@@ -160,19 +156,27 @@ class Fabrication:
             #
             file_name = filename_tsu[:-4] + "_"+names[n]+"."+self.ext
             file = open(file_name,"w")
-            ###initialization
-            file.write("%\n")
-            file.write("G90 (Absolute [G91 is incremental])\n")
-            file.write("G17 (set XY plane for circle path)\n")
-            file.write("G94 (set unit/minute)\n")
-            file.write("G21 (set unit[mm])\n")
-            file.write("F400. (Feeding 400mm/min)\n")
-            file.write("S6000 (Spindle 6000rpm)\n")
-            file.write("M3 (spindle start)\n")
-            file.write("G54\n")
-            file.write("F400.\n")
+            if self.ext=="gcode" or self.ext=="nc":
+                ###initialization .goce and .nc
+                file.write("%\n")
+                file.write("G90 (Absolute [G91 is incremental])\n")
+                file.write("G17 (set XY plane for circle path)\n")
+                file.write("G94 (set unit/minute)\n")
+                file.write("G21 (set unit[mm])\n")
+                file.write("F400. (Feeding 400mm/min)\n")
+                file.write("S6000 (Spindle 6000rpm)\n")
+                file.write("M3 (spindle start)\n")
+                file.write("G54\n")
+                file.write("F400.\n")
+            elif self.ext=="sbp":
+                file.write("'%\n")
+                file.write("SA\n")
+                file.write("MS,6.67,6.67\n\n")
+                file.write("TR 6000\n\n")
+                file.write("SO 1,1\n")
+            else:
+                print("Unknown extension:", self.ext)
 
-            #speed = 400
             ###content
             currentg = ""
             for i,mv in enumerate(self.parent.gcodeverts[n]):
@@ -195,20 +199,40 @@ class Fabrication:
                     if diff_ang>0.5*math.pi: clockwise = True
 
                 #write to file
-                if arc and clockwise:
-                    file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
-                elif arc and not clockwise:
-                    file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
-                else:
-                    file.write("G1 ")
-                    if i==0 or mv.x!=pmv.x: file.write("X"+mv.xstr+" ")
-                    if i==0 or mv.y!=pmv.y: file.write("Y"+mv.ystr+" ")
-                    if i==0 or mv.z!=pmv.z: file.write("Z"+mv.zstr+" ")
-                    file.write("\n")
+                if self.ext=="gcode" or self.ext=="nc":
+                    if arc and clockwise:
+                        file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
+                    elif arc and not clockwise:
+                        file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
+                    else:
+                        file.write("G1 ")
+                        if i==0 or mv.x!=pmv.x: file.write("X"+mv.xstr+" ")
+                        if i==0 or mv.y!=pmv.y: file.write("Y"+mv.ystr+" ")
+                        if i==0 or mv.z!=pmv.z: file.write("Z"+mv.zstr+" ")
+                        file.write("\n")
+                elif self.ext=="sbp":
+                    if arc:
+                        file.write("CG,"+str(round(2*self.dia,d))+","+mv.xstr+","+mv.ystr+",,,T,")
+                        if clockwise: file.write("1\n")
+                        else: file.write("-1\n")
+                    else:
+                        file.write("M3,")
+                        if i==0 or mv.x!=pmv.x: file.write(mv.xstr+",")
+                        else: file.write(" ,")
+                        if i==0 or mv.y!=pmv.y: file.write(mv.ystr+",")
+                        else: file.write(" ,")
+                        if i==0 or mv.z!=pmv.z: file.write(mv.zstr+"\n")
+                        else: file.write(" \n")
             #end
-            file.write("M5 (Spindle stop)\n")
-            file.write("M2 (end of program)\n")
-            file.write("M30 (delete sd file)\n")
-            file.write("%\n")
+            if self.ext=="gcode" or self.ext=="nc":
+                file.write("M5 (Spindle stop)\n")
+                file.write("M2 (end of program)\n")
+                file.write("M30 (delete sd file)\n")
+                file.write("%\n")
+            elif self.ext=="sbp":
+                file.write("SO 1,0\n")
+                file.write("END\n")
+                file.write("'%\n")
+
             print("Exported",file_name)
             file.close()

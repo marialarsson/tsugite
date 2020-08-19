@@ -1,6 +1,6 @@
 from OpenGL.GL import *
-from ViewSettings import ViewSettings
 from Buffer import ElementProperties
+from ViewSettings import ViewSettings
 import numpy as np
 import pyrr
 
@@ -420,9 +420,9 @@ class Display:
             G0 = self.type.mesh.indices_arrows[n]
             d0 = 2.55*self.type.component_size
             d1 = 1.55*self.type.component_size
-            if len(self.type.fixed_sides[n])==2: d0 = d1
-            for ax,dir in self.type.fixed_sides[n]:
-                vec = d0*(2*dir-1)*self.type.pos_vecs[ax]/np.linalg.norm(self.type.pos_vecs[ax])
+            if len(self.type.fixed.sides[n])==2: d0 = d1
+            for side in self.type.fixed.sides[n]:
+                vec = d0*(2*side.dir-1)*self.type.pos_vecs[side.ax]/np.linalg.norm(self.type.pos_vecs[side.ax])
                 #draw_geometries_with_excluded_area(window,G0,G1,translation_vec=vec)
                 self.draw_geometries(G0,translation_vec=vec)
 

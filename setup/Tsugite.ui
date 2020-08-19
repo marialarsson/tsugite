@@ -485,7 +485,7 @@
           <string> mm</string>
          </property>
          <property name="decimals">
-          <number>1</number>
+          <number>2</number>
          </property>
          <property name="minimum">
           <double>1.000000000000000</double>
@@ -618,6 +618,13 @@
         <widget class="QRadioButton" name="radioNC">
          <property name="text">
           <string>*.nc</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioSBP">
+         <property name="text">
+          <string>*.sbp</string>
          </property>
         </widget>
        </item>

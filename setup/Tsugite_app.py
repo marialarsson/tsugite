@@ -66,6 +66,7 @@ class GLWidget(QGLWidget):
         rot = self.parent.findChild(QSpinBox, "spinPATHROT").value()
         if self.parent.findChild(QRadioButton, "radioGCODE").isChecked(): ext = "gcode"
         elif self.parent.findChild(QRadioButton, "radioNC").isChecked(): ext = "nc"
+        elif self.parent.findChild(QRadioButton, "radioSBP").isChecked(): ext = "sbp"
         self.type = Types(self,fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fabext=ext, fabrot=rot)
         self.display = Display(self,self.type)
 
@@ -242,6 +243,7 @@ class mainWindow(QMainWindow):
         self.findChild(QPushButton, "buttonGCODE").clicked.connect(self.export_gcode)
         self.findChild(QRadioButton, "radioGCODE").toggled.connect(self.set_gcode_as_standard)
         self.findChild(QRadioButton, "radioNC").toggled.connect(self.set_nccode_as_standard)
+        self.findChild(QRadioButton, "radioSBP").toggled.connect(self.set_sbp_as_standard)
         #---MENU
         #---File
         self.findChild(QAction, "actionNew").triggered.connect(self.new_file)
@@ -400,6 +402,11 @@ class mainWindow(QMainWindow):
         if bool: self.glWidget.type.fab.ext = "nc"
 
     @pyqtSlot()
+    def set_sbp_as_standard(self):
+        bool = self.findChild(QRadioButton, "radioSBP").isChecked()
+        if bool: self.glWidget.type.fab.ext = "sbp"
+
+    @pyqtSlot()
     def new_file(self):
         self.filename = get_untitled_filename("Untitled","tsu","_")
         self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
@@ -490,6 +497,8 @@ class mainWindow(QMainWindow):
         self.findChild(QSpinBox, "spinPATHROT").setValue(int(self.glWidget.type.fab.extra_rot_deg))
         if self.glWidget.type.fab.ext=="gcode":
             self.findChild(QRadioButton, "radioGCODE").setChecked(True)
+        elif self.glWidget.type.fab.ext=="sbp":
+            self.findChild(QRadioButton, "radioSBP").setChecked(True)
         elif self.glWidget.type.fab.ext=="nc":
             self.findChild(QRadioButton, "radioNC").setChecked(True)
 

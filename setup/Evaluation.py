@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 from Fabrication import RegionVertex
+from Misc import FixedSide
 
 def get_ordered_outline(verts):
     ord_verts = []
@@ -79,9 +80,9 @@ def get_friction_and_contact_areas(mat,slides,fixed_sides,n):
                     nind[ax]+=2*dir-1
                     cont = False
                     if nind[ax]<0:
-                        if [ax,0] in other_fixed_sides: cont = True
+                        if FixedSide(ax,0).unique(other_fixed_sides): cont=True
                     elif nind[ax]>=len(mat):
-                        if [ax,1] in other_fixed_sides: cont = True
+                        if FixedSide(ax,1).unique(other_fixed_sides): cont=True
                     elif mat[tuple(nind)]!=n: cont = True
                     if cont:
                         contact+=1
@@ -92,20 +93,20 @@ def get_friction_and_contact_areas(mat,slides,fixed_sides,n):
                             friction += 1
                             ffaces.append([ax,list(find)])
         # Check neighbors for each fixed side of the current material
-        for ax,dir in fixed_sides[n]:
+        for side in fixed_sides[n]:
             for i in range(len(mat)):
                 for j in range(len(mat)):
                     nind = [i,j]
-                    axind = dir*(len(mat)-1)
-                    nind.insert(ax,axind)
+                    axind = side.dir*(len(mat)-1)
+                    nind.insert(side.ax,axind)
                     if mat[tuple(nind)]!=n: # neighboring another timber
                         contact+=1
                         find = nind.copy()
-                        find[ax]+=dir
-                        cfaces.append([ax,list(find)])
-                        if ax in friction_axes:
+                        find[side.ax]+=side.dir
+                        cfaces.append([side.ax,list(find)])
+                        if side.ax in friction_axes:
                             friction+=1
-                            ffaces.append([ax,list(find)])
+                            ffaces.append([side.ax,list(find)])
     return friction, ffaces, contact, cfaces
 
 def is_connected(mat,n):
@@ -194,22 +195,22 @@ def add_fixed_sides(mat,fixed_sides, add=0):
     pad_loc = [[0,0],[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1],[-1,-1]]
     for n in range(len(fixed_sides)):
-        for ax,dir in fixed_sides[n]:
-            pad_loc[ax][dir] = 1
-            pad_val[ax][dir] = n+add
+        for side in fixed_sides[n]:
+            pad_loc[side.ax][side.dir] = 1
+            pad_val[side.ax][side.dir] = n+add
     pad_loc = tuple(map(tuple, pad_loc))
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
     # Take care of corners ########################needs to be adjusted for 3 components....!!!!!!!!!!!!!!!!!!
     for fixed_sides_1 in fixed_sides:
         for fixed_sides_2 in fixed_sides:
-            for ax,dir in fixed_sides_1:
-                for ax2,dir2 in fixed_sides_2:
-                    if ax==ax2: continue
+            for side in fixed_sides_1:
+                for side2 in fixed_sides_2:
+                    if side.ax==side2.ax: continue
                     for i in range(dim+2):
                         ind = [i,i,i]
-                        ind[ax] =  dir*(mat.shape[ax]-1)
-                        ind[ax2] = dir2*(mat.shape[ax2]-1)
+                        ind[side.ax] =  side.dir*(mat.shape[side.ax]-1)
+                        ind[side2.ax] = side2.dir*(mat.shape[side2.ax]-1)
                         try:
                             mat[tuple(ind)] = -1
                         except:
@@ -300,11 +301,11 @@ def is_connected_to_fixed_side(indices,mat,fixed_sides):
     val = mat[tuple(indices[0])]
     d = len(mat)
     for ind in indices:
-        for ax,dir in fixed_sides:
-            if ind[ax]==0 and dir==0:
+        for side in fixed_sides:
+            if ind[side.ax]==0 and side.dir==0:
                 connected=True
                 break
-            elif ind[ax]==d-1 and dir==1:
+            elif ind[side.ax]==d-1 and side.dir==1:
                 connected=True
                 break
         if connected: break
@@ -392,13 +393,13 @@ def get_chessboard_vertics(mat,ax,noc,n):
 
 def is_connected_to_fixed_side_2d(inds,fixed_sides,ax,dim):
     connected = False
-    for fax,fdir in fixed_sides:
+    for side in fixed_sides:
         fax2d = [0,0,0]
-        fax2d[fax] = 1
+        fax2d[side.ax] = 1
         fax2d.pop(ax)
         fax2d = fax2d.index(1)
         for ind in inds:
-            if ind[fax2d]==fdir*(dim-1):
+            if ind[fax2d]==side.dir*(dim-1):
                 connected = True
                 break
         if connected: break
@@ -471,7 +472,7 @@ def get_breakable_voxels(mat,fixed_sides,sax,n):
     outline_indices = []
     voxel_indices = []
     dim = len(mat)
-    gax = fixed_sides[0][0] # grain axis
+    gax = fixed_sides[0].ax # grain axis
     if gax!=sax: # if grain direction does not equal to the sliding direction
 
         paxes = [0,1,2]
@@ -726,7 +727,7 @@ class Evaluation:
         self.fab_directions = self.update(voxel_matrix,type)
 
     def update(self,voxel_matrix,type):
-        self.voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, type.fixed_sides)
+        self.voxel_matrix_with_sides = add_fixed_sides(voxel_matrix, type.fixed.sides)
 
         # Voxel connection and bridgeing
         self.connected = []
@@ -739,14 +740,14 @@ class Evaluation:
         self.voxel_matrix_connected = voxel_matrix.copy()
         self.voxel_matrix_unconnected = None
 
-        self.seperate_unconnected(voxel_matrix,type.fixed_sides,type.dim)
+        self.seperate_unconnected(voxel_matrix,type.fixed.sides,type.dim)
 
         # Bridging
-        voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, type.fixed_sides)
+        voxel_matrix_connected_with_sides = add_fixed_sides(self.voxel_matrix_connected, type.fixed.sides)
         for n in range(type.noc):
             self.bridged[n] = is_connected(voxel_matrix_connected_with_sides,n)
             if not self.bridged[n]:
-                voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(voxel_matrix,type.fixed_sides,type.dim,n)
+                voxel_matrix_unbridged_1, voxel_matrix_unbridged_2 = self.seperate_unbridged(voxel_matrix,type.fixed.sides,type.dim,n)
                 self.voxel_matrices_unbridged[n] = [voxel_matrix_unbridged_1, voxel_matrix_unbridged_2]
 
         # Fabricatability by direction constraint
@@ -793,7 +794,7 @@ class Evaluation:
         self.contact_nums = []
         self.contact_faces = []
         for n in range(type.noc):
-            friction,ffaces,contact,cfaces, = get_friction_and_contact_areas(voxel_matrix,self.slides[n],type.fixed_sides,n)
+            friction,ffaces,contact,cfaces, = get_friction_and_contact_areas(voxel_matrix,self.slides[n],type.fixed.sides,n)
             self.friction_nums.append(friction)
             self.friction_faces.append(ffaces)
             self.contact_nums.append(contact)
@@ -802,7 +803,7 @@ class Evaluation:
 
         # Grain direction
         for n in range(type.noc):
-            brk,brk_oinds,brk_vinds = get_breakable_voxels(voxel_matrix,type.fixed_sides[n],type.sax,n)
+            brk,brk_oinds,brk_vinds = get_breakable_voxels(voxel_matrix,type.fixed.sides[n],type.sax,n)
             self.breakable.append(brk)
             self.breakable_outline_inds.append(brk_oinds)
             self.breakable_voxel_inds.append(brk_vinds)
