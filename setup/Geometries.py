@@ -297,23 +297,13 @@ def open_line_indices(self,all_indices,n,offset):
     dirs = [0,1]
     if n==0: dirs=[0]
     elif n==self.parent.noc-1: dirs=[1]
-    other_axes = np.array([0,1,2])
-    other_axes = np.delete(other_axes,np.where(other_axes==self.parent.sax))
-    ind = np.array([0,0,0])
-    d = self.parent.dim-1
+    d = self.parent.dim+1
+    start = d*d*d
     for dir in dirs:
-        heights = get_top_corner_heights(self.voxel_matrix,n,self.parent.sax,dir)
-        d = self.parent.dim+1
-        for x in range(2):
-            for y in range(2):
-                add = np.array([0,0,0])
-                add[other_axes[0]] = x*self.parent.dim
-                add[other_axes[1]] = y*self.parent.dim
-                add[self.parent.sax] = dir*self.parent.dim
-                start = get_index(ind,add,self.parent.dim)
-                step=0
-                end = d*d*d+24*self.parent.sax+12*(1-dir)+2*x+y+4*step
-                indices.extend([start,end])
+        a1,b1,c1,d1 = get_corner_indices(self.parent.sax,dir,self.parent.dim)
+        off = 24*self.parent.sax+12*(1-dir)
+        a0,b0,c0,d0 = start+off,start+off+1,start+off+2,start+off+3
+        indices.extend([a0,a1, b0,b1, c0,c1, d0,d1])
     # Format
     indices = np.array(indices, dtype=np.uint32)
     indices = indices + offset

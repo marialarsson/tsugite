@@ -1,11 +1,13 @@
 import numpy as np
 import math
 
-def angle_between(vector_1, vector_2):
+def angle_between(vector_1, vector_2, normal_vector=[]):
     unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
     unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
     dot_product = np.dot(unit_vector_1, unit_vector_2)
     angle = np.arccos(dot_product)
+    cross = np.cross(unit_vector_1,unit_vector_2)
+    if len(normal_vector)>0 and np.dot(normal_vector, cross)<0: angle = -angle
     return angle
 
 def rotate_vector_around_axis(vec=[3,5,0], axis=[4,4,1], theta=1.2): #example values
@@ -39,7 +41,6 @@ class RegionVertex:
         self.neighbor_values = np.array(neighbor_values)
         self.flat_neighbor_values = self.neighbor_values.flatten()
 
-
 class RoughPixel:
     def __init__(self,ind,mat,pad_loc,dim,n):
         self.ind = ind
@@ -68,13 +69,14 @@ class RoughPixel:
         self.flat_neighbors = [x for sublist in self.neighbors for x in sublist]
 
 class MillVertex:
-    def __init__(self,pt,is_arc=False,arc_ctr=np.array([0,0,0])):
+    def __init__(self,pt,is_tra=False,is_arc=False,arc_ctr=np.array([0,0,0])):
         self.pt = np.array(pt)
         self.x = pt[0]
         self.y = pt[1]
         self.z = pt[2]
         self.is_arc = is_arc
         self.arc_ctr = np.array(arc_ctr)
+        self.is_tra = is_tra # is traversing, gcode_mode G0 (max speed) (otherwise G1)
 
     def scale_and_swap(self,ax,dir,ratio,real_tim_dims,coords,d,n):
         #sawp
@@ -137,22 +139,18 @@ class Fabrication:
         d = 3 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
         for n in range(self.parent.noc):
+            fdir = self.parent.mesh.fab_directions[n]
             comp_ax = self.parent.fixed.sides[n][0].ax
             comp_dir = self.parent.fixed.sides[n][0].dir # component direction
             comp_vec = self.parent.pos_vecs[comp_ax]
-            if comp_dir==0 and comp_ax!=self.parent.sax:
-                comp_vec=-comp_vec
+            if comp_dir==0 and comp_ax!=self.parent.sax: comp_vec=-comp_vec
             comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
             comp_vec = comp_vec/np.linalg.norm(comp_vec) #unitize
-            xax = np.array([1,0,0])
-            rot_ang = angle_between(xax,comp_vec)
-            aaxis = np.cross(xax,comp_vec)
-            if np.dot(comp_vec, np.cross(aaxis, xax))<0: #>
-                rot_ang=-rot_ang
-            fdir = self.parent.mesh.fab_directions[n]
-            if fdir==0:
-                rot_ang=rot_ang+math.pi+math.radians(self.extra_rot_deg) ###for roland machine etc###############################
-            else: rot_ang-=math.radians(self.extra_rot_deg) ###for roland machine etc###############################
+            zax = np.array([0,0,1])
+            align_ax = np.array([1,0,0])
+            align_ax = rotate_vector_around_axis(align_ax, axis=zax, theta=math.radians(self.extra_rot_deg))
+            rot_ang = angle_between(align_ax,comp_vec,normal_vector=zax)
+            if fdir==0: rot_ang=-rot_ang
             #
             file_name = filename_tsu[:-4] + "_"+names[n]+"."+self.ext
             file = open(file_name,"w")
@@ -178,11 +176,9 @@ class Fabrication:
                 print("Unknown extension:", self.ext)
 
             ###content
-            currentg = ""
             for i,mv in enumerate(self.parent.gcodeverts[n]):
                 mv.scale_and_swap(fax,fdir,self.parent.ratio,self.parent.real_tim_dims,coords,d,n)
-                if comp_ax!=fax:
-                    mv.rotate(rot_ang,d)
+                if comp_ax!=fax: mv.rotate(rot_ang,d)
                 if i>0: pmv = self.parent.gcodeverts[n][i-1]
                 # check segment angle
                 arc = False
@@ -205,7 +201,8 @@ class Fabrication:
                     elif arc and not clockwise:
                         file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
                     else:
-                        file.write("G1 ")
+                        if mv.is_tra: file.write("G0 ")
+                        else: file.write("G1 ")
                         if i==0 or mv.x!=pmv.x: file.write("X"+mv.xstr+" ")
                         if i==0 or mv.y!=pmv.y: file.write("Y"+mv.ystr+" ")
                         if i==0 or mv.z!=pmv.z: file.write("Z"+mv.zstr+" ")
@@ -216,7 +213,8 @@ class Fabrication:
                         if clockwise: file.write("1\n")
                         else: file.write("-1\n")
                     else:
-                        file.write("M3,")
+                        if mv.is_tra: file.write("J3,")
+                        else: file.write("M3,")
                         if i==0 or mv.x!=pmv.x: file.write(mv.xstr+",")
                         else: file.write(" ,")
                         if i==0 or mv.y!=pmv.y: file.write(mv.ystr+",")

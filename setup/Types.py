@@ -5,6 +5,7 @@ from numpy import linalg
 import math
 import copy
 import os
+import random
 from Buffer import Buffer
 from Evaluation import Evaluation
 from Fabrication import Fabrication
@@ -109,7 +110,7 @@ def layer_mat_from_cube(type,lay_num,n):
             mat[i][j]=int(type.mesh.voxel_matrix[tuple(ind)])
     return mat
 
-def pad_layer_mat_with_fixed_sides(type,mat):
+def pad_layer_mat_with_fixed_sides(mat,type,n):
     pad_loc = [[0,0],[0,0]]
     pad_val = [[-1,-1],[-1,-1]]
     for n2 in range(len(type.fixed.sides)):
@@ -119,12 +120,26 @@ def pad_layer_mat_with_fixed_sides(type,mat):
             axes[oside.ax] = 1
             axes.pop(type.sax)
             oax = axes.index(1)
-            pad_loc[oside.ax][oside.dir] = 1
-            pad_val[oside.ax][oside.dir] = n2
+            pad_loc[oax][oside.dir] = 1
+            pad_val[oax][oside.dir] = n2
+    # If it is an angled joint, pad so that the edge of a joint located on an edge will be trimmed well
+    #if abs(type.ang-90)>1 and len(type.fixed.sides[n])==1 and type.fixed.sides[n][0].ax!=type.sax:
+    #    print("get here")
+    #    ax = type.fixed.sides[n][0].ax
+    #    dir = type.fixed.sides[n][0].dir
+    #    odir = 1-dir
+    #    axes = [0,0,0]
+    #    axes[ax] = 1
+    #    axes.pop(type.sax)
+    #    oax = axes.index(1)
+    #    pad_loc[oax][odir] = 1
+    #    pad_val[oax][odir] = 9
+    # Perform the padding
     pad_loc = tuple(map(tuple, pad_loc))
     pad_val = tuple(map(tuple, pad_val))
     mat = np.pad(mat, pad_loc, 'constant', constant_values=pad_val)
-    # take care of -1 corners
+    # take care of -1 corners # does this still work after adding former step??????????????
+    # This could be shorter for sure...
     for fixed_sides_1 in type.fixed.sides:
         for fixed_sides_2 in type.fixed.sides:
             for side1 in fixed_sides_1:
@@ -320,6 +335,62 @@ def rough_milling_path(type,rough_pixs,lay_num,n):
         mvertices.append(mverts)
     return mvertices
 
+def edge_milling_path(type,lay_num,n):
+    mverts = []
+
+    if len(type.fixed.sides[n])==1 and type.fixed.sides[n][0].ax!=type.sax:
+
+        # ax dir of current fixed side
+        ax = type.fixed.sides[n][0].ax
+        dir = type.fixed.sides[n][0].dir
+        # oax - axis perp. to component axis
+        oax = [0,1,2]
+        oax.remove(type.sax)
+        oax.remove(ax)
+        oax=oax[0]
+        # fabrication direction
+        fdir = type.mesh.fab_directions[n]
+
+        # check so that that part is not removed anyways...
+        # i.e. if the whole bottom row in that direction is of other material
+        ind = [0,0,0]
+        ind[ax] = (1-dir)*(type.dim-1)
+        ind[type.sax] = fdir*(type.dim-1)
+        free=True
+        for i in range(type.dim):
+            ind[oax]=i
+            val = type.mesh.voxel_matrix[tuple(ind)]
+            if int(val)==n:
+                free=False
+                break
+
+        if not free:
+            # define start (pt0) and end (pt1) points of edge
+            ind = [0,0,0]
+            add = [0,0,0]
+            ind[ax] = (1-dir)*type.dim
+            ind[type.sax] = type.dim*(1-fdir)+(2*fdir-1)*lay_num
+            i_pt = get_index(ind,add,type.dim)
+            pt0 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
+            ind[oax] = type.dim
+            i_pt = get_index(ind,add,type.dim)
+            pt1 = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
+
+            # offset edge line by radius of millingbit
+            dir_vec = normalize(pt0-pt1)
+            sax_vec = [0,0,0]
+            sax_vec[type.sax] = 2*fdir-1
+            off_vec = rotate_vector_around_axis(dir_vec, sax_vec, math.radians(90))
+            off_vec = (2*dir-1)*type.fab.vrad*off_vec
+            pt0 = pt0+off_vec
+            pt1 = pt1+off_vec
+
+            # Write to mverts
+            mverts=[MillVertex(pt0),MillVertex(pt1)]
+
+
+    return mverts
+
 def set_starting_vert(verts):
     first_i = None
     second_i = None
@@ -420,6 +491,7 @@ def set_vector_length(vec,new_norm):
 
 def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,verts,lay_num,n):
     outline = []
+    corner_artifacts = []
 
     fdir = type.mesh.fab_directions[n]
 
@@ -468,7 +540,6 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
                     if dia1 or dia2:
                         rounded = True
         if rounded:
-
             nind = tuple(np.argwhere(rv.neighbors==1)[0])
             off_vec_a = -neighbor_vectors_a[nind]
             off_vec_b = -neighbor_vectors_b[nind]
@@ -482,6 +553,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
             pts = [pt1,pt2]
             ctr = pt-off_vec_a-off_vec_b # arc center
 
+
             # Reorder pt1 and pt2
             if len(outline)>0: # if it is not the first point in the outline
                 ppt = outline[-1].pt
@@ -492,6 +564,25 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
                 if ang1>ang2: pts.reverse()
             outline.append(MillVertex(pts[0],is_arc=True,arc_ctr=ctr))
             outline.append(MillVertex(pts[1],is_arc=True,arc_ctr=ctr))
+
+            # Extreme case where corner is very rounded and everything is not cut
+            dist = linalg.norm(pt-ctr)
+            if dist>type.fab.vdia and lay_num<type.dim-1:
+                artifact = []
+                v0 = type.fab.vdia*normalize(pt+off_vec-pts[0])
+                v1 = type.fab.vdia*normalize(pt+off_vec-pts[1])
+                vp = type.fab.vrad*normalize(pts[1]-pts[0])
+                pts3 =  [pts[0]-vp+v0,pt+2*off_vec,pts[1]+vp+v1]
+                while linalg.norm(pts3[2]-pts3[0])>type.fab.vdia:
+                    pts3[0] += vp
+                    pts3[1] += -off_vec
+                    pts3[2] += -vp
+                    for i in range(3): artifact.append(MillVertex(pts3[i]))
+                    pts3.reverse()
+                    vp = -vp
+                if len(artifact)>0:
+                    corner_artifacts.append(artifact)
+
         else: # other corner
             pt = pt+off_vec
             outline.append(MillVertex(pt))
@@ -505,7 +596,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
             if d1<d2: outline[0],outline[1] = outline[1],outline[0]
             test_first=False
 
-    return outline
+    return outline, corner_artifacts
 
 def get_outline(type,verts,lay_num,n):
     fdir = type.mesh.fab_directions[n]
@@ -526,6 +617,28 @@ def get_vertex(index,verts,n):
     z = verts[n*index+2]
     return np.array([x,y,z])
 
+def get_milling_end_points(type,n,last_z):
+    verts = []
+    mverts = []
+
+    r = g = b = tx = ty = 0.0
+
+    fdir = type.mesh.fab_directions[n]
+
+    origin_vert = [0,0,0]
+    origin_vert[type.sax] = last_z
+
+    extra_zheight = 15/type.ratio
+    above_origin_vert = [0,0,0]
+    above_origin_vert[type.sax] = last_z-(2*fdir-1)*extra_zheight
+
+    mverts.append(MillVertex(origin_vert, is_tra=True))
+    mverts.append(MillVertex(above_origin_vert, is_tra=True))
+    verts.extend([origin_vert[0],origin_vert[1],origin_vert[2],r,g,b,tx,ty])
+    verts.extend([above_origin_vert[0],above_origin_vert[1],above_origin_vert[2],r,g,b,tx,ty])
+
+    return verts,mverts
+
 def get_layered_vertices(type,outline,n,i,no_z,dep):
     verts = []
     mverts = []
@@ -537,7 +650,7 @@ def get_layered_vertices(type,outline,n,i,no_z,dep):
     start_vert = [outline[0].x,outline[0].y,outline[0].z]
     safe_height = outline[0].pt[type.sax]-(2*fdir-1)*i*type.voxel_sizes[type.sax]-0.2*(2*fdir-1)*type.voxel_sizes[type.sax]
     start_vert[type.sax] = safe_height
-    mverts.append(MillVertex(start_vert))
+    mverts.append(MillVertex(start_vert,is_tra=True))
     verts.extend([start_vert[0],start_vert[1],start_vert[2],r,g,b,tx,ty])
 
     # add layers with Z-height
@@ -565,14 +678,13 @@ def get_layered_vertices(type,outline,n,i,no_z,dep):
     # add enpoint
     end_vert = [outline[0].x,outline[0].y,outline[0].z]
     end_vert[type.sax] = safe_height
-    mverts.append(MillVertex(end_vert))
+    mverts.append(MillVertex(end_vert, is_tra=True))
     verts.extend([end_vert[0],end_vert[1],end_vert[2],r,g,b,tx,ty])
 
     return verts,mverts
 
 def any_minus_one_neighbor(ind,lay_mat):
     bool = False
-    #print(lay_mat)
     for add0 in range(-1,1,1):
         temp = []
         temp2 = []
@@ -674,12 +786,10 @@ def milling_path_vertices(type,n):
     vertices = []
     milling_vertices = []
 
+
     min_vox_size = np.min(type.voxel_sizes)
     # Check that the milling bit is not too large for the voxel size
     if np.min(type.voxel_sizes)<type.fab.vdia: print("Could not generate milling path. The milling bit is too large.")
-    min_ang = math.degrees(math.asin((type.fab.vrad+type.fab.vtol)/min_vox_size))
-    max_ang = 180-min_ang
-    if type.ang<min_ang or type.ang>max_ang: print("Could not generate milling path. The angle is out of range.")
 
     # Calculate depth constants
     no_z = int(type.ratio*type.voxel_sizes[type.sax]/type.fab.dep)
@@ -692,7 +802,7 @@ def milling_path_vertices(type,n):
     dir_ax = axes[0] # primary milling direction axis
     off_ax = axes[1] # milling offset axis
     ### new for oblique angles ### neighbor vectors
-    le = type.fab.vrad/math.cos(abs(math.radians(90-type.ang)))
+    le = type.fab.vrad/math.cos(abs(math.radians(-type.ang)))
     dir_vec = le*type.pos_vecs[axes[0]]/np.linalg.norm(type.pos_vecs[axes[0]])
     off_vec = le*type.pos_vecs[axes[1]]/np.linalg.norm(type.pos_vecs[axes[1]])
     neighbor_vectors = []
@@ -720,7 +830,7 @@ def milling_path_vertices(type,n):
         lay_mat = layer_mat_from_cube(type,lay_num,n) #OK
 
         # Pad 2d matrix with fixed sides
-        lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(type,lay_mat) #OK
+        lay_mat,pad_loc = pad_layer_mat_with_fixed_sides(lay_mat,type,n) #OK
         org_lay_mat = copy.deepcopy(lay_mat) #OK
 
         # Get/browse regions
@@ -731,6 +841,13 @@ def milling_path_vertices(type,n):
             if len(inds)==0: break #OK
             reg_inds = get_diff_neighbors(lay_mat,[inds[0]],n) #OK
 
+            #If oblique joint, create path to trim edge
+            edge_path = []
+            if abs(type.ang)>1: edge_path = edge_milling_path(type,lay_num,n)
+            if len(edge_path)>0:
+                verts,mverts = get_layered_vertices(type,edge_path,n,lay_num,no_z,dep)
+                vertices.extend(verts)
+                milling_vertices.extend(mverts)
 
             # Anaylize which voxels needs to be roguhly cut initially
             # 1. Add all open voxels in the region
@@ -744,8 +861,6 @@ def milling_path_vertices(type,n):
                     verts,mverts = get_layered_vertices(type,rough_path,n,lay_num,no_z,dep)
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
-
-
 
             # Overwrite detected regin in original matrix
             for reg_ind in reg_inds: lay_mat[tuple(reg_ind)]=n #OK
@@ -764,11 +879,11 @@ def milling_path_vertices(type,n):
                 #Get a sequence of ordered vertices
                 reg_ord_verts,reg_verts,closed = get_sublist_of_ordered_verts(reg_verts) #OK
 
-                # Make outline of ordered vertices (for dedugging olny!!!!!!!)
+                # Make outline of ordered vertices (for dedugging only!!!!!!!)
                 #if len(reg_ord_verts)>1: outline = get_outline(type,reg_ord_verts,lay_num,n)
 
                 # Offset vertices according to boundary condition (and remove if redundant)
-                outline = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
+                outline,corner_artifacts = offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,reg_ord_verts,lay_num,n) #<----needs to be updated for oblique angles!!!!!<---
 
                 # Get z height and extend vertices to global list
                 if len(reg_ord_verts)>1 and len(outline)>0:
@@ -777,12 +892,24 @@ def milling_path_vertices(type,n):
                     vertices.extend(verts)
                     milling_vertices.extend(mverts)
 
+                if len(corner_artifacts)>0:
+                    for artifact in corner_artifacts:
+                        verts,mverts = get_layered_vertices(type,artifact,n,lay_num,no_z,dep)
+                        vertices.extend(verts)
+                        milling_vertices.extend(mverts)
+
+    # Add end point
+    end_verts, end_mverts = get_milling_end_points(type,n,milling_vertices[-1].pt[type.sax])
+    vertices.extend(end_verts)
+    milling_vertices.extend(end_mverts)
+
     # Format and return
     vertices = np.array(vertices, dtype = np.float32)
+
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,parent,fs=[],sax=2,dim=3,ang=90.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
+    def __init__(self,parent,fs=[],sax=2,dim=3,ang=0.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
         self.parent=parent
         self.sax = sax
         self.fixed = FixedSides(self)
@@ -861,10 +988,10 @@ class Types:
             non_sax = [0,1,2]
             non_sax.remove(self.sax)
             for i,ax in enumerate(non_sax):
-                theta = math.radians(0.5*(self.ang-90))
+                theta = math.radians(0.5*self.ang)
                 if i%2==1: theta = -theta
                 self.pos_vecs[ax] = rotate_vector_around_axis(self.pos_vecs[ax],self.pos_vecs[self.sax],theta)
-                self.pos_vecs[ax] = self.pos_vecs[ax]/math.cos(math.radians(abs(self.ang-90)))
+                self.pos_vecs[ax] = self.pos_vecs[ax]/math.cos(math.radians(abs(self.ang)))
         # Add all vertices of the dim*dim*dim voxel cube
         for i in range(self.dim+1):
             for j in range(self.dim+1):
@@ -882,33 +1009,30 @@ class Types:
                     ty = tex_coords[1]/self.dim
                     # extend list of vertices
                     vertices.extend([x,y,z,r,g,b,tx,ty])
+        # Calculate extra length for angled components
+        extra_len=0
+        if self.ang!=0.0 and self.rot:
+            extra_len = 0.1*self.component_size*math.tan(math.radians(abs(self.ang)))
         # Add component base vertices
         for ax in range(3):
+            if ax==self.sax: extra_l=0
+            else: extra_l=extra_len
             for dir in range(-1,2,2):
                 for step in range(3):
-                    step+=0.5
-                    if step==0.5: step=1.0
-                    axvec = dir*step*self.component_size*self.pos_vecs[ax]/np.linalg.norm(self.pos_vecs[ax])
+                    if step==0: step=1
+                    else: step+=0.5+extra_len
+                    axvec = dir*step*(self.component_size+extra_l)*self.pos_vecs[ax]/np.linalg.norm(self.pos_vecs[ax])
                     for x in range(2):
                         for y in range(2):
                             other_vecs = copy.deepcopy(self.pos_vecs)
                             other_vecs.pop(ax)
-                            vs = list(self.voxel_sizes).copy()
-                            vs.pop(ax)
-                            other_vecs[0] = other_vecs[0]/np.linalg.norm(other_vecs[0])
-                            other_vecs[1] = other_vecs[1]/np.linalg.norm(other_vecs[1])
-                            if ax!=self.sax and self.rot:
-                                comp_vec = self.pos_vecs[ax]
-                                other_vecs[1] = np.cross(comp_vec,other_vecs[0])
-                                other_vecs[0] = np.cross(other_vecs[1],comp_vec)
-                                other_vecs[0] = other_vecs[0]/np.linalg.norm(other_vecs[0])
-                                other_vecs[1] = other_vecs[1]/np.linalg.norm(other_vecs[1])
-                                if ax==1: y=1-y ####weird but works
-                                xvec = (x-0.5)*self.dim*other_vecs[0]*vs[0]
-                                yvec = (y-0.5)*self.dim*other_vecs[1]*vs[1]
+                            if ax!=self.sax and self.rot and step!=0.5:
+                                #cvec = copy.deep(self.pos_vecs[ax])
+                                xvec = (x-0.5)*self.dim*other_vecs[0]#+cvec
+                                yvec = (y-0.5)*self.dim*other_vecs[1]#-cvec
                             else:
-                                xvec = (x-0.5)*self.dim*other_vecs[0]*vs[0]
-                                yvec = (y-0.5)*self.dim*other_vecs[1]*vs[1]
+                                xvec = (x-0.5)*self.dim*other_vecs[0]
+                                yvec = (y-0.5)*self.dim*other_vecs[1]
                             pos = axvec+xvec+yvec
                             # texture coordinates
                             tex_coords = [x,y]
@@ -983,9 +1107,9 @@ class Types:
                     for i in range(new_noc-self.noc):
                         random_i = random.randint(0,len(self.fixed.unblocked)-1)
                         if self.fixed.sides[-1][0].ax==self.sax: # last component is aligned with the sliding axis
-                            self.fixed.sides.insert(-1,self.unblocked[random_i])
+                            self.fixed.sides.insert(-1,[self.fixed.unblocked[random_i]])
                         else:
-                            self.fixed.sides.append(self.self.unblocked[random_i])
+                            self.fixed.sides.append([self.fixed.unblocked[random_i]])
                         #also consider if it is aligned and should be the first one in line... rare though...
                         self.fixed.update_unblocked()
                     self.noc = new_noc
@@ -1001,7 +1125,6 @@ class Types:
 
     def update_component_position(self,new_sides,n):
         self.fixed.sides[n] = new_sides
-        print(new_sides)
         self.fixed.update_unblocked()
         self.create_and_buffer_vertices(milling_path=False)
         self.mesh.voxel_matrix_from_height_fields()
@@ -1035,7 +1158,6 @@ class Types:
         if self.suggestions_on:
             sugg_hfs = []
             if not self.mesh.eval.valid:
-                #print("Looking for valid suggestions...")
                 sugg_hfs = produce_suggestions(self,self.mesh.height_fields)
                 for i in range(len(sugg_hfs)): self.sugs.append(Geometries(self,mainmesh=False,hfs=sugg_hfs[i]))
 
