@@ -1,10 +1,12 @@
 # Tsugite: Interactive Design and Fabrication of Wood Joints
 
+![](img/tsugite_title.png)
+
 This is the repository related to a paper presented at UIST 2020.
 It is an interface where you can model a joint geometry in a voxelized design space, and export milling paths for fabrication with a 3-axis CNC-machine.
 
 The system performs geometric evaluations in real time and provides graphical feedback accordingly (see a-h below).
-![The eight graphical feedback modes.](tsugite_feedback.png)
+![](img/tsugite_feedback.png | width=500)
 
 This software is free for personal use and non-commercial research conducted within non-commercial organizations.
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp) or Maria Larsson (ma.ka.larsson@gmail.com).
