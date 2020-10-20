@@ -8,7 +8,7 @@ It is an interface where you can model a joint geometry in a voxelized design sp
 
 The system performs geometric evaluations in real time and provides graphical feedback accordingly (see a-h below).
 
-<img src="img/tsugite_feedback.png | width=500" height="24">
+![](img/tsugite_feedback.png)
 
 This software is free for personal use and non-commercial research conducted within non-commercial organizations.
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp) or Maria Larsson (ma.ka.larsson@gmail.com).
