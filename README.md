@@ -30,6 +30,6 @@ We cannot provide technical support and we are not responsible for any damage to
 ### Publication
 Maria Larsson, Hironori Yoshida, Nobuyuki Umetani, and Takeo Igarashi. 2020. Tsugite: Interactive Design and Fabrication of Wood Joints. In Proceedings of the 32nd Annual ACM Symposium on User Interface Software and Technology (UIST '20). Association for Computing Machinery, Virtual Event, USA.
 
-Project page: http://www.ma-la.com/tsugite.html
-
 ACM link: https://dl.acm.org/doi/abs/10.1145/3379337.3415899
+
+Project page: http://www.ma-la.com/tsugite.html
