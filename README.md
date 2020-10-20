@@ -22,7 +22,11 @@ PyQt5 1.9.0
 
 OpenCV 4.4.0.44
 
+Pillow 7.2.0
+
 numpy 1.18.5
+
+pyrr 0.10.3
 
 ### Run Program
 Run setup/tsugite_app.py

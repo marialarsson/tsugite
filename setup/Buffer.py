@@ -17,7 +17,7 @@ class Buffer:
         self.EBO = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
         self.vertex_no_info = 8
-        image = Image.open("textures/end_grain_dia.jpg")
+        image = Image.open("textures/end_grain.jpg")
         self.img_data = np.array(list(image.getdata()), np.uint8)
         image = Image.open("textures/friction_area.jpg")
         self.img_data_fric = np.array(list(image.getdata()), np.uint8)
@@ -38,7 +38,7 @@ class Buffer:
         glEnableVertexAttribArray(1)
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24)) #texture
         glEnableVertexAttribArray(2)
-        glGenTextures(3) # texture = glGenTextures(1)
+        glGenTextures(3)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)

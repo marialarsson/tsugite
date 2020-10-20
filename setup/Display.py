@@ -8,7 +8,7 @@ class Display:
     def __init__(self,parent,type):
         self.parent = parent
         self.type = type
-        self.view = ViewSettings() #view
+        self.view = ViewSettings()
         self.create_color_shaders()
         self.create_texture_shaders()
 
