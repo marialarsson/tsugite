@@ -12,7 +12,6 @@ from OpenGL.GLU import *
 
 #Other
 import sys
-import pyrr
 import numpy as np
 import time
 import math
