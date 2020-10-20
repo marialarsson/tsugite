@@ -16,9 +16,9 @@ If you want to use it for commercial purposes, please contact Kaoru Shigeta (shi
 ### Environment Requirements
 Python 3.8.3
 
-OpenGL
+OpenGL 3.1.5
 
-PyQt5 1.9.0
+PyQt5 5.15.1
 
 OpenCV 4.4.0.44
 
