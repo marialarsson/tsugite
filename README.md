@@ -1,108 +1,27 @@
-# Tsugite
-## Interactive Design and Fabrication of Wood Joints
+# Tsugite: Interactive Design and Fabrication of Wood Joints
 
-Environment:
+This is the repository related to the publication Tsugite presented at UIST 2020.
+It is an interface where you can model a joint geometry in a voxelized design space, and export milling paths for fabrication with a 3-axis CNC-machine.
+
+The system performs geometric evaluations in real time and provides graphical feedback accordingly.
+[The eight graphical feedback modes.](tsugite_feedback.png)
+
+The code is free for personal use and non-commercial research conducted within non-commercial organizations.
+If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta[at]todaitlo.jp).
+
+### Requirements
 Python 3.8.3
-OpenGL 
+OpenGL
 
+### Run program
+Run setup/tsugite_app.py
 
-Run setup/main.py
+### Publication
+Maria Larsson, Hironori Yoshida, Nobuyuki Umetani, and Takeo Igarashi. 2020. Tsugite: Interactive Design and Fabrication of Wood Joints. In Proceedings of the 32nd Annual ACM Symposium on User Interface Software and Technology (UIST '20). Association for Computing Machinery, Virtual Event, USA.
 
-## Interface
+Project page: http://www.ma-la.com/tsugite.html
+ACM link: https://dl.acm.org/doi/abs/10.1145/3379337.3415899
 
-### Model Joint
-Edit joint geometry by pushing/pulling on faces:
-<p float="left">
-  <img src="/Screenshots/screenshot_edit_pulled.png" width="430" />
-  <img src="/Screenshots/screenshot_edit_result.png" width="430" />
-</p>
-Randomize joint geometry with key R, and clear joint geometry key C
-
-### Joint types
-Change joint type with keys I L T X:
-<p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="210" />
-  <img src="/Screenshots/screenshot_type_L.png" width="210" />
-  <img src="/Screenshots/screenshot_type_T.png" width="210" />
-  <img src="/Screenshots/screenshot_type_X.png" width="210" />
-</p>
-
-### Sliding Directions
-Change main sliding direction with arrow keys up and right:
-<p float="left">
-  <img src="/Screenshots/screenshot_slide_up.png" width="210" />
-  <img src="/Screenshots/screenshot_slide_rt.png" width="210" />
-</p>
-
-Arrows show the current sliding directions. Dashed arrows indicated slides additional to the main sliding direction:
-<p float="left">
-  <img src="/Screenshots/screenshot_slide_2.png" width="210" />
-  <img src="/Screenshots/screenshot_slide_3.png" width="210" />
-  <img src="/Screenshots/screenshot_slide_4.png" width="210" />
-  <img src="/Screenshots/screenshot_slide_5.png" width="210" />
-</p>
-
-### Joint Resolution
-Edit voxel cube dimension with keys 2, 3 (default), 4 and 5:
-<p float="left">
-  <img src="/Screenshots/screenshot_dim_2.png" width="210" />
-  <img src="/Screenshots/screenshot_dim_3.png" width="210" />
-  <img src="/Screenshots/screenshot_dim_4.png" width="210" />
-  <img src="/Screenshots/screenshot_dim_5.png" width="210" />
-</p>
-
-### Number of components
-Change between 2 and 3 components with key Y:
-<p float="left">
-  <img src="/Screenshots/screenshot_2_closed.png" width="210" />
-  <img src="/Screenshots/screenshot_2_open.png" width="210" />
-  <img src="/Screenshots/screenshot_3_closed.png" width="210" />
-  <img src="/Screenshots/screenshot_3_open.png" width="210" />
-</p>
-
-### Feedback
-
-Unconnected voxels and unbridged components are colored:
-<p float="left">
-  <img src="/Screenshots/screenshot_unconnected.png" width="210" />
-  <img src="/Screenshots/screenshot_unbridged.png" width="210" />
-</p>
-
-Structural evaluation (to be implemented).
-
-### Fabrication
-
-Preview fabricated geometry with key F, and turn on/off milling path with key M:
-<p float="left">
-  <img src="/Screenshots/screenshot_fab_0.png" width="210" />
-  <img src="/Screenshots/screenshot_fab_1.png" width="210" />
-  <img src="/Screenshots/screenshot_path.png" width="210" />
-</p>
-
-### Preview Options
-
-Rotate view with right mouse button.
-
-Open/close joint with key O:
-<p float="left">
-  <img src="/Screenshots/screenshot_type_I.png" width="210" />
-  <img src="/Screenshots/screenshot_open.png" width="210" />
-</p>
-
-Turn on/off component view with keys A and B:
-<p float="left">
-  <img src="/Screenshots/screenshot_A.png" width="210" />
-  <img src="/Screenshots/screenshot_B.png" width="210" />
-</p>
-
-Turn on/off hidden lines with key H:
-<p float="left">
-  <img src="/Screenshots/screenshot_hidden_show.png" width="210" />
-  <img src="/Screenshots/screenshot_hidden_hide.png" width="210" />
-</p>
-
-Press key P to save a screenshot.
-
-Save joint geometry with key S, and load saved geometry with G
-
-Hit ESC key to quit.
+### Disclaimer
+Please note that this is a research prototype and not a consumer-ready product.
+We cannot provide technical support and we are not responsible for any damage to your fabrication equipment.
