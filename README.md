@@ -1,8 +1,10 @@
-# DISCO JOINT
+# Tsugite
+## Interactive Design and Fabrication of Wood Joints
 
-DISCrete Optimization of JOINT geometries, and automatic milling path generation.
+Environment:
+Python 3.8.3
+OpenGL 
 
-Developed with python 3.6.0 / OpenGL / GLFW
 
 Run setup/main.py
 
