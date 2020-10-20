@@ -537,53 +537,138 @@
       </layout>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_6">
+      <layout class="QHBoxLayout" name="horizontalLayout_13">
        <item>
-        <widget class="QLabel" name="label_13">
+        <widget class="QLabel" name="label_14">
          <property name="text">
-          <string>Rotate milling path</string>
+          <string>Milling speed</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="spinPATHROT">
-         <property name="maximumSize">
-          <size>
-           <width>120</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="layoutDirection">
-          <enum>Qt::LeftToRight</enum>
-         </property>
+        <widget class="QSpinBox" name="spinSPEED">
          <property name="alignment">
           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
          </property>
          <property name="suffix">
-          <string>°</string>
+          <string> mm/min</string>
          </property>
          <property name="minimum">
-          <number>-360</number>
+          <number>100</number>
          </property>
          <property name="maximum">
-          <number>360</number>
+          <number>1000</number>
          </property>
          <property name="singleStep">
-          <number>90</number>
+          <number>100</number>
+         </property>
+         <property name="value">
+          <number>400</number>
          </property>
         </widget>
        </item>
       </layout>
      </item>
      <item>
-      <widget class="QLabel" name="label_14">
-       <property name="text">
-        <string>(defult rotation: X-axis aligned)</string>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="horizontalLayout_14">
+       <item>
+        <widget class="QLabel" name="label_15">
+         <property name="text">
+          <string>Spindle speed</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="spinSPINDLE">
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="suffix">
+          <string> rpm</string>
+         </property>
+         <property name="minimum">
+          <number>1000</number>
+         </property>
+         <property name="maximum">
+          <number>10000</number>
+         </property>
+         <property name="singleStep">
+          <number>100</number>
+         </property>
+         <property name="value">
+          <number>6000</number>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkPATH">
+      <layout class="QHBoxLayout" name="horizontalLayout_6">
+       <item>
+        <widget class="QLabel" name="label_13">
+         <property name="text">
+          <string>Axis of alignement</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="comboALIGN">
+         <property name="editable">
+          <bool>false</bool>
+         </property>
+         <property name="currentText">
+          <string>x-</string>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <item>
+          <property name="text">
+           <string>x-</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>y-</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>x+</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>y+</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_12">
+       <item>
+        <widget class="QCheckBox" name="checkFIN">
+         <property name="text">
+          <string>Arc interpolation</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkINC">
+         <property name="text">
+          <string>Incremental depth</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QPushButton" name="buttonPATH">
        <property name="text">
         <string>Show milling path (M)</string>
        </property>

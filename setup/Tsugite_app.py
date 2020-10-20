@@ -63,11 +63,15 @@ class GLWidget(QGLWidget):
         dz = self.parent.findChild(QDoubleSpinBox, "spinDZ").value()
         dia = self.parent.findChild(QDoubleSpinBox, "spinDIA").value()
         tol = self.parent.findChild(QDoubleSpinBox, "spinTOL").value()
-        rot = self.parent.findChild(QSpinBox, "spinPATHROT").value()
+        spe = self.parent.findChild(QSpinBox, "spinSPEED").value()
+        spi = self.parent.findChild(QSpinBox, "spinSPINDLE").value()
+        aax = self.parent.findChild(QComboBox, "comboALIGN").currentIndex()
+        inc = self.parent.findChild(QCheckBox, "checkINC").isChecked()
+        fin = self.parent.findChild(QCheckBox, "checkFIN").isChecked()
         if self.parent.findChild(QRadioButton, "radioGCODE").isChecked(): ext = "gcode"
         elif self.parent.findChild(QRadioButton, "radioNC").isChecked(): ext = "nc"
         elif self.parent.findChild(QRadioButton, "radioSBP").isChecked(): ext = "sbp"
-        self.type = Types(self,fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fabext=ext, fabrot=rot)
+        self.type = Types(self,fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fspe=spe, fspi=spi, fabext=ext, align_ax=aax, incremental=inc, finterp=fin)
         self.display = Display(self,self.type)
 
     def resizeGL(self, width, height):
@@ -238,8 +242,12 @@ class mainWindow(QMainWindow):
         #---Fabrication
         self.findChild(QDoubleSpinBox, "spinDIA").valueChanged.connect(self.set_milling_bit_diameter)
         self.findChild(QDoubleSpinBox, "spinTOL").valueChanged.connect(self.set_fab_tolerance)
-        self.findChild(QSpinBox, "spinPATHROT").valueChanged.connect(self.set_milling_path_extra_rotation)
-        self.findChild(QCheckBox, "checkPATH").stateChanged.connect(self.set_millingpath_view)
+        self.findChild(QSpinBox, "spinSPEED").valueChanged.connect(self.set_fab_speed)
+        self.findChild(QSpinBox, "spinSPINDLE").valueChanged.connect(self.set_fab_spindlespeed)
+        self.findChild(QComboBox, "comboALIGN").currentTextChanged.connect(self.set_milling_path_axis_alginement)
+        self.findChild(QCheckBox, "checkINC").stateChanged.connect(self.set_incremental)
+        self.findChild(QCheckBox, "checkFIN").stateChanged.connect(self.set_interpolation)
+        self.findChild(QPushButton, "buttonPATH").clicked.connect(self.set_millingpath_view)
         self.findChild(QPushButton, "buttonGCODE").clicked.connect(self.export_gcode)
         self.findChild(QRadioButton, "radioGCODE").toggled.connect(self.set_gcode_as_standard)
         self.findChild(QRadioButton, "radioNC").toggled.connect(self.set_nccode_as_standard)
@@ -370,23 +378,43 @@ class mainWindow(QMainWindow):
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
 
-    def set_milling_path_extra_rotation(self):
-        val = self.findChild(QSpinBox, "spinPATHROT").value()
-        self.glWidget.type.fab.extra_rot_deg = val
+    @pyqtSlot()
+    def set_fab_speed(self):
+        val = self.findChild(QSpinBox, "spinSPEED").value()
+        self.glWidget.type.fab.speed = val
+
+
+    @pyqtSlot()
+    def set_fab_spindlespeed(self):
+        val = self.findChild(QSpinBox, "spinSPINDLE").value()
+        self.glWidget.type.fab.spindlespeed = val
+
+    @pyqtSlot()
+    def set_milling_path_axis_alginement(self):
+        val = self.findChild(QComboBox, "comboALIGN").currentIndex()
+        self.glWidget.type.fab.align_ax = val
+
+    @pyqtSlot()
+    def set_incremental(self):
+        val = self.findChild(QCheckBox, "checkINC").isChecked()
+        self.glWidget.type.incremental = val
+
+    @pyqtSlot()
+    def set_interpolation(self):
+        val = self.findChild(QCheckBox, "checkFIN").isChecked()
+        self.glWidget.type.fab.interp = val
 
     @pyqtSlot()
     def set_millingpath_view(self):
-        bool = self.findChild(QCheckBox, "checkPATH").checkState()
-        self.glWidget.display.view.show_milling_path = bool
-        if bool:
-            self.glWidget.type.create_and_buffer_vertices(milling_path=True)
-            self.glWidget.type.combine_and_buffer_indices(milling_path=True)
+        self.glWidget.display.view.show_milling_path = not self.glWidget.display.view.show_milling_path
+        bool = self.glWidget.display.view.show_milling_path
+        self.glWidget.type.create_and_buffer_vertices(milling_path=bool)
+        self.glWidget.type.combine_and_buffer_indices(milling_path=bool)
 
     @pyqtSlot()
     def export_gcode(self):
         if not self.glWidget.display.view.show_milling_path:
             self.glWidget.display.view.show_milling_path = True
-            self.findChild(QCheckBox, "checkPATH").setChecked(True)
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
         self.glWidget.type.fab.export_gcode(filename_tsu=self.filename)
@@ -494,7 +522,11 @@ class mainWindow(QMainWindow):
         else: self.findChild(QCheckBox, "checkCUBE").setChecked(False)
         self.findChild(QDoubleSpinBox, "spinDIA").setValue(self.glWidget.type.fab.real_dia)
         self.findChild(QDoubleSpinBox, "spinTOL").setValue(self.glWidget.type.fab.tol)
-        self.findChild(QSpinBox, "spinPATHROT").setValue(int(self.glWidget.type.fab.extra_rot_deg))
+        self.findChild(QSpinBox, "spinSPEED").setValue(self.glWidget.type.fab.speed)
+        self.findChild(QSpinBox, "spinSPINDLE").setValue(self.glWidget.type.fab.spindlespeed)
+        self.findChild(QCheckBox, "checkINC").setChecked(self.glWidget.type.incremental)
+        self.findChild(QCheckBox, "checkFIN").setChecked(self.glWidget.type.fab.interp)
+        self.findChild(QComboBox, "comboALIGN").setCurrentIndex(self.glWidget.type.fab.align_ax)
         if self.glWidget.type.fab.ext=="gcode":
             self.findChild(QRadioButton, "radioGCODE").setChecked(True)
         elif self.glWidget.type.fab.ext=="sbp":

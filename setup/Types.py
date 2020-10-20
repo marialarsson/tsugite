@@ -8,10 +8,7 @@ import os
 import random
 from Buffer import Buffer
 from Evaluation import Evaluation
-from Fabrication import Fabrication
-from Fabrication import MillVertex
-from Fabrication import RegionVertex
-from Fabrication import RoughPixel
+from Fabrication import *
 from Geometries import Geometries
 from Geometries import get_index
 from Misc import FixedSides
@@ -160,37 +157,6 @@ def pad_layer_mat_with_fixed_sides(mat,type,n):
                     ind[ax2] = side2.dir*(mat.shape[ax2]-1)
                     mat[tuple(ind)] = -1
     return mat,pad_loc
-
-def arc_points(st,en,ctr,ax,astep):
-    pts = []
-    # numpy arrays
-    st = np.array(st)
-    en = np.array(en)
-    ctr = np.array(ctr)
-    """ # fix later
-    # cw or ccw?
-    clockwise = False
-    vec1 = en-ctr
-    vec1 = vec1/np.linalg.norm(vec1)
-    zvec = np.array([0,0,0])
-    zvec[ax] = 1
-    xvec = np.cross(vec1,zvec)
-    vec2 = st-ctr
-    vec2 = vec2/np.linalg.norm(vec2)
-    dist = np.linalg.norm(xvec-vec2)
-    if dist>0: clockwise = True
-    """
-    # calculate steps and count and produce inbetween points
-    vec = st-ctr
-    vec2 = en-ctr
-    cnt = int(0.5+angle_between(vec,vec2)/astep)
-    astep = angle_between(vec,vec2)/cnt
-    ax_vec = np.cross(vec,vec2)
-    #if (clockwise and ax==2) or (not clockwise and ax!=2): astep = -astep
-    for i in range(1,cnt+1):
-        rvec = rotate_vector_around_axis(vec, ax_vec, astep*i)
-        pts.append(ctr+rvec)
-    return pts
 
 def get_region_outline_vertices(reg_inds,lay_mat,org_lay_mat,pad_loc,n):
     # also duplicate vertices on diagonal
@@ -639,7 +605,28 @@ def get_milling_end_points(type,n,last_z):
 
     return verts,mverts
 
-def get_layered_vertices(type,outline,n,i,no_z,dep):
+def get_segment_proportions(outline):
+    olen = 0
+    slens = []
+    sprops = []
+
+    for i in range(1,len(outline)):
+        ppt = outline[i-1].pt
+        pt = outline[i].pt
+        dist = linalg.norm(pt-ppt)
+        slens.append(dist)
+        olen+=dist
+
+    olen2=0
+    sprops.append(0.0)
+    for slen in slens:
+        olen2+=slen
+        sprop = olen2/olen
+        sprops.append(sprop)
+
+    return sprops
+
+def get_layered_vertices(type,outline,n,lay_num,no_z,dep):
     verts = []
     mverts = []
 
@@ -648,28 +635,49 @@ def get_layered_vertices(type,outline,n,i,no_z,dep):
     fdir = type.mesh.fab_directions[n]
     # add startpoint
     start_vert = [outline[0].x,outline[0].y,outline[0].z]
-    safe_height = outline[0].pt[type.sax]-(2*fdir-1)*i*type.voxel_sizes[type.sax]-0.2*(2*fdir-1)*type.voxel_sizes[type.sax]
+    safe_height = outline[0].pt[type.sax]-(2*fdir-1)*(lay_num*type.voxel_sizes[type.sax]+2*dep)
     start_vert[type.sax] = safe_height
     mverts.append(MillVertex(start_vert,is_tra=True))
     verts.extend([start_vert[0],start_vert[1],start_vert[2],r,g,b,tx,ty])
+    if lay_num!=0:
+        start_vert2 = [outline[0].x,outline[0].y,outline[0].z]
+        safe_height2 = outline[0].pt[type.sax]-(2*fdir-1)*dep
+        start_vert2[type.sax] = safe_height2
+        mverts.append(MillVertex(start_vert2,is_tra=True))
+        verts.extend([start_vert2[0],start_vert2[1],start_vert2[2],r,g,b,tx,ty])
 
     # add layers with Z-height
-    for num in range(1,no_z+1):
-        for i,mv in enumerate(outline):
+    # set start number (one layer earlier if first layer)
+    if lay_num==0: stn=0
+    else: stn=1
+    # set end number (one layer more if last layer and not sliding direction aligned component)
+    if lay_num==type.dim-1 and type.sax!=type.fixed.sides[n][0].ax: enn=no_z+2
+    else: enn=no_z+1
+    if type.incremental:
+        enn+=1
+        seg_props = get_segment_proportions(outline)
+    else: seg_props = [1.0]*len(outline)
+    #calculate depth for incremental setting
+
+    for num in range(stn,enn):
+        if type.incremental and num==enn-1: seg_props = [0.0]*len(outline)
+        for i, (mv, sp) in enumerate(zip(outline,seg_props)):
             pt = [mv.x,mv.y,mv.z]
-            pt[type.sax] += num*(2*fdir-1)*dep
+            pt[type.sax] += (2*fdir-1)*(num-1+sp)*dep
             if mv.is_arc:
                 ctr = [mv.arc_ctr[0],mv.arc_ctr[1],mv.arc_ctr[2]]
-                ctr[type.sax] += num*(2*fdir-1)*dep
+                ctr[type.sax] += (2*fdir-1)*(num-1+sp)*dep
                 mverts.append(MillVertex(pt, is_arc=True, arc_ctr=ctr))
             else:
                 mverts.append(MillVertex(pt))
             if i>0:
                 pmv = outline[i-1]
-            if i>0 and mv.is_arc and pmv.is_arc and np.array_equal(mv.arc_ctr,pmv.arc_ctr):
+            if i>0 and connected_arc(mv,pmv):
                 ppt = [pmv.x,pmv.y,pmv.z]
-                ppt[type.sax] += num*(2*fdir-1)*dep
-                arc_pts = arc_points(ppt,pt,ctr,type.sax,math.radians(5))
+                ppt[type.sax] += (2*fdir-1)*(num-1+sp)*dep
+                pctr = [pmv.arc_ctr[0],pmv.arc_ctr[1],pmv.arc_ctr[2]]
+                pctr[type.sax] += (2*fdir-1)*(num-1+sp)*dep
+                arc_pts = arc_points(ppt,pt,pctr,ctr,type.sax,math.radians(5))
                 for arc_pt in arc_pts: verts.extend([arc_pt[0],arc_pt[1],arc_pt[2],r,g,b,tx,ty])
             else:
                 verts.extend([pt[0],pt[1],pt[2],r,g,b,tx,ty])
@@ -783,6 +791,7 @@ def is_additional_outer_corner(type,rv,ind,ax,n):
     return outer_corner
 
 def milling_path_vertices(type,n):
+
     vertices = []
     milling_vertices = []
 
@@ -909,7 +918,7 @@ def milling_path_vertices(type,n):
     return vertices, milling_vertices
 
 class Types:
-    def __init__(self,parent,fs=[],sax=2,dim=3,ang=0.0, td=[44.0,44.0,44.0], fabtol=0.15, fabdia=6.00, fabrot=0.0, fabext="gcode", hfs=[]):
+    def __init__(self,parent,fs=[],sax=2,dim=3,ang=0.0, td=[44.0,44.0,44.0], fspe=400, fspi=6000, fabtol=0.15, fabdia=6.00, align_ax=0, fabext="gcode", incremental=False, hfs=[], finterp=True):
         self.parent=parent
         self.sax = sax
         self.fixed = FixedSides(self)
@@ -921,7 +930,7 @@ class Types:
         self.component_length = 0.5*self.component_size
         self.ratio = np.average(self.real_tim_dims)/self.component_size
         self.voxel_sizes = np.copy(self.real_tim_dims)/(self.ratio*self.dim)
-        self.fab = Fabrication(self, tol=fabtol, dia=fabdia, ext=fabext, extra_rot_deg=fabrot)
+        self.fab = Fabrication(self, tol=fabtol, dia=fabdia, ext=fabext, align_ax=align_ax, interp=finterp, spi=fspi, spe=fspe)
         self.vertex_no_info = 8
         self.ang = ang
         self.buff = Buffer(self) #initiating the buffer
@@ -933,10 +942,9 @@ class Types:
         self.update_suggestions()
         self.combine_and_buffer_indices()
         self.gallary_start_index = -20
+        self.incremental = incremental
 
     def create_and_buffer_vertices(self, milling_path=False):
-        if not milling_path:
-            self.parent.parent.findChild(QCheckBox, "checkPATH").setChecked(False)
         self.jverts = []
         self.everts = []
         self.mverts = []
@@ -1130,7 +1138,7 @@ class Types:
         self.mesh.voxel_matrix_from_height_fields()
         self.combine_and_buffer_indices()
 
-    def reset(self, fs=None, sax=2, dim=3, ang=90., td=[44.0,44.0,44.0], fabdia=6.0, fabtol=0.15, fabrot=0.0, fabext="gcode", hfs=[]):
+    def reset(self, fs=None, sax=2, dim=3, ang=90., td=[44.0,44.0,44.0], incremental=False, align_ax=0, fabdia=6.0, fabtol=0.15, finterp=True, fabrot=0.0, fabext="gcode", hfs=[], fspe=400, fspi=600):
         self.fixed = FixedSides(self,fs=fs)
         self.noc=len(self.fixed.sides)
         self.sax=sax
@@ -1146,8 +1154,13 @@ class Types:
         self.fab.vdia = self.fab.dia/self.ratio
         self.fab.vrad = self.fab.rad/self.ratio
         self.fab.vtol = self.fab.tol/self.ratio
+        self.fab.speed = fspe
+        self.fab.spindlespeed = fspi
         self.fab.extra_rot_deg=fabrot
         self.fab.ext=fabext
+        self.fab.align_ax=align_ax
+        self.fab.interp = finterp
+        self.incremental=incremental
         self.mesh = Geometries(self, hfs=hfs)
         self.fixed.update_unblocked()
         self.create_and_buffer_vertices(milling_path=False)
@@ -1201,7 +1214,11 @@ class Types:
         file.write("TDZ "+str(self.real_tim_dims[2])+"\n")
         file.write("DIA "+str(self.fab.real_dia)+"\n")
         file.write("TOL "+str(self.fab.tol)+"\n")
-        file.write("ROT "+str(self.fab.extra_rot_deg)+"\n")
+        file.write("SPE "+str(self.fab.speed)+"\n")
+        file.write("SPI "+str(self.fab.spindlespeed)+"\n")
+        file.write("INC "+str(self.incremental)+"\n")
+        file.write("FIN "+str(self.fab.interp)+"\n")
+        file.write("ALN "+str(self.fab.align_ax)+"\n")
         file.write("EXT "+self.fab.ext+"\n")
 
         # Fixed sides
@@ -1240,9 +1257,13 @@ class Types:
         dx, dy, dz = self.real_tim_dims
         dia = self.fab.real_dia
         tol = self.fab.tol
-        rot = self.fab.extra_rot_deg
+        spe = self.fab.speed
+        spi = self.fab.spindlespeed
+        inc = self.incremental
+        aln = self.fab.align_ax
         ext = self.fab.ext
         fs = self.fixed.sides
+        fin = self.fab.interp
 
         # Read
         hfs = []
@@ -1258,7 +1279,15 @@ class Types:
             elif items[0]=="TDZ": dz = float(items[1])
             elif items[0]=="DIA": dia = float(items[1])
             elif items[0]=="TOL": tol = float(items[1])
-            elif items[0]=="ROT": rot = float(items[1])
+            elif items[0]=="SPE": spe = float(items[1])
+            elif items[0]=="SPI": spi = float(items[1])
+            elif items[0]=="INC":
+                if items[1]=="True": inc = True
+                else: inc = False
+            elif items[0]=="FIN":
+                if items[1]=="True": fin = True
+                else: fin = False
+            elif items[0]=="ALN": aln = float(items[1])
             elif items[0]=="EXT": ext = items[1]
             elif items[0]=="FSS": fs = FixedSides(self,side_str=items[1]).sides
             elif items[0]=="HFS": hfi = i
@@ -1272,4 +1301,4 @@ class Types:
         hfs = np.array(hfs)
 
         # Reinitiate
-        self.reset(fs=fs, sax=sax, dim=dim, ang=ang, td=[dx,dy,dz], fabdia=dia, fabtol=tol, fabrot=rot, fabext=ext, hfs=hfs)
+        self.reset(fs=fs, sax=sax, dim=dim, ang=ang, td=[dx,dy,dz], fabdia=dia, fabtol=tol, align_ax=aln, finterp=fin, incremental=inc, fabext=ext, hfs=hfs, fspe=spe, fspi=spi)

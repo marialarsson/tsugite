@@ -23,6 +23,34 @@ def rotate_vector_around_axis(vec=[3,5,0], axis=[4,4,1], theta=1.2): #example va
     rotated_vec = np.dot(mat, vec)
     return rotated_vec
 
+def connected_arc(mv0,mv1):
+    conn_arc = False
+    if mv0.is_arc and mv1.is_arc:
+        if mv0.arc_ctr[0]==mv1.arc_ctr[0]:
+            if mv0.arc_ctr[1]==mv1.arc_ctr[1]:
+                conn_arc=True
+    return conn_arc
+
+def arc_points(st,en,ctr0,ctr1,ax,astep):
+    pts = []
+    # numpy arrays
+    st = np.array(st)
+    en = np.array(en)
+    ctr0 = np.array(ctr0)
+    ctr1 = np.array(ctr1)
+    # calculate steps and count and produce inbetween points
+    v0 = st-ctr0
+    v1 = en-ctr1
+    cnt = int(0.5+angle_between(v0,v1)/astep)
+    astep = angle_between(v0,v1)/cnt
+    zstep = (en[ax]-st[ax])/cnt
+    ax_vec = np.cross(v0,v1)
+    for i in range(1,cnt+1):
+        rvec = rotate_vector_around_axis(v0, ax_vec, astep*i)
+        zvec = [0,0,zstep*i]
+        pts.append(ctr0+rvec+zvec)
+    return pts
+
 class RegionVertex:
     def __init__(self,ind,abs_ind,neighbors,neighbor_values,dia=False,minus_one_neighbor=False):
         self.ind = ind
@@ -115,9 +143,8 @@ class MillVertex:
         if self.is_arc:
             self.arc_ctr = rotate_vector_around_axis(self.arc_ctr, [0,0,1], ang)
             self.arc_ctr = np.array(self.arc_ctr)
-
 class Fabrication:
-    def __init__(self,parent,tol=0.15,dia=6.00,ext="gcode",extra_rot_deg=0):
+    def __init__(self,parent,tol=0.15,dia=6.00,ext="gcode",align_ax=0,interp=True, spe=400, spi=6000):
         self.parent = parent
         self.real_dia = dia #milling bit radius in mm
         self.tol = tol #0.10 #tolerance in mm
@@ -127,8 +154,11 @@ class Fabrication:
         self.vrad = self.rad/self.parent.ratio
         self.vtol = self.tol/self.parent.ratio
         self.dep = 1.5 #milling depth in mm
-        self.extra_rot_deg = extra_rot_deg
+        self.align_ax = align_ax
         self.ext = ext
+        self.interp=interp
+        self.speed = spe
+        self.spindlespeed = spi
 
     def export_gcode(self,filename_tsu="C:/Users/makal/Dropbox/gcode/joint.tsu"):
         # make sure that the z axis of the gcode is facing up
@@ -147,9 +177,10 @@ class Fabrication:
             comp_vec = np.array([comp_vec[coords[0]],comp_vec[coords[1]],comp_vec[coords[2]]])
             comp_vec = comp_vec/np.linalg.norm(comp_vec) #unitize
             zax = np.array([0,0,1])
-            align_ax = np.array([1,0,0])
-            align_ax = rotate_vector_around_axis(align_ax, axis=zax, theta=math.radians(self.extra_rot_deg))
-            rot_ang = angle_between(align_ax,comp_vec,normal_vector=zax)
+            aax = [0,0,0]
+            aax[int(self.align_ax/2)] = 2*(self.align_ax%2)-1
+            #aax = rotate_vector_around_axis(aax, axis=zax, theta=math.radians(self.extra_rot_deg))
+            rot_ang = angle_between(aax,comp_vec,normal_vector=zax)
             if fdir==0: rot_ang=-rot_ang
             #
             file_name = filename_tsu[:-4] + "_"+names[n]+"."+self.ext
@@ -161,11 +192,12 @@ class Fabrication:
                 file.write("G17 (set XY plane for circle path)\n")
                 file.write("G94 (set unit/minute)\n")
                 file.write("G21 (set unit[mm])\n")
-                file.write("F400. (Feeding 400mm/min)\n")
-                file.write("S6000 (Spindle 6000rpm)\n")
+                spistr = str(int(self.spindlespeed))
+                file.write("S"+spistr+" (Spindle "+spistr+"rpm)\n")
                 file.write("M3 (spindle start)\n")
                 file.write("G54\n")
-                file.write("F400.\n")
+                spestr=str(int(self.speed))
+                file.write("F"+spestr+" (Feed "+spestr+"mm/min)\n")
             elif self.ext=="sbp":
                 file.write("'%\n")
                 file.write("SA\n")
@@ -183,7 +215,7 @@ class Fabrication:
                 # check segment angle
                 arc = False
                 clockwise = False
-                if i>0 and mv.is_arc and pmv.is_arc and np.array_equal(mv.arc_ctr,pmv.arc_ctr):
+                if i>0 and connected_arc(mv,pmv):
                     arc = True
                     vec1 = mv.pt-mv.arc_ctr
                     vec1 = vec1/np.linalg.norm(vec1)
@@ -196,23 +228,36 @@ class Fabrication:
 
                 #write to file
                 if self.ext=="gcode" or self.ext=="nc":
-                    if arc and clockwise:
-                        file.write("G2 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
-                    elif arc and not clockwise:
-                        file.write("G3 X"+mv.xstr+" Y"+mv.ystr+" R"+str(round(self.dia,d))+"\n")
-                    else:
-                        if mv.is_tra: file.write("G0 ")
-                        else: file.write("G1 ")
-                        if i==0 or mv.x!=pmv.x: file.write("X"+mv.xstr+" ")
-                        if i==0 or mv.y!=pmv.y: file.write("Y"+mv.ystr+" ")
-                        if i==0 or mv.z!=pmv.z: file.write("Z"+mv.zstr+" ")
+                    if arc and self.interp:
+                        if clockwise: file.write("G2")
+                        else: file.write("G3")
+                        file.write(" R"+str(round(self.dia,d))+" X"+mv.xstr+" Y"+mv.ystr)
+                        if mv.z!=pmv.z: file.write(" Z"+mv.zstr)
+                        file.write("\n")
+                    elif arc and not self.interp:
+                        pts = arc_points(pmv.pt,mv.pt,pmv.arc_ctr,mv.arc_ctr,2,math.radians(1))
+                        for pt in pts:
+                            file.write("G1")
+                            file.write(" X"+str(round(pt[0],3))+" Y"+str(round(pt[1],3)))
+                            if mv.z!=pmv.z: file.write(" Z"+str(round(pt[2],3)))
+                            file.write("\n")
+                    elif i==0 or mv.x!=pmv.x or mv.y!=pmv.y or mv.z!=pmv.z:
+                        if mv.is_tra: file.write("G0")
+                        else: file.write("G1")
+                        if i==0 or mv.x!=pmv.x: file.write(" X"+mv.xstr)
+                        if i==0 or mv.y!=pmv.y: file.write(" Y"+mv.ystr)
+                        if i==0 or mv.z!=pmv.z: file.write(" Z"+mv.zstr)
                         file.write("\n")
                 elif self.ext=="sbp":
-                    if arc:
+                    if arc and mv.z==pmv.z:
                         file.write("CG,"+str(round(2*self.dia,d))+","+mv.xstr+","+mv.ystr+",,,T,")
                         if clockwise: file.write("1\n")
                         else: file.write("-1\n")
-                    else:
+                    elif arc and mv.z!=pmv.z:
+                        pts = arc_points(pmv.pt,mv.pt,pmv.arc_ctr,mv.arc_ctr,2,math.radians(1))
+                        for pt in pts:
+                            file.write("M3,"+str(round(pt[0],3))+","+str(round(pt[1],3))+","+str(round(pt[2],3))+"\n")
+                    elif i==0 or mv.x!=pmv.x or mv.y!=pmv.y or mv.z!=pmv.z:
                         if mv.is_tra: file.write("J3,")
                         else: file.write("M3,")
                         if i==0 or mv.x!=pmv.x: file.write(mv.xstr+",")
