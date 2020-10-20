@@ -181,21 +181,21 @@ class Selection:
                     if side.ax==sax and side.dir==1 and self.n!=noc-1: blocked=True; break
             else: # Timber moveing mode
                 length_ratio = linalg.norm(mouse_vec)/linalg.norm(comp_vec)
-                if length_ratio>0.15: #treshhold "if moved a little bit"
-                    side_num = len(self.parent.parent.fixed.sides[self.n])
-                    if side_num==1 and absang>135: #L
-                        if length_ratio<0.5: # moved just a bit, L to T
-                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,0),FixedSide(comp_ax,1)]
-                        elif length_ratio<1.5: # moved a lot, L to other L
-                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,1-comp_dir)]
-                    elif side_num==2 and length_ratio<1.5: #T
-                        if absang>135: self.new_fixed_sides_for_display = [FixedSide(comp_ax,1)] # positive direction
-                        else: self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)] # negative direction                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)]
+                side_num = len(self.parent.parent.fixed.sides[self.n])
+                if side_num==1 and absang>135: #currently L
+                    if length_ratio<0.5: # moved just a bit, L to T
+                        self.new_fixed_sides_for_display = [FixedSide(comp_ax,0),FixedSide(comp_ax,1)]
+                    elif length_ratio<2.0: # moved a lot, L to other L
+                        self.new_fixed_sides_for_display = [FixedSide(comp_ax,1-comp_dir)]
+                elif side_num==2: # currently T
+                    if absang>135: self.new_fixed_sides_for_display = [FixedSide(comp_ax,1)] # positive direction
+                    else: self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)] # negative direction                            self.new_fixed_sides_for_display = [FixedSide(comp_ax,0)]
             # check if the direction is blocked
             blocked = False
             for side in self.new_fixed_sides_for_display:
-                if side.unique(self.parent.parent.fixed.unblocked):
-                    blocked=True
+                if side.unique(self.parent.parent.fixed.sides[self.n]):
+                    if side.unique(self.parent.parent.fixed.unblocked):
+                        blocked=True
             if blocked:
                 all_same = True
                 for side in self.new_fixed_sides_for_display:
@@ -203,8 +203,5 @@ class Selection:
                         all_same=False
                 if all_same: blocked = False
             if not blocked: self.new_fixed_sides = self.new_fixed_sides_for_display
-
-
-
         if not np.equal(self.parent.parent.fixed.sides[self.n],np.array(self.new_fixed_sides_for_display)).all():
             self.parent.parent.combine_and_buffer_indices()# for move/rotate preview outline # cant you show this by tansformation instead?

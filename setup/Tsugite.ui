@@ -98,6 +98,9 @@
      </item>
      <item>
       <widget class="QCheckBox" name="checkBox">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Show area of friction/contact (A)</string>
        </property>
@@ -420,6 +423,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="buttonGALLERY">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Gallery mode</string>
        </property>
