@@ -22,7 +22,7 @@ import cv2
 from Types import Types
 from Geometries import Geometries
 from ViewSettings import ViewSettings
-from Display import Display
+from Show import Show
 
 def get_untitled_filename(name,ext,sep):
     # list of all filenames with specified extension in the current directory
@@ -71,7 +71,7 @@ class GLWidget(QGLWidget):
         elif self.parent.findChild(QRadioButton, "radioNC").isChecked(): ext = "nc"
         elif self.parent.findChild(QRadioButton, "radioSBP").isChecked(): ext = "sbp"
         self.type = Types(self,fs=[[[2,0]],[[2,1]]],sax=sax,dim=dim,ang=ang, td=[dx,dy,dz], fabtol=tol, fabdia=dia, fspe=spe, fspi=spi, fabext=ext, align_ax=aax, incremental=inc, finterp=fin)
-        self.display = Display(self,self.type)
+        self.show = Show(self,self.type)
 
     def resizeGL(self, width, height):
         self.width = width
@@ -89,48 +89,48 @@ class GLWidget(QGLWidget):
         glViewport(0,0,self.width-self.wstep,self.height)
         glLoadIdentity()
 
-        self.display.update()
+        self.show.update()
 
-        if not self.display.view.gallery:
+        if not self.show.view.gallery:
             glViewport(0,0,self.width-self.wstep,self.height)
             glLoadIdentity()
             # Color picking / editing
             # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
             if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
-                self.display.pick(self.x,self.y,self.height)
+                self.show.pick(self.x,self.y,self.height)
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
             elif self.type.mesh.select.state==2: # Edit joint geometry
-                self.type.mesh.select.edit([self.x,self.y], self.display.view.xrot, self.display.view.yrot, w=self.width, h=self.height)
+                self.type.mesh.select.edit([self.x,self.y], self.show.view.xrot, self.show.view.yrot, w=self.width, h=self.height)
             elif self.type.mesh.select.state==12: # Edit timber orientation/position
-                self.type.mesh.select.move([self.x,self.y], self.display.view.xrot, self.display.view.yrot)
+                self.type.mesh.select.move([self.x,self.y], self.show.view.xrot, self.show.view.yrot)
 
             # Display main geometry
-            self.display.end_grains()
-            if self.display.view.show_feedback:
-                self.display.unfabricatable()
-                self.display.nondurable()
-                self.display.unconnected()
-                self.display.unbridged()
-                self.display.checker()
-                self.display.arrows()
+            self.show.end_grains()
+            if self.show.view.show_feedback:
+                self.show.unfabricatable()
+                self.show.nondurable()
+                self.show.unconnected()
+                self.show.unbridged()
+                self.show.checker()
+                self.show.arrows()
                 show_area=False #<--replace by checkbox...
                 if show_area:
-                    self.display.area()
-            self.display.joint_geometry()
+                    self.show.area()
+            self.show.joint_geometry()
 
             if self.type.mesh.select.suggstate>=0:
                 index=self.type.mesh.select.suggstate
-                if len(self.type.sugs)>index: self.display.difference_suggestion(index)
+                if len(self.type.sugs)>index: self.show.difference_suggestion(index)
 
             # Display editing in action
-            self.display.selected()
-            self.display.moving_rotating()
+            self.show.selected()
+            self.show.moving_rotating()
 
             # Display milling paths
-            self.display.milling_paths()
+            self.show.milling_paths()
 
             # Suggestions
-            if self.display.view.show_suggestions:
+            if self.show.view.show_suggestions:
                 for i in range(len(self.type.sugs)):
                     hquater = self.height/4
                     wquater = self.width/5
@@ -143,14 +143,14 @@ class GLWidget(QGLWidget):
                         glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
                         glClear(GL_COLOR_BUFFER_BIT)
                         glDisable(GL_SCISSOR_TEST)
-                    self.display.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
+                    self.show.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
         else:
             print("gallery mode")
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             if time.time()-self.click_time<0.2:
-                self.display.view.open_joint = not self.display.view.open_joint
+                self.show.view.open_joint = not self.show.view.open_joint
             elif self.type.mesh.select.state==0: #face hovered
                 self.type.mesh.select.start_pull([self.parent.scaling*e.x(),self.parent.scaling*e.y()])
             elif self.type.mesh.select.state==10: #body hovered
@@ -174,13 +174,13 @@ class GLWidget(QGLWidget):
             #        type.combine_and_buffer_indices()
             else: self.click_time = time.time()
         elif e.button() == Qt.RightButton:
-            self.display.view.start_rotation_xy(self.parent.scaling*e.x(),self.parent.scaling*e.y())
+            self.show.view.start_rotation_xy(self.parent.scaling*e.x(),self.parent.scaling*e.y())
 
     def mouseMoveEvent(self, e):
         self.x = self.parent.scaling*e.x()
         self.y = self.parent.scaling*e.y()
-        if self.display.view.dragged:
-            self.display.view.update_rotation_xy(self.x,self.y)
+        if self.show.view.dragged:
+            self.show.view.update_rotation_xy(self.x,self.y)
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton:
@@ -189,7 +189,7 @@ class GLWidget(QGLWidget):
             elif self.type.mesh.select.state==12: #body moved
                 self.type.mesh.select.end_move()
         elif e.button() == Qt.RightButton:
-            self.display.view.end_rotation()
+            self.show.view.end_rotation()
 
 class mainWindow(QMainWindow):
 
@@ -271,12 +271,12 @@ class mainWindow(QMainWindow):
 
     @pyqtSlot()
     def open_close_joint(self):
-        self.glWidget.display.view.open_joint = not self.glWidget.display.view.open_joint
+        self.glWidget.show.view.open_joint = not self.glWidget.show.view.open_joint
 
     @pyqtSlot()
     def set_feedback_view(self):
         bool = self.findChild(QCheckBox, "checkFEED").checkState()
-        self.glWidget.display.view.show_feedback = bool
+        self.glWidget.show.view.show_feedback = bool
 
     @pyqtSlot()
     def change_sliding_axis(self):
@@ -304,7 +304,7 @@ class mainWindow(QMainWindow):
     @pyqtSlot()
     def set_timber_X(self):
         val = self.findChild(QDoubleSpinBox, "spinDX").value()
-        mp = self.glWidget.display.view.show_milling_path
+        mp = self.glWidget.show.view.show_milling_path
         if mp: self.glWidget.type.create_and_buffer_vertices(milling_path=True)
         if self.findChild(QCheckBox, "checkCUBE").isChecked():
             self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
@@ -316,7 +316,7 @@ class mainWindow(QMainWindow):
     @pyqtSlot()
     def set_timber_Y(self):
         val = self.findChild(QDoubleSpinBox, "spinDY").value()
-        mp = self.glWidget.display.view.show_milling_path
+        mp = self.glWidget.show.view.show_milling_path
         if self.findChild(QCheckBox, "checkCUBE").isChecked():
             self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
             self.findChild(QDoubleSpinBox, "spinDX").setValue(val)
@@ -327,7 +327,7 @@ class mainWindow(QMainWindow):
     @pyqtSlot()
     def set_timber_Z(self):
         val = self.findChild(QDoubleSpinBox, "spinDZ").value()
-        mp = self.glWidget.display.view.show_milling_path
+        mp = self.glWidget.show.view.show_milling_path
         if self.findChild(QCheckBox, "checkCUBE").isChecked():
             self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
             self.findChild(QDoubleSpinBox, "spinDX").setValue(val)
@@ -337,7 +337,7 @@ class mainWindow(QMainWindow):
 
     @pyqtSlot()
     def set_all_timber_same(self):
-        mp = self.glWidget.display.view.show_milling_path
+        mp = self.glWidget.show.view.show_milling_path
         if self.findChild(QCheckBox, "checkCUBE").isChecked():
             val = self.glWidget.type.real_tim_dims[0]
             self.glWidget.type.update_timber_width_and_height([0,1,2],val,milling_path=mp)
@@ -360,7 +360,7 @@ class mainWindow(QMainWindow):
         self.glWidget.type.fab.dia = 2*self.glWidget.type.fab.rad
         self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.ratio
         self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.ratio
-        if self.glWidget.display.view.show_milling_path:
+        if self.glWidget.show.view.show_milling_path:
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
 
@@ -373,7 +373,7 @@ class mainWindow(QMainWindow):
         self.glWidget.type.fab.vdia = self.glWidget.type.fab.dia/self.glWidget.type.ratio
         self.glWidget.type.fab.vrad = self.glWidget.type.fab.rad/self.glWidget.type.ratio
         self.glWidget.type.fab.vtol = self.glWidget.type.fab.tol/self.glWidget.type.ratio
-        if self.glWidget.display.view.show_milling_path:
+        if self.glWidget.show.view.show_milling_path:
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
 
@@ -405,15 +405,15 @@ class mainWindow(QMainWindow):
 
     @pyqtSlot()
     def set_millingpath_view(self):
-        self.glWidget.display.view.show_milling_path = not self.glWidget.display.view.show_milling_path
-        bool = self.glWidget.display.view.show_milling_path
+        self.glWidget.show.view.show_milling_path = not self.glWidget.show.view.show_milling_path
+        bool = self.glWidget.show.view.show_milling_path
         self.glWidget.type.create_and_buffer_vertices(milling_path=bool)
         self.glWidget.type.combine_and_buffer_indices(milling_path=bool)
 
     @pyqtSlot()
     def export_gcode(self):
-        if not self.glWidget.display.view.show_milling_path:
-            self.glWidget.display.view.show_milling_path = True
+        if not self.glWidget.show.view.show_milling_path:
+            self.glWidget.show.view.show_milling_path = True
             self.glWidget.type.create_and_buffer_vertices(milling_path=True)
             self.glWidget.type.combine_and_buffer_indices(milling_path=True)
         self.glWidget.type.fab.export_gcode(filename_tsu=self.filename)
@@ -437,7 +437,7 @@ class mainWindow(QMainWindow):
     def new_file(self):
         self.filename = get_untitled_filename("Untitled","tsu","_")
         self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
-        self.glWidget.display.view.show_milling_path=False
+        self.glWidget.show.view.show_milling_path=False
         self.glWidget.type.reset()
         self.set_ui_values()
         self.show_all_timbers()
@@ -477,36 +477,36 @@ class mainWindow(QMainWindow):
 
     @pyqtSlot()
     def show_hide_hidden_lines(self):
-        self.glWidget.display.view.show_hidden_lines = self.findChild(QAction, "actionHIDDEN").isChecked()
+        self.glWidget.show.view.show_hidden_lines = self.findChild(QAction, "actionHIDDEN").isChecked()
 
     @pyqtSlot()
     def show_hide_timbers(self):
         names = ["A","B","C","D"]
         for i,item in enumerate(names):
             bool = self.findChild(QAction, "action"+names[i]).isChecked()
-            self.glWidget.display.view.hidden[i] = not bool
+            self.glWidget.show.view.hidden[i] = not bool
 
     @pyqtSlot()
     def show_all_timbers(self):
         names = ["A","B","C","D"]
         for i,item in enumerate(names):
             self.findChild(QAction, "action"+names[i]).setChecked(True)
-            self.glWidget.display.view.hidden[i] = False
+            self.glWidget.show.view.hidden[i] = False
 
     @pyqtSlot()
     def set_standard_rotation(self):
-        self.glWidget.display.view.xrot = 0.8
-        self.glWidget.display.view.yrot = 0.4
+        self.glWidget.show.view.xrot = 0.8
+        self.glWidget.show.view.yrot = 0.4
 
     @pyqtSlot()
     def set_closest_plane_rotation(self):
-        xrot = self.glWidget.display.view.xrot
-        yrot = self.glWidget.display.view.yrot
+        xrot = self.glWidget.show.view.xrot
+        yrot = self.glWidget.show.view.yrot
         nang = 0.5*math.pi
         xrot = round(xrot/nang,0)*nang
         yrot = round(yrot/nang,0)*nang
-        self.glWidget.display.view.xrot = xrot
-        self.glWidget.display.view.yrot = yrot
+        self.glWidget.show.view.xrot = xrot
+        self.glWidget.show.view.yrot = yrot
 
     def set_ui_values(self):
         self.findChild(QComboBox, "comboSLIDE").setCurrentIndex(self.glWidget.type.sax)

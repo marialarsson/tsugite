@@ -4,7 +4,7 @@ from ViewSettings import ViewSettings
 import numpy as np
 import pyrr
 
-class Display:
+class Show:
     def __init__(self,parent,type):
         self.parent = parent
         self.type = type
