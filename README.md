@@ -33,6 +33,12 @@ pyrr 0.10.3
 ### Run Program
 Run setup/tsugite_app.py
 
+### Fabrication
+Set machine origin at the center of the top side of the joint.
+Insert wood bar a) vertically if the sliding/fabrication is aligned with the timber axis, and b) horizontally if it is perpendicular to the timber axis.
+
+![](img/tsugite_origin.jpg)
+
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
 We cannot provide technical support and we are not responsible for any damage to your fabrication equipment.
