@@ -14,7 +14,6 @@ This software is free for personal use and non-commercial research conducted wit
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp) or Maria Larsson (ma.ka.larsson@gmail.com).
 
 ### Environment Requirements
-Windows 10
 
 Python 3.8.3
 
