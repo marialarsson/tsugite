@@ -92,7 +92,7 @@ class Show:
         glUseProgram(shader)
         rot_x = pyrr.Matrix44.from_x_rotation(self.view.xrot)
         rot_y = pyrr.Matrix44.from_y_rotation(self.view.yrot)
-        glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
+        glUniformMatrix4fv(3, 1, GL_FALSE, np.array(rot_x * rot_y))
 
     def draw_geometries(self, geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
         # Define translation matrices for opening
@@ -166,7 +166,7 @@ class Show:
             glMatrixMode(GL_MODELVIEW)
             rot_x = pyrr.Matrix44.from_x_rotation(self.view.xrot)
             rot_y = pyrr.Matrix44.from_y_rotation(self.view.yrot)
-            glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
+            glUniformMatrix4fv(3, 1, GL_FALSE, np.array(rot_x * rot_y))
             glPolygonOffset(1.0,1.0)
 
             ########################## Draw colorful top faces ##########################
