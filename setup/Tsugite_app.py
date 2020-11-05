@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 
 from PyQt5.QtWidgets import *
@@ -38,7 +40,7 @@ def get_untitled_filename(name,ext,sep):
         fname = name+sep+str(cnt)
         cnt+=1
     # add path and extension, return
-    fname = os.getcwd()+"\\"+fname+"."+ext
+    fname = os.getcwd()+os.sep+fname+"."+ext
     return fname
 
 class GLWidget(QGLWidget):
@@ -203,7 +205,7 @@ class mainWindow(QMainWindow):
 
         self.title = "Tsugite"
         self.filename = get_untitled_filename("Untitled","tsu","_")
-        self.setWindowTitle(self.filename.split("\\")[-1]+" - "+self.title)
+        self.setWindowTitle(self.filename.split(os.sep)[-1]+" - "+self.title)
         self.setWindowIcon(QIcon("tsugite_icon.png"))
 
         self.glWidget = GLWidget(self)

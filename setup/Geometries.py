@@ -735,21 +735,20 @@ class Geometries:
 
     def load_search_results(self,index=-1):
         # Folder
-        s = "\\"
         location = os.path.abspath(os.getcwd())
-        location = location.split(s)
+        location = location.split(os.sep)
         location.pop()
-        location = s.join(location)
-        location += "\\search_results\\noc_"+str(self.parent.noc)+"\\dim_"+str(self.parent.dim)+"\\fs_"
+        location = os.sep.join(location)
+        location += os.sep+"search_results"+os.sep+"noc_"+str(self.parent.noc)+os.sep+"dim_"+str(self.parent.dim)+os.sep+"fs_"
         for i in range(len(self.parent.fixed.sides)):
             for fs in self.parent.fixed.sides[i]:
                 location+=str(fs[0])+str(fs[1])
             if i!=len(self.parent.fixed.sides)-1: location+=("_")
-        location+="\\allvalid"
+        location+=os.sep+"allvalid"
         print("Trying to load geometry from",location)
         maxi = len(os.listdir(location))-1
         if index==-1: index=random.randint(0,maxi)
-        self.height_fields = np.load(location+"\\height_fields_"+str(index)+".npy")
+        self.height_fields = np.load(location+os.sep+"height_fields_"+str(index)+".npy")
         self.fab_directions = []
         for i in range(self.parent.noc):
             if i==0: self.fab_directions.append(0)
