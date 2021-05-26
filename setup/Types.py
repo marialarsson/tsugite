@@ -1201,6 +1201,27 @@ class Types:
 
     def save(self,filename="joint.tsu"):
 
+        """
+        Meaning of abbreviations:
+        SAX: sliding axis           (0-2)   (the sliding axis, not all possible sliding directions) (refer to Figure 3d of the paper)
+        NOT: number of timbers      (2-6)   (refer to Figure 3e of the paper)
+        RES: voxel resolution       (2-5)   (2-->[2,2,2], 3-->[3,3,3] and so on. Non-uniform resolution such as [2,3,4] is not possible currently) (refer to Figure 3f of the paper)
+        ANG: angle of intersection          (refer to Figure 27a of the paper)
+        TDX: timber timension in x-axis (mm)
+        TDY: timber timension in y-axis (mm)
+        TDZ: timber timension in z-axis (mm) (TDX, TDY, and TDZ does not have to be equal. Refer for Figure 27b of the paper)
+        DIA: diameter of the milling bit
+        TOL: tolerance
+        SPE: speed of the milling bit
+        SPI: spindle speed
+        INC: incremental            (T/F)   Option for the layering of the milling path to avoid "downcuts"
+        FIN: interpolation of arcs  (T/F)   Milling path true arcs or divided into many points (depending on milling machine)
+        ALN: align                          Axis to align the timber element with during fabrication
+        EXT: extension ("gcode"/"sbp"/"nc") File format for the milling machine. Roland machine: nc. Shopbot machine: sbp
+        FSS: fixed sides                    Fixed sides of the cube are connected to the timber (non-fixed sides are free/open)
+        HFS: height fields                  Voxel geometry described by height fields of size res*res
+        """
+
         #Inititate
         file = open(filename,"w")
 
