@@ -34,7 +34,7 @@ Insert wood bar a) vertically if the sliding/fabrication is aligned with the tim
 
 ### File format *.tsu
 *.tsu is a unique file format for this application.
-[my_joint.tsu](my_joint.tsu) is an example file.
+This file [my_joint.tsu](my_joint.tsu) is provided as an example.
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
