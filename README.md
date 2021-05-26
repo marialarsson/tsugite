@@ -14,19 +14,14 @@ This software is free for personal use and non-commercial research conducted wit
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp) or Maria Larsson (ma.ka.larsson@gmail.com).
 
 ### Environment Requirements
-Windows 10
-
-Python 3.8.3
-
-OpenGL 3.1.5
-
-PyQt5 5.15.1
-
-OpenCV 4.4.0.44
-
-Pillow 7.2.0
-
-numpy 1.18.5
+Markup :  
+  - Windows 10
+  - Python 3.8.3
+  - OpenGL 3.1.5
+  - PyQt5 5.15.1
+  - OpenCV 4.4.0.44
+  - Pillow 7.2.0
+  - numpy 1.18.5
 
 pyrr 0.10.3
 
