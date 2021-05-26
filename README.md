@@ -35,6 +35,7 @@ Insert wood bar a) vertically if the sliding/fabrication is aligned with the tim
 ### File format *.tsu
 *.tsu is a unique file format for this application.
 This file [my_joint.tsu](my_joint.tsu) is provided as an example.
+For meaning of 3 letter abbreviations (SAX, NOT, RES etc.), refer to the save and open functions at the end of [setup/types.py](setup/types.py).
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
