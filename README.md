@@ -14,19 +14,22 @@ This software is free for personal use and non-commercial research conducted wit
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp).
 
 ### Environment
-- Python version: 3.8.3
+- Python 3.8.3
+- pip 21.1.2
 - Packages: [requirements.txt](requirements.txt)
+
+It is recommended to use a virtual environment, for example [venv](https://docs.python.org/3/library/venv.html).
 
 The following command will install the packages at once.
 ```
 $ pip install -r requirements.txt
 ```
-It is recommended to use a virtual environment, for example [venv](https://docs.python.org/3/library/venv.html).
 
 ### Run Program
 After installing the necessary packages, you can run the application by the following command:
 ```
-$ python setup/tsugite_app.py
+$ cd setup
+$ python tsugite_app.py
 ```
 
 ### File format *.tsu
