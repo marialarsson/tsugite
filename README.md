@@ -13,14 +13,9 @@ The system performs geometric evaluations in real time and provides graphical fe
 This software is free for personal use and non-commercial research conducted within non-commercial organizations.
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp) or Maria Larsson (ma.ka.larsson@gmail.com).
 
-### Environment Requirements
-  - Python 3.8.3
-  - OpenGL 3.1.5
-  - PyQt5 5.15.1
-  - OpenCV 4.4.0.44
-  - Pillow 7.2.0
-  - numpy 1.18.5
-  - pyrr 0.10.3
+### Environment
+- Python version: 3.8.3
+- Dependencies: see [requirements.txt](requirements.txt)
 
 ### Run Program
 Run setup/tsugite_app.py
