@@ -15,7 +15,13 @@ If you want to use it for commercial purposes, please contact Kaoru Shigeta (shi
 
 ### Environment
 - Python version: 3.8.3
-- Dependencies: see [requirements.txt](requirements.txt)
+- Packages: [requirements.txt](requirements.txt)
+
+The following command will install the packages at once.
+```
+$ pip install -r requirements.txt
+```
+It is recommended to use a virtual environment, for example [venv](https://docs.python.org/3/library/venv.html).
 
 ### Run Program
 Run setup/tsugite_app.py
@@ -29,7 +35,6 @@ Insert wood bar a) vertically if the sliding/fabrication is aligned with the tim
 ### File format *.tsu
 *.tsu is a unique file format for this application.
 This file [my_joint.tsu](my_joint.tsu) is provided as an example.
-For meaning of the 3 letter abbreviations (SAX, NOT, RES etc.), refer to the save and open functions at the end of [setup/Types.py](setup/Types.py).
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
