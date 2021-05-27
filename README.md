@@ -29,8 +29,8 @@ $ python tsugite_app.py
 ```
 
 ### Interface
-The joint can be opened by double clicking anywhere or by pressing the SPACE bar.
-Edit the joint geometry by pushing and pulling on the faces. And change the orientation and position of the wood components by dragging. Other settings can be changed in the control panel to the left. Editable properties are summarized in the figure below.
+Open a joint by double-clicking anywhere or by pressing the SPACE bar.
+Edit the joint geometry by pushing and pulling on the faces. Change the orientation and position of the wood components by dragging them. Other properties can be edited in the control panel to the left. Editable properties are summarized in the figure below.
 
 ![](img/tsugite_edit.png)
 
