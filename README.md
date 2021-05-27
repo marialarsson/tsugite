@@ -47,3 +47,5 @@ Maria Larsson, Hironori Yoshida, Nobuyuki Umetani, and Takeo Igarashi. 2020. Tsu
 ACM link: https://dl.acm.org/doi/abs/10.1145/3379337.3415899
 
 Project page: http://www.ma-la.com/tsugite.html
+
+Paper PDF: http://ma-la.com/Tsugite_UIST20.pdf
