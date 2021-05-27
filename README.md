@@ -40,6 +40,8 @@ The system performs geometric evaluations in real time and provides graphical fe
 
 In case of an invalid joint, the system also gives suggestions (on the right side). The suggestions consists of up to four valid joint geometries within one edit distance from the current design.
 
+For more details, see the [User Interface Wiki](https://github.com/marialarsson/tsugite/wiki/User-Interface-Manual) (coming soon).
+
 ### File format *.tsu
 *.tsu is a unique file format for this application.
 This file [my_joint.tsu](my_joint.tsu) is provided as an example.
@@ -51,7 +53,7 @@ Insert wood bar a) vertically if the sliding/fabrication is aligned with the tim
 
 ![](img/tsugite_origin.jpg)
 
-For more details, see the [Fabrication Manual](https://github.com/marialarsson/tsugite/wiki) (coming soon).
+For more details, see the [Fabrication Wiki](https://github.com/marialarsson/tsugite/wiki/Fabrication-Manual) (coming soon).
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
