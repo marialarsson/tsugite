@@ -24,7 +24,10 @@ $ pip install -r requirements.txt
 It is recommended to use a virtual environment, for example [venv](https://docs.python.org/3/library/venv.html).
 
 ### Run Program
-Run setup/tsugite_app.py
+After installing the necessary packages, you can run the application by the following command:
+```
+$ python setup/tsugite_app.py
+```
 
 ### Fabrication
 Set machine origin at the center of the top side of the joint.
@@ -35,6 +38,7 @@ Insert wood bar a) vertically if the sliding/fabrication is aligned with the tim
 ### File format *.tsu
 *.tsu is a unique file format for this application.
 This file [my_joint.tsu](my_joint.tsu) is provided as an example.
+You can save and open *.tsu files from the menu bar in the interface.
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
