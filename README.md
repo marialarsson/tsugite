@@ -29,16 +29,16 @@ After installing the necessary packages, you can run the application by the foll
 $ python setup/tsugite_app.py
 ```
 
+### File format *.tsu
+*.tsu is a unique file format for this application.
+This file [my_joint.tsu](my_joint.tsu) is provided as an example.
+You can save and open *.tsu files from the menu bar in the interface.
+
 ### Fabrication
 Set machine origin at the center of the top side of the joint.
 Insert wood bar a) vertically if the sliding/fabrication is aligned with the timber axis, and b) horizontally if it is perpendicular to the timber axis.
 
 ![](img/tsugite_origin.jpg)
-
-### File format *.tsu
-*.tsu is a unique file format for this application.
-This file [my_joint.tsu](my_joint.tsu) is provided as an example.
-You can save and open *.tsu files from the menu bar in the interface.
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
