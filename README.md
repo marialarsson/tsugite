@@ -6,10 +6,6 @@
 This is the repository related to a paper presented at UIST 2020.
 It is an interface where you can model a joint geometry in a voxelized design space, and export milling paths for fabrication with a 3-axis CNC-machine.
 
-The system performs geometric evaluations in real time and provides graphical feedback accordingly (see a-h below).
-
-![](img/tsugite_feedback.png)
-
 This software is free for personal use and non-commercial research conducted within non-commercial organizations.
 If you want to use it for commercial purposes, please contact Kaoru Shigeta (shigeta@todaitlo.jp).
 
@@ -26,11 +22,23 @@ $ pip install -r requirements.txt
 ```
 
 ### Run Program
-After installing the necessary packages, you can run the application by the following command:
+After installing the necessary packages, run the application by the following commands.
 ```
 $ cd setup
 $ python tsugite_app.py
 ```
+
+### Interface
+The joint can be opened by double clicking anywhere or by pressing the SPACE bar.
+Edit the joint geometry by pushing and pulling on the faces. And change the orientation and position of the wood components by dragging. Other settings can be changed in the control panel to the left. Editable properties are summarized in the figure below.
+
+![](img/tsugite_edit.png)
+
+The system performs geometric evaluations in real time and provides graphical feedback accordingly (see a-h below).
+
+![](img/tsugite_feedback.png)
+
+In case of an invalid joint, the system also gives suggestions (on the right side). The suggestions consists of up to four valid joint geometries within one edit distance from the current design.
 
 ### File format *.tsu
 *.tsu is a unique file format for this application.
@@ -42,6 +50,8 @@ Set machine origin at the center of the top side of the joint.
 Insert wood bar a) vertically if the sliding/fabrication is aligned with the timber axis, and b) horizontally if it is perpendicular to the timber axis.
 
 ![](img/tsugite_origin.jpg)
+
+For more details, see the [Fabrication Manual](https://github.com/marialarsson/tsugite/wiki) (coming soon).
 
 ### Disclaimer
 Please note that this is a research prototype and not a consumer-ready product.
