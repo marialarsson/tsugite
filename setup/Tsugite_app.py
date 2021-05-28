@@ -43,61 +43,58 @@ class GLWidget(QGLWidget):
 
         self.show.update()
 
-        if not self.show.view.gallery:
-            glViewport(0,0,self.width-self.wstep,self.height)
-            glLoadIdentity()
-            # Color picking / editing
-            # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
-            if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
-                self.show.pick(self.x,self.y,self.height)
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-            elif self.type.mesh.select.state==2: # Edit joint geometry
-                self.type.mesh.select.edit([self.x,self.y], self.show.view.xrot, self.show.view.yrot, w=self.width, h=self.height)
-            elif self.type.mesh.select.state==12: # Edit timber orientation/position
-                self.type.mesh.select.move([self.x,self.y], self.show.view.xrot, self.show.view.yrot)
+        glViewport(0,0,self.width-self.wstep,self.height)
+        glLoadIdentity()
+        # Color picking / editing
+        # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
+        if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
+            self.show.pick(self.x,self.y,self.height)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+        elif self.type.mesh.select.state==2: # Edit joint geometry
+            self.type.mesh.select.edit([self.x,self.y], self.show.view.xrot, self.show.view.yrot, w=self.width, h=self.height)
+        elif self.type.mesh.select.state==12: # Edit timber orientation/position
+            self.type.mesh.select.move([self.x,self.y], self.show.view.xrot, self.show.view.yrot)
 
-            # Display main geometry
-            self.show.end_grains()
-            if self.show.view.show_feedback:
-                self.show.unfabricatable()
-                self.show.nondurable()
-                self.show.unconnected()
-                self.show.unbridged()
-                self.show.checker()
-                self.show.arrows()
-                show_area=False #<--replace by checkbox...
-                if show_area:
-                    self.show.area()
-            self.show.joint_geometry()
+        # Display main geometry
+        self.show.end_grains()
+        if self.show.view.show_feedback:
+            self.show.unfabricatable()
+            self.show.nondurable()
+            self.show.unconnected()
+            self.show.unbridged()
+            self.show.checker()
+            self.show.arrows()
+            show_area=False #<--replace by checkbox...
+            if show_area:
+                self.show.area()
+        self.show.joint_geometry()
 
-            if self.type.mesh.select.suggstate>=0:
-                index=self.type.mesh.select.suggstate
-                if len(self.type.sugs)>index: self.show.difference_suggestion(index)
+        if self.type.mesh.select.suggstate>=0:
+            index=self.type.mesh.select.suggstate
+            if len(self.type.sugs)>index: self.show.difference_suggestion(index)
 
-            # Display editing in action
-            self.show.selected()
-            self.show.moving_rotating()
+        # Display editing in action
+        self.show.selected()
+        self.show.moving_rotating()
 
-            # Display milling paths
-            self.show.milling_paths()
+        # Display milling paths
+        self.show.milling_paths()
 
-            # Suggestions
-            if self.show.view.show_suggestions:
-                for i in range(len(self.type.sugs)):
-                    hquater = self.height/4
-                    wquater = self.width/5
-                    glViewport(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
-                    glLoadIdentity()
-                    if i==self.type.mesh.select.suggstate:
-                        glEnable(GL_SCISSOR_TEST)
-                        glScissor(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
-                        glClearDepth(1.0)
-                        glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
-                        glClear(GL_COLOR_BUFFER_BIT)
-                        glDisable(GL_SCISSOR_TEST)
-                    self.show.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
-        else:
-            print("gallery mode")
+        # Suggestions
+        if self.show.view.show_suggestions:
+            for i in range(len(self.type.sugs)):
+                hquater = self.height/4
+                wquater = self.width/5
+                glViewport(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
+                glLoadIdentity()
+                if i==self.type.mesh.select.suggstate:
+                    glEnable(GL_SCISSOR_TEST)
+                    glScissor(self.width-self.wstep,self.height-self.hstep*(i+1),self.wstep,self.hstep)
+                    glClearDepth(1.0)
+                    glClearColor(0.9, 0.9, 0.9, 1.0) #light grey
+                    glClear(GL_COLOR_BUFFER_BIT)
+                    glDisable(GL_SCISSOR_TEST)
+                self.show.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
@@ -115,7 +112,7 @@ class GLWidget(QGLWidget):
                     self.type.sugs = []
                     self.type.combine_and_buffer_indices()
                     self.type.mesh.select.suggstate=-1
-            #GALLERY PICK
+            #GALLERY PICK -- not implemented currently
             #elif type.mesh.select.gallstate>=0:
             #    index = type.mesh.select.gallstate
             #    if index<len(type.gals):
