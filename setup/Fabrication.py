@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import os
 
 def angle_between(vector_1, vector_2, normal_vector=[]):
     unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
@@ -160,7 +161,7 @@ class Fabrication:
         self.speed = spe
         self.spindlespeed = spi
 
-    def export_gcode(self,filename_tsu="C:/Users/makal/Dropbox/gcode/joint.tsu"):
+    def export_gcode(self,filename_tsu=os.getcwd()+os.sep+"joint.tsu"):
         # make sure that the z axis of the gcode is facing up
         fax = self.parent.sax
         coords = [0,1]
