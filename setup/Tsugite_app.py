@@ -196,7 +196,6 @@ class mainWindow(QMainWindow):
     from _mainWindow import open_file
     from _mainWindow import save_file
     from _mainWindow import save_file_as
-    from _mainWindow import save_screenshot
     from _mainWindow import show_hide_hidden_lines
     from _mainWindow import show_hide_timbers
     from _mainWindow import show_all_timbers

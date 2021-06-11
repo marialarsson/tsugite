@@ -5,7 +5,6 @@ import numpy as np
 import time
 import math
 import os
-import cv2
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -79,7 +78,6 @@ def setupUi(self):
     self.findChild(QAction, "actionOpen").triggered.connect(self.open_file)
     self.findChild(QAction, "actionSave").triggered.connect(self.save_file)
     self.findChild(QAction, "actionSaveas").triggered.connect(self.save_file_as)
-    self.findChild(QAction, "actionImage").triggered.connect(self.save_screenshot)
     #---View
     self.findChild(QAction, "actionHIDDEN").triggered.connect(self.show_hide_hidden_lines)
     self.findChild(QAction, "actionA").triggered.connect(self.show_hide_timbers)
@@ -284,17 +282,6 @@ def save_file_as(self):
         self.filename = filename
         self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
         self.glWidget.type.save(self.filename)
-
-@pyqtSlot()
-def save_screenshot(self):
-    img_filename, _ = QFileDialog.getSaveFileName(filter="Image file (*.png)")
-    if img_filename!='':
-        image_buffer = glReadPixels(0, 0, self.glWidget.width, self.glWidget.height, GL_RGB, GL_UNSIGNED_BYTE)
-        image = np.frombuffer(image_buffer, dtype=np.uint8).reshape(self.glWidget.height, self.glWidget.width, 3)
-        image = np.flip(image,axis=0)
-        image = np.flip(image,axis=2)
-        cv2.imwrite(img_filename, image)
-        print("Saved screenshot to",img_filename)
 
 @pyqtSlot()
 def show_hide_hidden_lines(self):
