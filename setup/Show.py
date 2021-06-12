@@ -19,7 +19,7 @@ class Show:
 
     def create_color_shaders(self):
         vertex_shader = """
-        #version 330
+        #version 150
         #extension GL_ARB_explicit_attrib_location : require
         #extension GL_ARB_explicit_uniform_location : require
         layout(location = 0) in vec3 position;
@@ -39,7 +39,7 @@ class Show:
         """
 
         fragment_shader = """
-        #version 330
+        #version 150
         in vec3 newColor;
         in vec2 outTexCoords;
         out vec4 outColor;
@@ -55,7 +55,7 @@ class Show:
 
     def create_texture_shaders(self):
         vertex_shader = """
-        #version 330
+        #version 150
         #extension GL_ARB_explicit_attrib_location : require
         #extension GL_ARB_explicit_uniform_location : require
         layout(location = 0) in vec3 position;
@@ -74,7 +74,7 @@ class Show:
         """
 
         fragment_shader = """
-        #version 330
+        #version 150
         in vec3 newColor;
         in vec2 outTexCoords;
         out vec4 outColor;
