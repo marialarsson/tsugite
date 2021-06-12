@@ -5,7 +5,6 @@ import numpy as np
 import time
 import math
 import os
-import cv2
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
