@@ -289,7 +289,7 @@ def rough_milling_path(type,rough_pixs,lay_num,n):
         pt1 = pt1+v_vrad*off_vec+dir_add1
         pt2 = pt2+v_vrad*off_vec+dir_add2
         for i in range(no_lanes):
-            # skip lane if on bloked side in off direction
+            # skip lane if on blocked side in off direction
             if pix.neighbors[1][0]==1 and i==0: continue
             elif pix.neighbors[1][1]==1 and i==no_lanes-1: continue
 
@@ -384,7 +384,7 @@ def get_sublist_of_ordered_verts(verts):
         #try all directions to look for next vertex
         for vax in range(2):
             for vdir in range(-1,2,2):
-                # check if there is an avaliable vertex
+                # check if there is an available vertex
                 next_ind = ord_verts[-1].ind.copy()
                 next_ind[vax]+=vdir
                 next_rv = None
@@ -478,7 +478,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
         i_pt = get_index(ind,add,type.dim)
         pt = get_vertex(i_pt,type.jverts[n],type.vertex_no_info)
 
-        # move vertex according to boundry condition <---needs to be updated
+        # move vertex according to boundary condition <---needs to be updated
         off_vecs = []
         if rv.block_count==1:
             nind = tuple(np.argwhere(rv.neighbors==1)[0])
@@ -493,8 +493,8 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
         off_vec = np.average(off_vecs,axis=0)
         # check if it is an outer corner that should be rounded
         rounded = False
-        if rv.region_count==3: # outer corner, check if it sould be rounded or not
-            # check if this outer corner correspond to an inner corner of another mateiral
+        if rv.region_count==3: # outer corner, check if it should be rounded or not
+            # check if this outer corner correspond to an inner corner of another material
             for n2 in range(type.noc):
                 if n2==n: continue
                 cnt = np.sum(rv.flat_neighbor_values==n2)
@@ -554,7 +554,7 @@ def offset_verts(type,neighbor_vectors,neighbor_vectors_a,neighbor_vectors_b,ver
             outline.append(MillVertex(pt))
         if len(outline)>2 and outline[0].is_arc and test_first:
             # if the previous one was an arc but it was the first point of the outline,
-            # so we couldnt verify the order of the points
+            # so we couldn't verify the order of the points
             # we might need to retrospectively switch order of the arc points
             npt = outline[2].pt
             d1 = np.linalg.norm(outline[0].pt-npt)
@@ -683,7 +683,7 @@ def get_layered_vertices(type,outline,n,lay_num,no_z,dep):
                 verts.extend([pt[0],pt[1],pt[2],r,g,b,tx,ty])
         outline.reverse()
 
-    # add enpoint
+    # add endpoint
     end_vert = [outline[0].x,outline[0].y,outline[0].z]
     end_vert[type.sax] = safe_height
     mverts.append(MillVertex(end_vert, is_tra=True))
@@ -1221,7 +1221,7 @@ class Types:
         HFS: height fields                  Voxel geometry described by height fields of size res*res
         """
 
-        #Inititate
+        #Initiate
         file = open(filename,"w")
 
         # Joint properties

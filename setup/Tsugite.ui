@@ -613,7 +613,7 @@
        <item>
         <widget class="QLabel" name="label_13">
          <property name="text">
-          <string>Axis of alignement</string>
+          <string>Axis of alignment</string>
          </property>
         </widget>
        </item>

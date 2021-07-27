@@ -119,7 +119,7 @@ class Selection:
         mouse_vec = mouse_vec.astype(float)
         mouse_vec[0] = 2*mouse_vec[0]/w
         mouse_vec[1] = 2*mouse_vec[1]/h
-        ## Check that the move distance is above some treshhold
+        ## Check that the move distance is above some threshold
         move_dist = linalg.norm(mouse_vec)
         if move_dist>0.01:
             ## Get component direction vector
@@ -137,7 +137,7 @@ class Selection:
             oax = None
             absang = abs(ang)%180
             if absang>45 and absang<135: # Timber rotation mode
-                # Check plane of rotating by checking which axis the vector is more alinged to
+                # Check plane of rotating by checking which axis the vector is more aligned to
                 other_axes = [0,1,2]
                 other_axes.pop(comp_ax)
                 # The axis that is flatter to the scren will be processed
@@ -204,4 +204,4 @@ class Selection:
                 if all_same: blocked = False
             if not blocked: self.new_fixed_sides = self.new_fixed_sides_for_display
         if not np.equal(self.parent.parent.fixed.sides[self.n],np.array(self.new_fixed_sides_for_display)).all():
-            self.parent.parent.combine_and_buffer_indices()# for move/rotate preview outline # cant you show this by tansformation instead?
+            self.parent.parent.combine_and_buffer_indices()# for move/rotate preview outline # can't you show this by tansformation instead?

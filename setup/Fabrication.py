@@ -39,7 +39,7 @@ def arc_points(st,en,ctr0,ctr1,ax,astep):
     en = np.array(en)
     ctr0 = np.array(ctr0)
     ctr1 = np.array(ctr1)
-    # calculate steps and count and produce inbetween points
+    # calculate steps and count and produce in between points
     v0 = st-ctr0
     v1 = en-ctr1
     cnt = int(0.5+angle_between(v0,v1)/astep)

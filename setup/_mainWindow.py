@@ -29,7 +29,7 @@ def get_untitled_filename(name,ext,sep):
         items = item.split(".")
         if len(items)>1 and items[1]==ext:
             extnames.append(items[0])
-    # if the name already exists, append seperator and number
+    # if the name already exists, append separator and number
     fname = name
     cnt = 1
     while fname in extnames:

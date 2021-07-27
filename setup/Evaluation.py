@@ -16,7 +16,7 @@ def get_ordered_outline(verts):
         #try all directions to look for next vertex
         for vax in range(2):
             for vdir in range(-1,2,2):
-                # check if there is an avaliable vertex
+                # check if there is an available vertex
                 next_ind = ord_verts[-1].ind.copy()
                 next_ind[vax]+=vdir
                 next_rv = None
@@ -655,7 +655,7 @@ def is_potentially_connected(mat,dim,noc,level):
     for n in range(noc):
         if n!=level: mat_conn[mat_conn==n+10] = floodval
 
-    # Recursively add all postive neigbors
+    # Recursively add all positive neigbors
     mat_conn = flood_all_nonneg(mat_conn,floodval)
 
     # Get the count of all uncovered voxels
@@ -673,7 +673,7 @@ def is_potentially_connected(mat,dim,noc,level):
                 if n2==level or n2==n: continue
                 mat_conn[mat_conn==n2+10] = -1
             start_len = len(np.argwhere(mat_conn==floodval))
-            # Recursively add all postive neigbors
+            # Recursively add all positive neigbors
             mat_conn = flood_all_nonneg(mat_conn,floodval)
             end_len = len(np.argwhere(mat_conn==floodval))
             if end_len-start_len<3:
@@ -691,7 +691,7 @@ def is_potentially_connected(mat,dim,noc,level):
                 for n2 in range(noc):
                     if n2==level or n2==n: continue
                     mat_conn[mat_conn==n2+10] = -1
-                # Recursively add all postive neigbors
+                # Recursively add all positive neigbors
                 mat_conn = flood_all_nonneg(mat_conn,floodval)
                 for ind in inds:
                     if mat_conn[tuple(ind)]!=floodval:

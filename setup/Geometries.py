@@ -585,7 +585,7 @@ class Geometries:
     def __init__(self,parent,mainmesh=True,hfs=[]):
         self.mainmesh = mainmesh
         self.parent = parent
-        self.fab_directions = [0,1] #Initiate list of fabircation directions
+        self.fab_directions = [0,1] #Initiate list of fabrication directions
         for i in range(1,self.parent.noc-1): self.fab_directions.insert(1,1)
         if len(hfs)==0: self.height_fields = get_random_height_fields(self.parent.dim,self.parent.noc) #Initiate a random joint geometry
         else: self.height_fields = hfs
@@ -759,12 +759,12 @@ class Geometries:
     def edit_height_fields(self,faces,h,n,dir):
         for ind in faces:
             self.height_fields[n-dir][tuple(ind)] = h
-            if dir==0: # If editiing top
+            if dir==0: # If editing top
                 # If new height is higher than following hf, update to same height
                 for i in range(n-dir+1,self.parent.noc-1):
                     h2 = self.height_fields[i][tuple(ind)]
                     if h>h2: self.height_fields[i][tuple(ind)]=h
-            if dir==1: # If editiing bottom
+            if dir==1: # If editing bottom
                 # If new height is lower than previous hf, update to same height
                 for i in range(0,n-dir):
                     h2 = self.height_fields[i][tuple(ind)]
