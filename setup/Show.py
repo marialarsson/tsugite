@@ -12,6 +12,14 @@ class Show:
         self.create_color_shaders()
         self.create_texture_shaders()
 
+    # def resize( w, h ):
+    #     width = w
+    #     height = h
+    #     aspect = w/h
+    #     # glViewport( 0, 0, width, height )
+    #     print("resize here")
+    #     glViewport( 0, 0, height*aspect, height )
+
     def update(self):
         self.init_shader(self.shader_col)
         if (self.view.open_joint and self.view.open_ratio<self.type.noc-1) or (not self.view.open_joint and self.view.open_ratio>0):
@@ -19,7 +27,7 @@ class Show:
 
     def create_color_shaders(self):
         vertex_shader = """
-        #version 150
+          #version 150
         #extension GL_ARB_explicit_attrib_location : require
         #extension GL_ARB_explicit_uniform_location : require
         layout(location = 0) in vec3 position;
@@ -84,6 +92,8 @@ class Show:
             outColor = texture(samplerTex, outTexCoords);
         }
         """
+        
+
         # Compiling the shaders
         self.shader_tex = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
                                                   OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
@@ -110,6 +120,24 @@ class Show:
             if self.view.hidden[geo.n]: continue
             glUniformMatrix4fv(4, 1, GL_FALSE, moves[geo.n])
             glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
+
+    def resizeGL(self, width, height):
+	    glViewport(0, 0, width, height)
+	    glMatrixMode(gl.GL_PROJECTION)
+	    glLoadIdentity()        
+	    aspect = width / float(height)
+
+	    # aspect = 1.267
+	    # oratio = aspect
+	    # if height * oratio > width:
+	    #     height = width / oratio
+        #     # height = w / oratio
+	    # else:
+	    #     width = height * oratio
+
+	    # print(aspect)
+	    gluPerspective(45.0, aspect, 1.0, 100.0)
+	    glMatrixMode(gl.GL_MODELVIEW)
 
     def draw_geometries_with_excluded_area(self, show_geos, screen_geos, translation_vec=np.array([0,0,0])):
         # Define translation matrices for opening
@@ -447,3 +475,7 @@ class Show:
                 if self.type.mesh.eval.fab_direction_ok[n]:
                     glUniform3f(5,cols[n][0],cols[n][1],cols[n][2])
                     self.draw_geometries([self.type.mesh.indices_milling_path[n]])
+
+    def resizeEvent(self, event):
+        print(' resizeEvent')
+        self.resize(self.width(), self.height())

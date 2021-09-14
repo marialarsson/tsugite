@@ -15,7 +15,7 @@ from PyQt5.QtOpenGL import *
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
-
+from math import tan, pi
 from Types import Types
 from Geometries import Geometries
 from ViewSettings import ViewSettings
@@ -26,24 +26,81 @@ class GLWidget(QGLWidget):
     def __init__(self, parent=None):
         self.parent = parent
         QGLWidget.__init__(self, parent)
-        self.setMinimumSize(800, 800)
+        # self.setMinimumSize(800, 800)
         self.setMouseTracking(True)
         self.click_time = time.time()
         self.x = 0
         self.y = 0
 
-    from _GLWidget import initializeGL
-    from _GLWidget import resizeGL
+    # def __init__(self, parent=None):
+    #     fmt = QGLFormat()
+    #     fmt.setVersion(2, 1)
+    #     fmt.setProfile(QGLFormat.CoreProfile)
+    #     fmt.setSampleBuffers(True)
 
+    #     self.parent = parent
+    #     QGLWidget.__init__(self, fmt, parent)
+
+    #     # self.parent = parent
+    #     # QGLWidget.__init__(self, parent)
+    #     # self.setMinimumSize(10, 10)
+    #     # self.setMaximumSize(10000, 10000)
+    #     #self.setMinimumSize(800, 800)
+
+    #     self.setMouseTracking(True)
+    #     self.click_time = time.time()
+    #     self.x = 0
+    #     self.y = 0    
+
+
+    from _GLWidget import initializeGL
+    # from _GLWidget import resizeGL
+    def resizeGL(self, w, h):
+        def perspective(fovY, aspect, zNear, zFar):
+            fH =tan(fovY / 360. * pi) * zNear
+            fW = fH * aspect
+            glFrustum(-fW, fW, -fH, fH, zNear, zFar)
+
+        # oratio = self.width() /self.height()
+        ratio = 1.267
+        
+ 
+
+        if h * ratio > w:
+            h = round(w / ratio)
+
+        else:
+            w = round(h * ratio)
+
+
+        # print(" widget resizeGL")        
+        # print(w)
+        # print(h)
+        
+        glViewport(0, 0, w, h)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        perspective(45.0, ratio, 1, 1000)
+        glMatrixMode(GL_MODELVIEW)
+        self.width = w
+        self.height = h
+        self.wstep = int(0.5+w/5)
+        self.hstep = int(0.5+h/4)
+
+
+
+        
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        glViewport(0,0,self.width-self.wstep,self.height)
+        # glViewport(0,0,self.width-self.wstep,self.height)
         glLoadIdentity()
 
         self.show.update()
+        # ortho = np.multiply(np.array((-2, +2, -2, +2), dtype=float), self.zoomFactor)
+	    # glOrtho(ortho[0], ortho[1], ortho[2], ortho[3], 4.0, 15.0)
 
         glViewport(0,0,self.width-self.wstep,self.height)
-        glLoadIdentity()
+        # glLoadIdentity()
         # Color picking / editing
         # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
         if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
@@ -95,6 +152,19 @@ class GLWidget(QGLWidget):
                     glDisable(GL_SCISSOR_TEST)
                 self.show.joint_geometry(mesh=self.type.sugs[i],lw=2,hidden=False)
 
+                
+    # def resizeGL(self, w, h):
+    #     # setup viewport, projection etc.:
+    #     glViewport(0,0,w,h)
+    #     self.show.update()
+
+    # resize_cb = pyqtSignal(int,int)
+    # def resizeGL(self, width, height):
+    #     if height == 0: height = 1
+    #     self.resize_cb.emit(width,height)
+        
+
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             if time.time()-self.click_time<0.2:
@@ -124,6 +194,7 @@ class GLWidget(QGLWidget):
         elif e.button() == Qt.RightButton:
             self.show.view.start_rotation_xy(self.parent.scaling*e.x(),self.parent.scaling*e.y())
 
+
     def mouseMoveEvent(self, e):
         self.x = self.parent.scaling*e.x()
         self.y = self.parent.scaling*e.y()
@@ -138,14 +209,26 @@ class GLWidget(QGLWidget):
                 self.type.mesh.select.end_move()
         elif e.button() == Qt.RightButton:
             self.show.view.end_rotation()
+    def minimumSizeHint(self):
+        return QSize(50, 50)
+    def sizeHint(self):        
+        # print("resize Hint!")
+        return QSize(800, 800)
+    # def resizeEvent(self, event):
+    #     print(' widget resizeEvent')
+        # self.resizeGL(self.width(), self.height())
+            # self.resize(self.width, self.height)
+    
+            
 
 class MovieSplashScreen(QSplashScreen):
 
     def __init__(self, movie, parent = None):
-    
+        
+        
         movie.jumpToFrame(0)
         pixmap = QPixmap(movie.frameRect().size())
-        
+   
         QSplashScreen.__init__(self, pixmap)
         self.movie = movie
         self.movie.frameChanged.connect(self.repaint)
@@ -162,16 +245,17 @@ class MovieSplashScreen(QSplashScreen):
         pixmap = self.movie.currentPixmap()
         self.setMask(pixmap.mask())
         painter.drawPixmap(0, 0, pixmap)
+
+
     
     def sizeHint(self):
-    
         return self.movie.scaledSize()
+
 
 class mainWindow(QMainWindow):
 
     def __init__(self, *args):
         super(mainWindow, self).__init__(*args)
-
         self.scaling = self.devicePixelRatioF()
 
         loadUi('Tsugite.ui', self)
@@ -183,8 +267,10 @@ class mainWindow(QMainWindow):
         self.setWindowIcon(QIcon("tsugite_icon.png"))
 
         self.glWidget = GLWidget(self)
-        self.H_layout.addWidget(self.glWidget)
 
+        self.H_layout.addWidget(self.glWidget)
+        # self.setCentralWidget(self.glWidget)
+        
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage("To open and close the joint: PRESS 'Open/close joint' button or DOUBLE-CLICK anywhere inside the window.")
@@ -193,6 +279,7 @@ class mainWindow(QMainWindow):
         timer.setInterval(20)   # period, in milliseconds
         timer.timeout.connect(self.glWidget.updateGL)
         timer.start()
+
 
     from _mainWindow import setupUi
     from _mainWindow import open_close_joint
@@ -240,12 +327,21 @@ class mainWindow(QMainWindow):
             self.glWidget.type.mesh.select.shift = False
             self.glWidget.type.mesh.select.refresh = True
 
+    # def resizeEvent(self, event):
+        # print('  resizeEvent')
+
+    #     # self.resize(self.width(), self.height())
+    #     self.glWidget.resizeEvent(event)
+  
+
 #deal with dpi
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True) #enable highdpi scaling
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True) #use highdpi icons
 app = QApplication(sys.argv)
 movie = QMovie("tsugite_loading_3d.gif")
+
 splash = MovieSplashScreen(movie)
+
 splash.show()
 
 start = time.time()
@@ -254,8 +350,8 @@ while movie.state() == QMovie.Running and time.time() < start + 1:
     app.processEvents()
 #screen = app.screens()[0]
 #dpi = screen.physicalDotsPerInch()
+
 window = mainWindow()
 window.show()
 splash.finish(window)
 sys.exit(app.exec_())
-
