@@ -1,4 +1,5 @@
 from OpenGL.GL import *
+import OpenGL.GL.shaders as shaders
 from Buffer import ElementProperties
 from ViewSettings import ViewSettings
 import numpy as np
@@ -27,9 +28,8 @@ class Show:
 
     def create_color_shaders(self):
         vertex_shader = """
-          #version 150
-        #extension GL_ARB_explicit_attrib_location : require
-        #extension GL_ARB_explicit_uniform_location : require
+        #version %d%d0
+
         layout(location = 0) in vec3 position;
         layout(location = 1) in vec3 color;
         layout(location = 2) in vec2 inTexCoords;
@@ -47,7 +47,7 @@ class Show:
         """
 
         fragment_shader = """
-        #version 150
+        #version %d%d0
         in vec3 newColor;
         in vec2 outTexCoords;
         out vec4 outColor;
@@ -57,15 +57,16 @@ class Show:
             outColor = vec4(newColor, 1.0);
         }
         """
+
+        major = glGetInteger(GL_MAJOR_VERSION)
+        minor = glGetInteger(GL_MINOR_VERSION)
         # Compiling the shaders
-        self.shader_col = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
-                                                  OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
+        self.shader_col = shaders.compileProgram(shaders.compileShader(vertex_shader % (major, minor), GL_VERTEX_SHADER),
+                                                  shaders.compileShader(fragment_shader% (major, minor), GL_FRAGMENT_SHADER))
 
     def create_texture_shaders(self):
         vertex_shader = """
-        #version 150
-        #extension GL_ARB_explicit_attrib_location : require
-        #extension GL_ARB_explicit_uniform_location : require
+        #version %d%d0
         layout(location = 0) in vec3 position;
         layout(location = 1) in vec3 color;
         layout(location = 2) in vec2 inTexCoords;
@@ -82,7 +83,7 @@ class Show:
         """
 
         fragment_shader = """
-        #version 150
+        #version %d%d0
         in vec3 newColor;
         in vec2 outTexCoords;
         out vec4 outColor;
@@ -93,16 +94,19 @@ class Show:
         }
         """
         
-
+        
+        major = glGetInteger(GL_MAJOR_VERSION)
+        minor = glGetInteger(GL_MINOR_VERSION)
         # Compiling the shaders
-        self.shader_tex = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
-                                                  OpenGL.GL.shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER))
+        self.shader_tex = shaders.compileProgram(shaders.compileShader(vertex_shader % (major, minor), GL_VERTEX_SHADER),
+                                                  shaders.compileShader(fragment_shader % (major, minor), GL_FRAGMENT_SHADER))
 
     def init_shader(self,shader):
         glUseProgram(shader)
         rot_x = pyrr.Matrix44.from_x_rotation(self.view.xrot)
         rot_y = pyrr.Matrix44.from_y_rotation(self.view.yrot)
         glUniformMatrix4fv(3, 1, GL_FALSE, rot_x * rot_y)
+        
 
     def draw_geometries(self, geos,clear_depth_buffer=True, translation_vec=np.array([0,0,0])):
         # Define translation matrices for opening
@@ -121,23 +125,23 @@ class Show:
             glUniformMatrix4fv(4, 1, GL_FALSE, moves[geo.n])
             glDrawElements(geo.draw_type, geo.count, GL_UNSIGNED_INT,  ctypes.c_void_p(4*geo.start_index))
 
-    def resizeGL(self, width, height):
-	    glViewport(0, 0, width, height)
-	    glMatrixMode(gl.GL_PROJECTION)
-	    glLoadIdentity()        
-	    aspect = width / float(height)
+    # def resizeGL(self, width, height):
+	#     glViewport(0, 0, width, height)
+	#     glMatrixMode(gl.GL_PROJECTION)
+	#     glLoadIdentity()        
+	#     aspect = width / float(height)
 
-	    # aspect = 1.267
-	    # oratio = aspect
-	    # if height * oratio > width:
-	    #     height = width / oratio
-        #     # height = w / oratio
-	    # else:
-	    #     width = height * oratio
+	#     # aspect = 1.267
+	#     # oratio = aspect
+	#     # if height * oratio > width:
+	#     #     height = width / oratio
+    #     #     # height = w / oratio
+	#     # else:
+	#     #     width = height * oratio
 
-	    # print(aspect)
-	    gluPerspective(45.0, aspect, 1.0, 100.0)
-	    glMatrixMode(gl.GL_MODELVIEW)
+	#     # print(aspect)
+	#     gluPerspective(45.0, aspect, 1.0, 100.0)
+	#     glMatrixMode(gl.GL_MODELVIEW)
 
     def draw_geometries_with_excluded_area(self, show_geos, screen_geos, translation_vec=np.array([0,0,0])):
         # Define translation matrices for opening
