@@ -6,6 +6,7 @@ import time
 import math
 import os
 
+from PyQt5 import QtCore, QtGui, QtOpenGL
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -24,14 +25,20 @@ from _mainWindow import get_untitled_filename
 
 class GLWidget(QGLWidget):
     def __init__(self, parent=None):
+        fmt = QGLFormat()
+        fmt.setVersion(4, 1)
+        fmt.setProfile(QGLFormat.CoreProfile)
+        fmt.setSampleBuffers(True)
+                
         self.parent = parent
-        QGLWidget.__init__(self, parent)
+        # QGLWidget.__init__(self,fmt, parent)
+        super().__init__(fmt, parent)
         # self.setMinimumSize(800, 800)
         self.setMouseTracking(True)
         self.click_time = time.time()
         self.x = 0
         self.y = 0
-
+        # print(self._opengl_info())
     # def __init__(self, parent=None):
     #     fmt = QGLFormat()
     #     fmt.setVersion(2, 1)
@@ -52,7 +59,7 @@ class GLWidget(QGLWidget):
     #     self.x = 0
     #     self.y = 0    
 
-
+    
     from _GLWidget import initializeGL
     # from _GLWidget import resizeGL
     def resizeGL(self, w, h):
@@ -254,8 +261,8 @@ class MovieSplashScreen(QSplashScreen):
 
 class mainWindow(QMainWindow):
 
-    def __init__(self, *args):
-        super(mainWindow, self).__init__(*args)
+    def __init__(self):
+        super().__init__()
         self.scaling = self.devicePixelRatioF()
 
         loadUi('Tsugite.ui', self)

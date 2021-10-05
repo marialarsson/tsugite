@@ -13,7 +13,17 @@ from math import tan, pi
 from Types import Types
 from Show import Show
 
+def _opengl_info() -> str:
+        return f"""### OpenGL info ###       
+
+ Vendor: {glGetString(GL_VENDOR).decode("utf-8")}
+ Renderer: {glGetString(GL_RENDERER).decode("utf-8")}
+ OpenGL Version: {glGetString(GL_VERSION).decode("utf-8")}
+ GLSL Version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode("utf-8")}
+"""
+
 def initializeGL(self):
+    print(_opengl_info())
     self.qglClearColor(QColor(255, 255, 255))
     glEnable(GL_DEPTH_TEST)                  # enable depth testing
     sax = self.parent.findChild(QComboBox, "comboSLIDE").currentIndex()
