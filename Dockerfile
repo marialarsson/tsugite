@@ -41,18 +41,20 @@ RUN meson \
 
 RUN ninja
 
-RUN ninja install
-
-RUN tar -cf /softpipe.tar /usr/local/lib/x86_64-linux-gnu/libglapi.so.0.0.0 /usr/local/lib/x86_64-linux-gnu/libGLESv1_CM.so.1.1.0 /usr/local/lib/x86_64-linux-gnu/libGLESv2.so.2.0.0 /usr/local/lib/x86_64-linux-gnu/libGL.so.1.5.0 /usr/local/include/KHR/khrplatform.h /usr/local/include/GLES/egl.h /usr/local/include/GLES/gl.h /usr/local/include/GLES/glext.h /usr/local/include/GLES/glplatform.h /usr/local/include/GLES2/gl2.h /usr/local/include/GLES2/gl2ext.h /usr/local/include/GLES2/gl2platform.h /usr/local/include/GLES3/gl3.h /usr/local/include/GLES3/gl31.h /usr/local/include/GLES3/gl32.h /usr/local/include/GLES3/gl3ext.h /usr/local/include/GLES3/gl3platform.h /usr/local/include/GL/gl.h /usr/local/include/GL/glcorearb.h /usr/local/include/GL/glext.h /usr/local/include/GL/glx.h /usr/local/include/GL/glxext.h /usr/local/share/drirc.d/00-mesa-defaults.conf /usr/local/lib/x86_64-linux-gnu/pkgconfig/glesv1_cm.pc /usr/local/lib/x86_64-linux-gnu/pkgconfig/glesv2.pc /usr/local/lib/x86_64-linux-gnu/pkgconfig/gl.pc
+RUN mkdir installdir && \
+	DESTDIR=installdir ninja install && \
+	cd installdir && \
+	tar -cf /softpipe.tar . 
 
 # multistage build, second phase (remove build deps, image goes from 1.7GB to a third of that)
 
 FROM debian:bullseye
 
+# install mesa llvmpipe and softpipe GALLIUM drivers for non-GPU OpenGL
 COPY --from=builder /softpipe.tar /
+RUN cd / && tar -xf /softpipe.tar
 
-RUN cd / && tar -xf /softpipe.tar && rm /softpipe.tar 
-
+# install tsugite app
 RUN apt -y update && apt install -y --no-install-recommends \
 	python3-pyqt5.qtopengl \
 	python3-pip \
@@ -66,13 +68,7 @@ RUN pip3 install -r requirements.txt
 COPY setup/ .
 COPY my_joint* ./
 
-ENV XVFB_WHD="1920x1080x24"\
-    DISPLAY=":0.0" \
-    LIBGL_ALWAYS_SOFTWARE="1" \
-    GALLIUM_DRIVER="softpipe"
-
-# add supervisord and a novnc websockified UI to the app
-
+# add supervisord and a novnc websockified UI in front of the app
 RUN apt-get install -y --no-install-recommends git && \
 	git clone https://github.com/kanaka/noVNC.git /root/noVNC \
 	&& git clone https://github.com/kanaka/websockify /root/noVNC/utils/websockify \
@@ -92,6 +88,7 @@ RUN apt-get install -y --no-install-recommends \
 	xvfb \
 	procps
 
+# set up default password for noVNC login
 #RUN cp /etc/X11/xinit/xinitrc /root/.xinitrc
 RUN mkdir ~/.vnc && x11vnc -storepasswd tsugite ~/.vnc/passwd
 
@@ -99,8 +96,13 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 EXPOSE 8083
 ENTRYPOINT [ "tini", "--" ]
 
-ENV DISPLAY_WIDTH="1920" \
-	DISPLAY_HEIGHT="1080"
+ENV XVFB_WHD="1200x768x24"\
+    DISPLAY=":0.0" \
+    LIBGL_ALWAYS_SOFTWARE="1" \
+    GALLIUM_DRIVER="llvmpipe"
+
+ENV DISPLAY_WIDTH="1600" \
+	DISPLAY_HEIGHT="1024"
 
 CMD /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
 
