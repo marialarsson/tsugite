@@ -1,7 +1,11 @@
 multipledispatch==0.6.0
 numpy==1.20.3
 Pillow==8.3.2
-PyOpenGL==3.1.5
-PyQt5==5.15.4
+#PyOpenGL==3.1.5
+#PyQt5==5.15.6
+PyQt5
+PyOpenGL
 pyrr==0.10.3
 six==1.15.0
+pbr==5.8.0
+testresources==2.0.1

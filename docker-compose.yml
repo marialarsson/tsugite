@@ -1,0 +1,7 @@
+services:
+
+  app:
+    image: tsugite
+    ports:
+      - "8083:8083"
+
