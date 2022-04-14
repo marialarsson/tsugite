@@ -25,7 +25,7 @@ $ pip install -r requirements.txt
 After installing the necessary packages, run the application by the following commands.
 ```
 $ cd setup
-$ python tsugite_app.py
+$ python Tsugite_app.py
 ```
 
 ### Interface
