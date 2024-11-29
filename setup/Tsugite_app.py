@@ -104,13 +104,15 @@ class GLWidget(QGLWidget):
         # Color picking / editing
         # Pick faces -1: nothing, 0: hovered, 1: adding, 2: pulling
         if not self.type.mesh.select.state==2 and not self.type.mesh.select.state==12: # Draw back buffer colors
+            #print(self.x,self.y,self.height)
             self.show.pick(self.x,self.y,self.height)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        elif self.type.mesh.select.state==2: # Edit joint geometry
+        elif self.type.mesh.select.state==2: # Editing joint geometry
             self.type.mesh.select.edit([self.x,self.y], self.show.view.xrot, self.show.view.yrot, w=self.width, h=self.height)
-        elif self.type.mesh.select.state==12: # Edit timber orientation/position
+        elif self.type.mesh.select.state==12: # Editing timber orientation/position
             self.type.mesh.select.move([self.x,self.y], self.show.view.xrot, self.show.view.yrot)
 
+        
         # Display main geometry
         self.show.end_grains()
         if self.show.view.show_feedback:
@@ -132,7 +134,7 @@ class GLWidget(QGLWidget):
         # Display editing in action
         self.show.selected()
         self.show.moving_rotating()
-
+        
         # Display milling paths
         self.show.milling_paths()
 
@@ -166,6 +168,7 @@ class GLWidget(QGLWidget):
 
 
     def mousePressEvent(self, e):
+        print("mouse_pressed")
         if e.button() == Qt.LeftButton:
             if time.time()-self.click_time<0.2:
                 self.show.view.open_joint = not self.show.view.open_joint
@@ -192,6 +195,7 @@ class GLWidget(QGLWidget):
             #        type.combine_and_buffer_indices()
             else: self.click_time = time.time()
         elif e.button() == Qt.RightButton:
+            print("start rot")
             self.show.view.start_rotation_xy(self.parent.scaling*e.x(),self.parent.scaling*e.y())
 
 

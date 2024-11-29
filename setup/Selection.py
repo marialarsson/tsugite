@@ -8,7 +8,7 @@ from Misc import FixedSide
 def angle_between_with_direction(v0, v1):
     v0 = v0 / np.linalg.norm(v0)
     v1 = v1 / np.linalg.norm(v1)
-    angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
+    angle = np.arctan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
     return math.degrees(angle)
 
 def unitize(v):

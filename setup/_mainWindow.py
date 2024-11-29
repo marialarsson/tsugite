@@ -240,17 +240,18 @@ def export_gcode(self):
 @pyqtSlot()
 def set_gcode_as_standard(self):
     bool = self.findChild(QRadioButton, "radioGCODE").isChecked()
-    if bool: self.glWidget.type.fab.ext = "gcode"
+    if bool: self.glWidget.type.fab.update_extension("gcode")
 
 @pyqtSlot()
 def set_nccode_as_standard(self):
     bool = self.findChild(QRadioButton, "radioNC").isChecked()
-    if bool: self.glWidget.type.fab.ext = "nc"
+    if bool: self.glWidget.type.fab.update_extension("nc")
+
 
 @pyqtSlot()
 def set_sbp_as_standard(self):
     bool = self.findChild(QRadioButton, "radioSBP").isChecked()
-    if bool: self.glWidget.type.fab.ext = "sbp"
+    if bool: self.glWidget.type.fab.update_extension("sbp")
 
 @pyqtSlot()
 def new_file(self):
@@ -329,11 +330,11 @@ def set_ui_values(self):
     else: self.findChild(QCheckBox, "checkCUBE").setChecked(False)
     self.findChild(QDoubleSpinBox, "spinDIA").setValue(self.glWidget.type.fab.real_dia)
     self.findChild(QDoubleSpinBox, "spinTOL").setValue(self.glWidget.type.fab.tol)
-    self.findChild(QSpinBox, "spinSPEED").setValue(self.glWidget.type.fab.speed)
-    self.findChild(QSpinBox, "spinSPINDLE").setValue(self.glWidget.type.fab.spindlespeed)
+    self.findChild(QSpinBox, "spinSPEED").setValue(int(self.glWidget.type.fab.speed))
+    self.findChild(QSpinBox, "spinSPINDLE").setValue(int(self.glWidget.type.fab.spindlespeed))
     self.findChild(QCheckBox, "checkINC").setChecked(self.glWidget.type.incremental)
     self.findChild(QCheckBox, "checkFIN").setChecked(self.glWidget.type.fab.interp)
-    self.findChild(QComboBox, "comboALIGN").setCurrentIndex(self.glWidget.type.fab.align_ax)
+    self.findChild(QComboBox, "comboALIGN").setCurrentIndex(int(self.glWidget.type.fab.align_ax))
     if self.glWidget.type.fab.ext=="gcode":
         self.findChild(QRadioButton, "radioGCODE").setChecked(True)
     elif self.glWidget.type.fab.ext=="sbp":

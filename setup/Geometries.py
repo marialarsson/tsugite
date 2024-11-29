@@ -1,13 +1,8 @@
 from OpenGL.GL import *
 import numpy as np
-from numpy import linalg
 import random
-import math
-import pyrr
 from Selection import Selection
-from Fabrication import Fabrication
 from Evaluation import Evaluation
-from Buffer import Buffer
 from Buffer import ElementProperties
 import copy
 import os
@@ -20,7 +15,8 @@ def get_random_height_fields(dim,noc):
     for n in range(noc-1):
         hf = np.zeros((dim,dim))
         for i in range(dim):
-            for j in range(dim): hf[i,j]=random.randint(phf[i,j],dim)
+            for j in range(dim): 
+                hf[i,j]=random.randint(int(phf[i,j]),dim)
         hfs.append(hf)
         phf = copy.deepcopy(hf)
     return hfs
@@ -416,9 +412,9 @@ def joint_top_face_indices(self,all_indices,n,noc,offset):
         indices.extend([d0,c0,c1,d1]) #side face 3
         indices.extend([c0,a0,a1,c1]) ##side face 4
     # Format
-    indices = np.array(indices, dtype=np.uint32)
+    indices = np.array(indices, dtype=np.int32)
     indices = indices + offset
-    indices_tops = np.array(indices_tops, dtype=np.uint32)
+    indices_tops = np.array(indices_tops, dtype=np.int32)
     indices_tops = indices_tops + offset
     # Store
     indices_prop = ElementProperties(GL_QUADS, len(indices), len(all_indices), n)

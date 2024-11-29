@@ -43,8 +43,12 @@ def arc_points(st,en,ctr0,ctr1,ax,astep):
     v0 = st-ctr0
     v1 = en-ctr1
     cnt = int(0.5+angle_between(v0,v1)/astep)
-    astep = angle_between(v0,v1)/cnt
-    zstep = (en[ax]-st[ax])/cnt
+    if cnt>0:
+        astep = angle_between(v0,v1)/cnt
+        zstep = (en[ax]-st[ax])/cnt
+    else:
+        astep=0 
+        zstep=0
     ax_vec = np.cross(v0,v1)
     for i in range(1,cnt+1):
         rvec = rotate_vector_around_axis(v0, ax_vec, astep*i)
@@ -107,14 +111,20 @@ class MillVertex:
         self.arc_ctr = np.array(arc_ctr)
         self.is_tra = is_tra # is traversing, gcode_mode G0 (max speed) (otherwise G1)
 
-    def scale_and_swap(self,ax,dir,ratio,real_tim_dims,coords,d,n):
-        #sawp
-        xyz = [ratio*self.x,ratio*self.y,ratio*self.z]
+    def scale_and_swap(self,ax,dir,ratio,unit_scale,real_tim_dims,coords,d,n):
+        
+        #print("1", self.x,self.y,self.z)
+
+        #sawp and scale
+        xyz = [unit_scale*ratio*self.x, unit_scale*ratio*self.y, unit_scale*ratio*self.z]
         if ax==2: xyz[1] = -xyz[1]
         xyz = xyz[coords[0]],xyz[coords[1]],xyz[coords[2]]
         self.x,self.y,self.z = xyz[0],xyz[1],xyz[2]
+
+        #print("2",self.x,self.y,self.z)
+        
         #move z down, flip if component b
-        self.z = -(2*dir-1)*self.z-0.5*real_tim_dims[ax]
+        self.z = -(2*dir-1)*self.z-0.5*unit_scale*real_tim_dims[ax]
         self.y = -(2*dir-1)*self.y
         self.pt = np.array([self.x,self.y,self.z])
         self.pos = np.array([self.x,self.y,self.z],dtype=np.float64)
@@ -123,10 +133,10 @@ class MillVertex:
         self.zstr = str(round(self.z,d))
         ##
         if self.is_arc:
-            self.arc_ctr = [ratio*self.arc_ctr[0],ratio*self.arc_ctr[1],ratio*self.arc_ctr[2]] #ratio*self.arc_ctr
+            self.arc_ctr = [unit_scale*ratio*self.arc_ctr[0], unit_scale*ratio*self.arc_ctr[1], unit_scale*ratio*self.arc_ctr[2]] 
             if ax==2: self.arc_ctr[1] = -self.arc_ctr[1]
             self.arc_ctr = [self.arc_ctr[coords[0]],self.arc_ctr[coords[1]],self.arc_ctr[coords[2]]]
-            self.arc_ctr[2] = -(2*dir-1)*self.arc_ctr[2]-0.5*real_tim_dims[ax]
+            self.arc_ctr[2] = -(2*dir-1)*self.arc_ctr[2]-0.5*unit_scale*real_tim_dims[ax]
             self.arc_ctr[1] = -(2*dir-1)*self.arc_ctr[1]
             self.arc_ctr = np.array(self.arc_ctr)
 
@@ -144,6 +154,7 @@ class MillVertex:
         if self.is_arc:
             self.arc_ctr = rotate_vector_around_axis(self.arc_ctr, [0,0,1], ang)
             self.arc_ctr = np.array(self.arc_ctr)
+
 class Fabrication:
     def __init__(self,parent,tol=0.15,dia=6.00,ext="gcode",align_ax=0,interp=True, spe=400, spi=6000):
         self.parent = parent
@@ -151,6 +162,8 @@ class Fabrication:
         self.tol = tol #0.10 #tolerance in mm
         self.rad = 0.5*self.real_dia-self.tol
         self.dia = 2*self.rad
+        self.unit_scale = 1.0
+        #if ext=='sbp': self.unit_scale=1/25.4 #inches
         self.vdia = self.dia/self.parent.ratio
         self.vrad = self.rad/self.parent.ratio
         self.vtol = self.tol/self.parent.ratio
@@ -160,14 +173,22 @@ class Fabrication:
         self.interp=interp
         self.speed = spe
         self.spindlespeed = spi
+    
+    def update_extension(self,ext):
+        self.ext = ext
+        self.unit_scale = 1.0
+        #if self.ext=='sbp': self.unit_scale=1/25.4 #inches
+        #print(self.ext,self.unit_scale)
+
 
     def export_gcode(self,filename_tsu=os.getcwd()+os.sep+"joint.tsu"):
+        print(self.ext)
         # make sure that the z axis of the gcode is facing up
         fax = self.parent.sax
         coords = [0,1]
         coords.insert(fax,2)
         #
-        d = 3 # =precision / no of decimals to write
+        d = 5 # =precision / no of decimals to write
         names = ["A","B","C","D","E","F"]
         for n in range(self.parent.noc):
             fdir = self.parent.mesh.fab_directions[n]
@@ -201,18 +222,23 @@ class Fabrication:
                 file.write("F"+spestr+" (Feed "+spestr+"mm/min)\n")
             elif self.ext=="sbp":
                 file.write("'%\n")
-                file.write("SA\n")
-                file.write("MS,6.67,6.67\n\n")
-                file.write("TR 6000\n\n")
-                file.write("SO 1,1\n")
+                #file.write("VN, 2\n")
+                file.write("SA\n") # Set to Absolute Distances
+                #file.write("TR 6000\n\n") #?
+                file.write("TR,18000\n") # from VUILD
+                file.write("C6\n")
+                file.write("PAUSE 2\n")
+                file.write("'\n")
+                #file.write("SO 1,1\n") #Set Output Switch ON
+                file.write("MS,6.67,6.67\n\n") # Move Speed Set
             else:
                 print("Unknown extension:", self.ext)
 
             ###content
             for i,mv in enumerate(self.parent.gcodeverts[n]):
-                mv.scale_and_swap(fax,fdir,self.parent.ratio,self.parent.real_tim_dims,coords,d,n)
+                mv.scale_and_swap(fax,fdir,self.parent.ratio,self.unit_scale,self.parent.real_tim_dims,coords,d,n)
                 if comp_ax!=fax: mv.rotate(rot_ang,d)
-                if i>0: pmv = self.parent.gcodeverts[n][i-1]
+                if i>0: pmv = self.parent.gcodeverts[n][i-1] #pmv=previous mill vertex
                 # check segment angle
                 arc = False
                 clockwise = False
@@ -249,9 +275,10 @@ class Fabrication:
                         if i==0 or mv.y!=pmv.y: file.write(" Y"+mv.ystr)
                         if i==0 or mv.z!=pmv.z: file.write(" Z"+mv.zstr)
                         file.write("\n")
+                        
                 elif self.ext=="sbp":
                     if arc and mv.z==pmv.z:
-                        file.write("CG,"+str(round(2*self.dia,d))+","+mv.xstr+","+mv.ystr+",,,T,")
+                        file.write("CG,"+str(round(2*self.dia*self.unit_scale,d))+","+mv.xstr+","+mv.ystr+",,,T,")
                         if clockwise: file.write("1\n")
                         else: file.write("-1\n")
                     elif arc and mv.z!=pmv.z:

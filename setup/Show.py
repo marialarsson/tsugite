@@ -126,6 +126,8 @@ class Show:
 	    glMatrixMode(gl.GL_PROJECTION)
 	    glLoadIdentity()        
 	    aspect = width / float(height)
+        #self.width = width
+        #self.height = height
 
 	    # aspect = 1.267
 	    # oratio = aspect
@@ -185,6 +187,8 @@ class Show:
 
     def pick(self,xpos,ypos,height):
 
+    
+
         if not self.view.gallery:
             ######################## COLOR SHADER ###########################
             glUseProgram(self.shader_col)
@@ -219,7 +223,7 @@ class Show:
                         self.draw_geometries([top],clear_depth_buffer=False)
 
         ############### Read pixel color at mouse position ###############
-        mouse_pixel = glReadPixelsub(xpos, height-ypos, 1, 1, GL_RGB, outputType=None)[0][0]
+        mouse_pixel = glReadPixelsub(xpos, height-ypos, 1, 1, GL_RGB, outputType=GL_UNSIGNED_BYTE)[0][0]
         mouse_pixel = np.array(mouse_pixel)
         pick_n = pick_d = pick_x = pick_y = None
         self.type.mesh.select.suggstate = -1
@@ -238,15 +242,17 @@ class Show:
                             if len(non_zeros[0])>1:
                                 pick_n = pick_n+self.type.dim
                                 if mouse_pixel[0]==mouse_pixel[2]: pick_n = 5
-                            val = 255-mouse_pixel[non_zeros[0][0]]
-                            i = int(0.5+val*(2+2*self.type.dim*self.type.dim)/255)-1
+                            val = 255-mouse_pixel[non_zeros[0][0]]                            
+                            #i = int(0.5+val*(2+2*self.type.dim*self.type.dim)/255)-1
+                            step_size = 128/(self.type.dim**2+1)
+                            i=round(val/step_size)-1
                             if i>=0:
                                 pick_x = (int(i/self.type.dim))%self.type.dim
                                 pick_y = i%self.type.dim
                             pick_d = 0
                             if pick_n==self.type.noc-1: pick_d = 1
                             elif int(i/self.type.dim)>=self.type.dim: pick_d = 1
-                            #print(pick_n,pick_d,pick_x,pick_y)
+                            #print("pick",pick_n,pick_d,pick_x,pick_y)
         """
         else: #gallerymode
             if xpos>0 and xpos<2000 and ypos>0 and ypos<1600:
