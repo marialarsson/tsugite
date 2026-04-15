@@ -5,6 +5,7 @@ import numpy as np
 import time
 import math
 import os
+from pathlib import Path
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -255,7 +256,7 @@ def set_sbp_as_standard(self):
 @pyqtSlot()
 def new_file(self):
     self.filename = get_untitled_filename("Untitled","tsu","_")
-    self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
+    self.setWindowTitle(Path(self.filename).name+" - "+self.title)
     self.glWidget.show.view.show_milling_path=False
     self.glWidget.type.reset()
     self.set_ui_values()
@@ -266,7 +267,7 @@ def open_file(self):
     filename, _ = QFileDialog.getOpenFileName(filter="Tsugite files (*.tsu)")
     if filename!='':
         self.filename = filename
-        self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
+        self.setWindowTitle(Path(self.filename).name+" - "+self.title)
         self.findChild(QCheckBox, "checkCUBE").setChecked(False)
         self.glWidget.type.open(self.filename)
         self.set_ui_values()
@@ -280,7 +281,7 @@ def save_file_as(self):
     filename, _ = QFileDialog.getSaveFileName(filter="Tsugite files (*.tsu)")
     if filename!='':
         self.filename = filename
-        self.setWindowTitle(self.filename.split("/")[-1]+" - "+self.title)
+        self.setWindowTitle(Path(self.filename).name+" - "+self.title)
         self.glWidget.type.save(self.filename)
 
 @pyqtSlot()

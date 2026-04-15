@@ -5,6 +5,9 @@ import numpy as np
 import time
 import math
 import os
+from pathlib import Path
+
+_HERE = Path(__file__).parent
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -258,13 +261,13 @@ class mainWindow(QMainWindow):
         super(mainWindow, self).__init__(*args)
         self.scaling = self.devicePixelRatioF()
 
-        loadUi('Tsugite.ui', self)
+        loadUi(str(_HERE / 'Tsugite.ui'), self)
         self.setupUi()
 
         self.title = "Tsugite"
         self.filename = get_untitled_filename("Untitled","tsu","_")
-        self.setWindowTitle(self.filename.split(os.sep)[-1]+" - "+self.title)
-        self.setWindowIcon(QIcon("tsugite_icon.png"))
+        self.setWindowTitle(Path(self.filename).name+" - "+self.title)
+        self.setWindowIcon(QIcon(str(_HERE / "tsugite_icon.png")))
 
         self.glWidget = GLWidget(self)
 
@@ -338,7 +341,7 @@ class mainWindow(QMainWindow):
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True) #enable highdpi scaling
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True) #use highdpi icons
 app = QApplication(sys.argv)
-movie = QMovie("tsugite_loading_3d.gif")
+movie = QMovie(str(_HERE / "tsugite_loading_3d.gif"))
 
 splash = MovieSplashScreen(movie)
 

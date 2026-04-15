@@ -1,6 +1,9 @@
 from OpenGL.GL import *
 import numpy as np
 from PIL import Image
+from pathlib import Path
+
+_HERE = Path(__file__).parent
 
 class ElementProperties:
     def __init__(self, draw_type, count, start_index, n):
@@ -17,11 +20,11 @@ class Buffer:
         self.EBO = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
         self.vertex_no_info = 8
-        image = Image.open("textures/end_grain.jpg")
+        image = Image.open(_HERE / "textures" / "end_grain.jpg")
         self.img_data = np.array(list(image.getdata()), np.uint8)
-        image = Image.open("textures/friction_area.jpg")
+        image = Image.open(_HERE / "textures" / "friction_area.jpg")
         self.img_data_fric = np.array(list(image.getdata()), np.uint8)
-        image = Image.open("textures/contact_area.jpg")
+        image = Image.open(_HERE / "textures" / "contact_area.jpg")
         self.img_data_cont = np.array(list(image.getdata()), np.uint8)
 
     def buffer_vertices(self):

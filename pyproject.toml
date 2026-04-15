@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "tsugite"
+version = "0.1.0"
+description = "Interactive CAD tool for designing and CNC-fabricating wood joints"
+requires-python = ">=3.10"
+dependencies = [
+    "multipledispatch==0.6.0",
+    "numpy>=1.23",
+    "Pillow>=9.0",
+    "PyQt5>=5.15.9",
+    "PyOpenGL>=3.1.6",
+    "pyrr==0.10.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-qt>=4.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["setup*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["setup"]

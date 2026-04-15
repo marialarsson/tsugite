@@ -3,6 +3,8 @@ import random
 
 def depth(l):
     if isinstance(l, list):
+        if not l:
+            return 1
         return 1 + max(depth(item) for item in l)
     else:
         return 0
